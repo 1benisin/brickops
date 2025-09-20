@@ -1,0 +1,9 @@
+{
+  "projectConfig": {
+    "projectSlug": "brickops",
+    "teamSlug": "local-dev"
+  },
+  "functions": {
+    "directory": "convex"
+  }
+}
