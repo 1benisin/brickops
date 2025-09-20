@@ -3,7 +3,161 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 217 91% 60%;
+  --muted: 217 33% 95%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 214 32% 97%;
+  --accent-foreground: 222 47% 11%;
+  --secondary: 214 20% 88%;
+  --secondary-foreground: 222 47% 18%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --success: 152 76% 36%;
+  --success-foreground: 152 44% 15%;
+  --warning: 32 98% 50%;
+  --warning-foreground: 32 100% 14%;
+  --info: 217 91% 60%;
+  --info-foreground: 210 40% 98%;
+
+  --primary: 217 91% 60%;
+  --primary-foreground: 210 40% 98%;
+
+  /* Brand palette */
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-900: #1e3a8a;
+
+  /* Neutral palette */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+
+  /* Typography scale */
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* Responsive breakpoints */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* Spacing scale */
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* Data viz palette */
+  --chart-1: 217 91% 60%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 12 76% 61%;
+
+  /* Radii */
+  --radius: 0.75rem;
+  --radius-lg: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.375rem;
+
+  /* Elevation tokens */
+  --shadow-subtle: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 18px 44px -20px rgba(15, 23, 42, 0.35);
+  --shadow-overlay: 0 45px 120px -30px rgba(15, 23, 42, 0.55);
+}
+
+.dark {
   color-scheme: dark;
+
+  --background: 221 39% 11%;
+  --foreground: 210 40% 98%;
+  --card: 224 40% 15%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 40% 12%;
+  --popover-foreground: 210 40% 98%;
+  --border: 217 33% 20%;
+  --input: 217 33% 20%;
+  --ring: 217 91% 65%;
+  --muted: 217 25% 19%;
+  --muted-foreground: 218 19% 75%;
+  --accent: 219 26% 20%;
+  --accent-foreground: 210 40% 98%;
+  --secondary: 219 24% 22%;
+  --secondary-foreground: 210 40% 98%;
+  --destructive: 0 63% 48%;
+  --destructive-foreground: 210 40% 98%;
+  --success: 149 80% 46%;
+  --success-foreground: 149 40% 12%;
+  --warning: 39 100% 55%;
+  --warning-foreground: 25 90% 15%;
+  --info: 217 91% 70%;
+  --info-foreground: 222 47% 10%;
+
+  --primary: 217 91% 68%;
+  --primary-foreground: 222 47% 12%;
+
+  --primary-50: #1e3a8a;
+  --primary-100: #1d4ed8;
+  --primary-500: #60a5fa;
+  --primary-600: #3b82f6;
+  --primary-700: #2563eb;
+  --primary-900: #eff6ff;
+
+  --gray-50: #111827;
+  --gray-100: #1f2937;
+  --gray-200: #374151;
+  --gray-300: #4b5563;
+  --gray-400: #6b7280;
+  --gray-500: #9ca3af;
+  --gray-600: #d1d5db;
+  --gray-700: #e5e7eb;
+  --gray-800: #f3f4f6;
+  --gray-900: #f9fafb;
+
+  --chart-1: 217 91% 68%;
+  --chart-2: 173 58% 46%;
+  --chart-3: 43 90% 64%;
+  --chart-4: 12 88% 70%;
+  --chart-5: 260 80% 70%;
+
+  --shadow-subtle: 0 2px 6px rgba(9, 9, 11, 0.45);
+  --shadow-card: 0 25px 60px -25px rgba(8, 47, 73, 0.6);
+  --shadow-overlay: 0 60px 120px -30px rgba(15, 23, 42, 0.75);
 }
 
 * {
@@ -12,12 +166,36 @@
 
 body {
   margin: 0;
-  font-family: var(
-    --font-sans,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  font-family: var(--font-sans);
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

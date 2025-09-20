@@ -15,13 +15,13 @@ Implement fixes based on QA results (gate and assessments) for a specific story.
 
 ```yaml
 required:
-  - story_id: '{epic}.{story}' # e.g., "2.2"
+  - story_id: "{epic}.{story}" # e.g., "2.2"
   - qa_root: from `bmad-core/core-config.yaml` key `qa.qaLocation` (e.g., `docs/project/qa`)
   - story_root: from `bmad-core/core-config.yaml` key `devStoryLocation` (e.g., `docs/project/stories`)
 
 optional:
-  - story_title: '{title}' # derive from story H1 if missing
-  - story_slug: '{slug}' # derive from title (lowercase, hyphenated) if missing
+  - story_title: "{title}" # derive from story H1 if missing
+  - story_slug: "{slug}" # derive from title (lowercase, hyphenated) if missing
 ```
 
 ## QA Sources to Read
@@ -105,7 +105,7 @@ CRITICAL: Dev agent is ONLY authorized to update these sections of the story fil
 Status Rule:
 
 - If gate was PASS and all identified gaps are closed → set `Status: Ready for Done`
-- Otherwise → set `Status: Ready for Review` and notify QA to re-run the review
+- Otherwise → set `Status: Review` and notify QA to re-run the review
 
 ### 6) Do NOT Edit Gate Files
 

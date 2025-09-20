@@ -15,7 +15,7 @@ Single repository containing the Next.js application and any shared packages, al
 ## Additional Technical Assumptions and Requests
 
 - **Frontend Framework**: Next.js 14+ with TypeScript for type safety and modern React features
-- **Styling**: Tailwind CSS with shadcn/ui component library for consistent, accessible design system across all devices
+- **Styling**: Tailwind CSS with shadcn/ui component library for consistent, accessible design system across all devices. **CRITICAL**: All UI components MUST be installed via shadcn/ui CLI (`pnpm dlx shadcn@latest add [component]`). Do NOT install Radix UI components directly.
 - **State Management**: Built-in React state management (useState, useContext, useReducer) with Zustand available if needed for complex state management
 - **Backend Services**: Convex for real-time database, authentication, and serverless functions
 - **Database**: Convex's built-in database with real-time subscriptions for live updates

@@ -83,7 +83,7 @@ The Test Architect (Quinn) provides comprehensive quality assurance throughout t
 #   - Performance: Response times, resource usage
 #   - Reliability: Error handling, recovery
 #   - Maintainability: Code quality, documentation
-# Run when: Before marking "Ready for Review"
+# Run when: Before marking "Review"
 ```
 
 ### Stage 3: Story Review (Quality Gate Assessment)
@@ -100,17 +100,20 @@ The Test Architect (Quinn) provides comprehensive quality assurance throughout t
 **What Happens During Review:**
 
 1. **Deep Code Analysis**
+
    - Architecture pattern compliance
    - Code quality and maintainability
    - Security vulnerability scanning
    - Performance bottleneck detection
 
 2. **Active Refactoring**
+
    - Improves code directly when safe
    - Fixes obvious issues immediately
    - Suggests complex refactoring for dev
 
 3. **Test Validation**
+
    - Coverage at all levels (unit/integration/E2E)
    - Test quality (no flaky tests, proper assertions)
    - Regression test adequacy
@@ -215,7 +218,7 @@ All Test Architect activities create permanent records:
 2. **QA (Optional)**: Risk assessment (`*risk`) → Test design (`*design`)
 3. **Dev**: Implement story → Write tests → Complete
 4. **QA (Optional)**: Mid-dev checks (`*trace`, `*nfr`)
-5. **Dev**: Mark Ready for Review
+5. **Dev**: Mark Review
 6. **QA (Required)**: Review story (`*review`) → Gate decision
 7. **Dev (If needed)**: Address issues
 8. **QA (If needed)**: Update gate (`*gate`)

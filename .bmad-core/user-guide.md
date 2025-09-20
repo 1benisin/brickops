@@ -117,7 +117,7 @@ graph TD
     V -->|No| F
     W --> X["Dev: Address Coverage/NFR Gaps"]
     X --> F["Dev: Run All Validations"]
-    F --> G["Dev: Mark Ready for Review + Add Notes"]
+    F --> G["Dev: Mark Review + Add Notes"]
     G --> H{"User Verification"}
     H -->|Request QA Review| I["QA: Test Architect Review + Quality Gate"]
     H -->|Approve Without QA| M["IMPORTANT: Verify All Regression Tests and Linting are Passing"]
@@ -192,12 +192,14 @@ npx bmad-method install
 BMAD integrates with OpenAI Codex via `AGENTS.md` and committed core agent files.
 
 - Two installation modes:
+
   - Codex (local only): keeps `.bmad-core/` ignored for local dev.
     - `npx bmad-method install -f -i codex -d .`
   - Codex Web Enabled: ensures `.bmad-core/` is tracked so you can commit it for Codex Web.
     - `npx bmad-method install -f -i codex-web -d .`
 
 - What gets generated:
+
   - `AGENTS.md` at the project root with a BMAD section containing
     - How-to-use with Codex (CLI & Web)
     - Agent Directory (Title, ID, When To Use)
@@ -207,6 +209,7 @@ BMAD integrates with OpenAI Codex via `AGENTS.md` and committed core agent files
     - `bmad:refresh`, `bmad:list`, `bmad:validate`
 
 - Using Codex:
+
   - CLI: run `codex` in the project root and prompt naturally, e.g., “As dev, implement …”.
   - Web: commit `.bmad-core/` and `AGENTS.md`, then open the repo in Codex and prompt the same way.
 
@@ -373,7 +376,7 @@ Validates non-functional requirements:
 
 #### 5. Comprehensive Test Architecture Review (`*review`)
 
-**When:** After development complete, story marked "Ready for Review"
+**When:** After development complete, story marked "Review"
 
 When you run `@qa *review {story}`, Quinn performs:
 
