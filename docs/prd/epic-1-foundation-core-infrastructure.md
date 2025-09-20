@@ -34,9 +34,8 @@ so that **I can build consistent, accessible UI components efficiently**.
 4. **1.1.4:** Install core shadcn/ui components (Button, Input, Card, Dialog, Table, etc.)
 5. **1.1.5:** Create custom component library structure with proper TypeScript definitions
 6. **1.1.6:** Set up accessibility utilities and WCAG AA compliance tools
-7. **1.1.7:** Create component documentation structure with Storybook or similar
-8. **1.1.8:** Implement dark/light mode support foundation
-9. **1.1.9:** Create reusable layout components (Header, Navigation, Container)
+7. **1.1.7:** Implement dark/light mode support foundation
+8. **1.1.8:** Create reusable layout components (Header, Navigation, Container)
 
 ## Story 1.2: Testing Infrastructure Setup
 

@@ -21,10 +21,18 @@
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "convex": "^1.11.0",
+    "lucide-react": "^0.544.0",
     "next": "14.1.0",
+    "next-themes": "^0.4.6",
     "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@playwright/test": "1.40.1",
@@ -52,11 +60,13 @@
     "playwright": "1.40.1",
     "postcss": "8.4.33",
     "prettier": "3.2.5",
+    "shadcn": "^3.3.1",
     "simple-git-hooks": "2.9.0",
     "tailwindcss": "3.4.1",
+    "tailwindcss-animate": "^1.0.7",
     "ts-jest": "29.1.1",
-    "typescript": "5.3.3",
     "ts-node": "10.9.2",
+    "typescript": "5.3.3",
     "vitest": "1.2.0"
   },
   "simple-git-hooks": {
@@ -70,5 +80,8 @@
     "*.{json,md,css,scss}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "ignore-workspace-root-check": true
   }
 }
