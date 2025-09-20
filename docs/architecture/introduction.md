@@ -1,18 +1,18 @@
 # Introduction
 
-This document outlines the overall project architecture for BrickOps, including backend systems, shared services, and non-UI specific concerns. Its primary goal is to serve as the guiding architectural blueprint for AI-driven development, ensuring consistency and adherence to chosen patterns and technologies.
+This document outlines the complete fullstack architecture for BrickOps, combining backend systems and frontend implementation with their integration. It serves as the single source of truth for AI-driven development, ensuring consistency across the entire technology stack.
 
-**Relationship to Frontend Architecture:**
-If the project includes a significant user interface, a separate Frontend Architecture Document will detail the frontend-specific design and MUST be used in conjunction with this document. Core technology stack choices documented herein (see "Tech Stack") are definitive for the entire project, including any frontend components.
+This unified approach consolidates what would traditionally be separate backend and frontend architecture documents into one, streamlining development for a modern fullstack application built with Next.js and Convex.
 
 ## Starter Template or Existing Project
 
-Based on review of the PRD, BrickOps will be built as a Next.js 14+ application with Convex for backend services. No specific starter template was identified in the requirements - the project will be built from standard Next.js and Convex initialization.
+Based on the PRD, BrickOps is built as a Next.js 14+ application with Convex for backend services. No specific starter template is used; the project starts from the standard Next.js setup with Convex integration.
 
-**Decision:** Starting from Next.js standard setup with Convex integration, allowing for maximum customization of the complex inventory management and API integration features required.
+Decision: Start from Next.js standard setup with Convex integration to allow maximum customization for complex inventory management and API integrations.
 
 ## Change Log
 
-| Date       | Version | Description                            | Author              |
-| ---------- | ------- | -------------------------------------- | ------------------- |
-| 2025-01-20 | 1.0     | Initial architecture document creation | Winston (Architect) |
+| Date       | Version | Description                                         | Author              |
+| ---------- | ------- | --------------------------------------------------- | ------------------- |
+| 2025-01-20 | 1.0     | Initial fullstack architecture consolidation        | Winston (Architect) |
+| 2025-01-20 | 1.1     | Added shadcn/ui to tech stack for component library | Sarah (PO)          |

@@ -1,6 +1,6 @@
 # Core Workflows
 
-## Order Processing and Inventory Sync Workflow
+## Order Processing and Inventory Sync
 
 ```mermaid
 sequenceDiagram
@@ -12,7 +12,6 @@ sequenceDiagram
     participant BO as Brickowl API
     participant DB as Convex DB
 
-    %% Scheduled Order Sync
     Note over Order: Every 15 minutes (Convex Cron)
     Order->>Marketplace: syncOrdersFromMarketplaces()
     Marketplace->>BL: GET /orders (new/updated)
@@ -20,7 +19,6 @@ sequenceDiagram
     Marketplace->>BO: GET /orders (new/updated)
     BO-->>Marketplace: Order data
 
-    %% Process New Orders
     loop For each new order
         Marketplace->>DB: Store MarketplaceOrder
         Marketplace->>Inventory: reserveInventory(orderItems)
@@ -28,21 +26,19 @@ sequenceDiagram
         DB-->>User: Real-time order notification
     end
 
-    %% User Reviews Orders
     User->>Order: View order management table
     Order->>DB: Query orders with filters
     DB-->>User: Real-time order updates
 
-    %% Order Status Updates
     User->>Order: Mark orders as picked
     Order->>Marketplace: updateOrderStatus(orderId, "picked")
-    Marketplace->>BL: PUT /orders/{id} (status update)
+    Marketplace->>BL: PUT /orders/{id}
     Marketplace->>BO: PUT /orders/{id}/status
     Order->>DB: Update local order status
     DB-->>User: Status confirmation
 ```
 
-## Part Identification and Inventory Addition Workflow
+## Part Identification and Inventory Addition
 
 ```mermaid
 sequenceDiagram
@@ -56,17 +52,14 @@ sequenceDiagram
     participant DB as Convex DB
     participant Files as Convex File Storage
 
-    %% Camera Capture
     User->>UI: Capture part image
     UI->>Files: Upload image
     Files-->>UI: File URL
 
-    %% Part Identification
     UI->>Identify: identifyPartFromImage(imageData)
     Identify->>Brickognize: POST /identify
     Brickognize-->>Identify: Identification results + confidence
 
-    %% Validate Against Catalog
     Identify->>Catalog: validatePartNumber(partNumber)
     alt Part exists in BrickOps catalog
         Catalog->>DB: Query cached part data
@@ -80,16 +73,11 @@ sequenceDiagram
     Catalog-->>Identify: Part validation + details
     Identify-->>UI: Identification results + confidence
 
-    %% User Confirmation & Inventory Addition
     UI-->>User: Display results with confidence score
     User->>UI: Confirm part + enter quantity/location
     UI->>Inventory: addInventoryItem(partDetails, quantity, location)
     Inventory->>DB: Store inventory item
     DB-->>UI: Real-time inventory update
-
-    %% Optional: Sync to Bricklink
-    Note over Inventory: If auto-sync enabled
-    Inventory->>MarketplaceIntegrationService: syncInventoryToBricklink()
 ```
 
 ## Pick Session Workflow with Issue Resolution
@@ -104,18 +92,15 @@ sequenceDiagram
     participant Order as OrderProcessingService
     participant DB as Convex DB
 
-    %% Session Initiation
     User->>UI: Select orders + Start Picking
     UI->>Pick: createPickSession(userId, orderIds)
     Pick->>Pick: generateOptimizedPickPath(orderIds)
     Pick->>DB: Store pick session + path
     DB-->>UI: Real-time session created
 
-    %% Picking Loop
     loop For each item in pick path
         UI-->>User: Display part card (image, location, quantity)
         User->>UI: Navigate to location
-
         alt Part found and picked
             User->>UI: Mark as picked + confirm quantity
             UI->>Pick: markPartPicked(sessionId, partNumber, quantity)
@@ -124,23 +109,12 @@ sequenceDiagram
             DB-->>UI: Real-time progress update
         else Part not found or insufficient
             User->>UI: Report issue
-            UI->>Pick: reportPickingIssue(sessionId, partNumber, "not_found")
-            Pick->>Todo: createTodoItem(partNumber, orderId, "not_found")
-            Pick->>Inventory: showAlternativeLocations(partNumber)
-
-            alt Alternative found
-                Inventory-->>UI: Alternative locations + quantities
-                User->>UI: Select alternative + pick
-                UI->>Pick: markPartPicked(sessionId, partNumber, quantity)
-                Pick->>Inventory: adjustQuantity(alternative location)
-            else No alternative
-                Pick->>DB: Mark item as unresolved
-                DB-->>UI: Add to session issues
-            end
+            UI->>Pick: reportPickingIssue(...)
+            Pick->>Todo: createTodoItem(...)
+            Pick->>Inventory: showAlternativeLocations(...)
         end
     end
 
-    %% Session Completion
     User->>UI: Complete pick session
     UI->>Pick: completePickSession(sessionId)
     Pick->>Order: updateOrderStatus(orderIds, "picked")

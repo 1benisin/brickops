@@ -20,10 +20,11 @@ The solution combines Brickognize API for automated part identification with int
 
 ## Change Log
 
-| Date       | Version | Description                                                                                                           | Author    |
-| ---------- | ------- | --------------------------------------------------------------------------------------------------------------------- | --------- |
-| 2025-01-12 | 1.0     | Initial PRD creation from Project Brief                                                                               | John (PM) |
-| 2025-01-19 | 1.1     | Refined Epic 4 & 5 for detailed order management and picking workflow, added FR15-FR19, updated UI specifications     | John (PM) |
-| 2025-01-19 | 1.1.1   | Simplified sorting grid requirement to display bin locations (e.g., C303) only, not full visualization                | John (PM) |
-| 2025-01-19 | 1.2     | Added multi-user login support with role-based access control, added FR20-FR23, updated Story 1.1 and added Story 1.5 | John (PM) |
-| 2025-01-19 | 1.2.1   | Clarified catalog architecture - changed from "local catalog" to "centralized catalog database on BrickOps servers"   | John (PM) |
+| Date       | Version | Description                                                                                                           | Author     |
+| ---------- | ------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 2025-01-12 | 1.0     | Initial PRD creation from Project Brief                                                                               | John (PM)  |
+| 2025-01-19 | 1.1     | Refined Epic 4 & 5 for detailed order management and picking workflow, added FR15-FR19, updated UI specifications     | John (PM)  |
+| 2025-01-19 | 1.1.1   | Simplified sorting grid requirement to display bin locations (e.g., C303) only, not full visualization                | John (PM)  |
+| 2025-01-19 | 1.2     | Added multi-user login support with role-based access control, added FR20-FR23, updated Story 1.1 and added Story 1.5 | John (PM)  |
+| 2025-01-19 | 1.2.1   | Clarified catalog architecture - changed from "local catalog" to "centralized catalog database on BrickOps servers"   | John (PM)  |
+| 2025-01-20 | 1.3     | Added foundational Stories 1.0-1.3 (scaffolding, shadcn/ui, testing, API setup), renumbered existing Epic 1 stories   | Sarah (PO) |
