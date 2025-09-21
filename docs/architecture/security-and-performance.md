@@ -4,6 +4,7 @@
 
 - Input Validation: Zod schemas at Convex function boundaries
 - Rate Limiting: Per-user limits (e.g., identify: 100/hour, order processing: 50/hour)
+- Provider Quotas: Bricklink default 5,000 calls/day (API Terms 2023-02-02). Enforce daily budgeting with alerts at ≥80% usage and hard stop beyond quota for compliance.
 - CORS: Restrict to production domains
 - Secrets: Never hardcode; use environment variables with encryption
 - Tenant Isolation: All queries scoped by businessAccountId

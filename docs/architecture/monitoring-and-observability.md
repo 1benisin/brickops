@@ -24,6 +24,7 @@
 - Database query performance and subscription efficiency
 - Real-time connection counts and message throughput
 - Rate limit hit rates and API quota usage
+  - Bricklink daily quota usage (% of 5,000/day) with alert threshold at ≥80%
 
 **Business Metrics:**
 
