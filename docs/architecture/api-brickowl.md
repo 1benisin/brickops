@@ -4,6 +4,12 @@ The API can be used to access your account programmatically. You will be able to
 
 To access the API you first need an [API Key](/user/677841/api_keys). Once you have the API key you can make a request to any of the methods listed below that your key has permission for. The API is rated limited to 600 requests per minute for most requests, or 200 requests per minute for bulk/batch.
 
+## Credential Management
+
+- Generate a key from the Brickowl account settings (`/user/<account-id>/api_keys`).
+- Store it as `BRICKOWL_API_KEY` in the Convex environment for each deployment (`npx convex env set`).
+- Enforce server-side usage only and respect provider rate limits (600 rpm standard, 200 rpm bulk).
+
 For `GET` request the key and any parameters should be added as parameters onto the request, for example https://api.brickowl.com/v1/order/view?key=KEY&order\_id=100.  
 For `POST` requests, the key and any parameters should be in the body of the request and have a content type of `application/x-www-form-urlencoded`
 

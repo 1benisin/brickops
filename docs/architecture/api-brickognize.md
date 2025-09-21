@@ -7,6 +7,12 @@
 - **Authentication**: API Key headers
 - **Contact**: piotr.rybak@brickognize.com
 
+### Credential Management
+
+- Request API access through the Brickognize developer portal and confirm approval via the contact above.
+- Store the issued credential as `BRICKOGNIZE_API_KEY` using `npx convex env set` (per environment).
+- Access is limited to Convex server-side functions; never expose the key to client code or logs.
+
 ### Key Endpoints
 
 #### Image Recognition (Legacy API)

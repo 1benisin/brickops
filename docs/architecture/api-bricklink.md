@@ -4,6 +4,17 @@
 
 https://api.bricklink.com/api/store/v1
 
+## Credential Management
+
+- Register the BrickOps integration in the Bricklink member portal to receive consumer credentials.
+- Generate access tokens tied to the BrickOps store account.
+- Store credentials in the Convex environment (`npx convex env set`):
+  - `BRICKLINK_CONSUMER_KEY`
+  - `BRICKLINK_CONSUMER_SECRET`
+  - `BRICKLINK_ACCESS_TOKEN`
+  - `BRICKLINK_TOKEN_SECRET`
+- Rotate keys per Bricklink policy and restrict usage to server-side requests. Never log raw OAuth secrets.
+
 ## SSL Only
 
 All requests are required to be done over SSL.
