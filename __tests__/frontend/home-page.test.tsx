@@ -4,18 +4,11 @@
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import HomePage from "@/app/page";
-
-jest.mock("next/navigation", () => ({
-  usePathname: jest.fn(),
-}));
-
-const { usePathname } = jest.requireMock("next/navigation") as {
-  usePathname: jest.Mock;
-};
+import { setMockPathname } from "@/test-utils/next-navigation";
 
 describe("HomePage", () => {
   beforeEach(() => {
-    usePathname.mockReturnValue("/");
+    setMockPathname("/");
   });
 
   it("renders hero content", () => {

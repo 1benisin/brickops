@@ -1,0 +1,41 @@
+schema: 1
+story: "1.2"
+story_title: "Story 1.2: Testing Infrastructure Setup"
+gate: PASS
+status_reason: "Coverage thresholds now enforce documented percentages and Playwright artifacts are ignored; QA sign-off granted."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-09-21T16:30:00Z"
+quality_score: 100
+expires: "2025-10-05T16:30:00Z"
+
+top_issues: []
+waiver:
+  active: false
+
+evidence:
+  tests_reviewed: 24
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Auth checks remain intact; no new surface introduced."
+  performance:
+    status: PASS
+    notes: "Coverage enforcement changes have negligible overhead."
+  reliability:
+    status: PASS
+    notes: "All test suites pass after configuration updates."
+  maintainability:
+    status: PASS
+    notes: "Coverage configuration now reflects documented standards; repo noise eliminated."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Update story status from Ready to Review/Done per workflow once change merged."
+      refs:
+        - docs/stories/1.2.testing-infrastructure-setup.story.md

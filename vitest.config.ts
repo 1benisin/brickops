@@ -15,10 +15,20 @@ export default defineConfig({
     coverage: {
       reporter: ["text", "json", "html"],
       reportsDirectory: "coverage/backend",
+      thresholds: {
+        lines: 80,
+        functions: 75,
+        statements: 80,
+        branches: 60,
+      },
     },
   },
   resolve: {
     alias: [
+      {
+        find: "@/test-utils",
+        replacement: fileURLToPath(new URL("./test/utils", import.meta.url)),
+      },
       {
         find: "@/convex",
         replacement: fileURLToPath(new URL("./convex", import.meta.url)),

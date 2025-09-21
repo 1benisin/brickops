@@ -23,7 +23,13 @@ Next.js + Convex monorepo scaffold with comprehensive developer tooling for the 
 - `pnpm dev` – Runs Next.js and Convex dev servers concurrently with hot reloading.
 - `pnpm build` – Builds the production bundle.
 - `pnpm lint` – Runs ESLint.
-- `pnpm test` – Executes frontend, backend, and E2E dry-run test suites.
+- `pnpm test` – Executes frontend, backend, and full Playwright suites sequentially.
+- `pnpm test:frontend` – Runs Jest + React Testing Library suites.
+- `pnpm test:frontend:coverage` – Generates frontend coverage reporting with thresholds.
+- `pnpm test:backend` – Runs Vitest suites for Convex functions.
+- `pnpm test:backend:coverage` – Produces backend coverage (v8 provider configured).
+- `pnpm test:coverage` – Aggregates frontend and backend coverage into `coverage/`.
+- `pnpm test:ci` – Lint + coverage + Playwright listing for CI guard rails.
 - `pnpm test:e2e` – Executes Playwright tests (requires running dev server).
 - `pnpm format` – Formats source code with Prettier.
 

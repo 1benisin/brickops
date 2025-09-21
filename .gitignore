@@ -16,6 +16,7 @@ pnpm-debug.log*
 coverage
 .playwright-report
 blob-report
+test-results/
 
 # Environment Files
 .env*
