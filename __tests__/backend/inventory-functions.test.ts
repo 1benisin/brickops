@@ -1,0 +1,152 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, expect, it } from "vitest";
+import { ConvexError } from "convex/values";
+
+import {
+  addInventoryItem,
+  listInventoryItems,
+  updateInventoryQuantity,
+} from "@/convex/functions/inventory";
+import {
+  buildSeedData,
+  createConvexTestContext,
+  createTestIdentity,
+} from "@/test-utils/convex-test-context";
+
+describe("inventory functions", () => {
+  const businessAccountId = "businessAccounts:1";
+  const ownerUserId = "users:1";
+  const tokenIdentifier = "tenant-123|user-1";
+
+  const baseSeed = buildSeedData({
+    businessAccounts: [
+      {
+        _id: businessAccountId,
+        name: "BrickOps",
+        ownerUserId,
+        createdAt: 1,
+      },
+    ],
+    users: [
+      {
+        _id: ownerUserId,
+        businessAccountId,
+        email: "owner@example.com",
+        role: "owner",
+        firstName: "Olivia",
+        lastName: "Ops",
+        tokenIdentifier,
+        createdAt: 1,
+      },
+    ],
+  });
+
+  it("creates an inventory item for an authenticated user", async () => {
+    const ctx = createConvexTestContext({
+      seed: baseSeed,
+      identity: createTestIdentity({ tokenIdentifier }),
+    });
+
+    const itemId = await (addInventoryItem as any)._handler(ctx, {
+      businessAccountId,
+      sku: "3001",
+      name: "Brick 2x4",
+      colorId: "5",
+      location: "A1-B2",
+      quantityAvailable: 10,
+      condition: "new",
+    });
+
+    expect(itemId).toMatch(/^inventoryItems:/);
+
+    const items = await (listInventoryItems as any)._handler(ctx, {
+      businessAccountId,
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      sku: "3001",
+      quantityAvailable: 10,
+      createdBy: ownerUserId,
+    });
+  });
+
+  it("prevents duplicate SKU entries for the same business", async () => {
+    const seed = buildSeedData({
+      ...baseSeed,
+      inventoryItems: [
+        {
+          _id: "inventoryItems:1",
+          businessAccountId,
+          sku: "3001",
+          name: "Brick 2x4",
+          colorId: "5",
+          location: "A1-B2",
+          quantityAvailable: 10,
+          condition: "new",
+          createdBy: ownerUserId,
+          createdAt: 1,
+        },
+      ],
+    });
+
+    const ctx = createConvexTestContext({
+      seed,
+      identity: createTestIdentity({ tokenIdentifier }),
+    });
+
+    await expect(
+      (addInventoryItem as any)._handler(ctx, {
+        businessAccountId,
+        sku: "3001",
+        name: "Brick 2x4",
+        colorId: "5",
+        location: "A1-B3",
+        quantityAvailable: 5,
+        condition: "new",
+      }),
+    ).rejects.toThrow(ConvexError);
+  });
+
+  it("prevents updates that would set negative inventory", async () => {
+    const seed = buildSeedData({
+      ...baseSeed,
+      inventoryItems: [
+        {
+          _id: "inventoryItems:1",
+          businessAccountId,
+          sku: "3001",
+          name: "Brick 2x4",
+          colorId: "5",
+          location: "A1-B2",
+          quantityAvailable: 10,
+          condition: "new",
+          createdBy: ownerUserId,
+          createdAt: 1,
+        },
+      ],
+    });
+
+    const ctx = createConvexTestContext({
+      seed,
+      identity: createTestIdentity({ tokenIdentifier }),
+    });
+
+    await expect(
+      (updateInventoryQuantity as any)._handler(ctx, {
+        itemId: "inventoryItems:1",
+        quantityAvailable: -3,
+      }),
+    ).rejects.toThrow("Quantity available cannot be negative");
+  });
+
+  it("denies access when identity is missing", async () => {
+    const ctx = createConvexTestContext({ seed: baseSeed, identity: null });
+
+    await expect(
+      (listInventoryItems as any)._handler(ctx, {
+        businessAccountId,
+      }),
+    ).rejects.toThrow("Authentication required");
+  });
+});

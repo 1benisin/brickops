@@ -1,13 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { AppNavigation, type NavigationItem } from "@/components/layout";
-
-jest.mock("next/navigation", () => ({
-  usePathname: jest.fn(),
-}));
-
-const { usePathname } = jest.requireMock("next/navigation") as {
-  usePathname: jest.Mock;
-};
+import { setMockPathname } from "@/test-utils/next-navigation";
 
 const navigationItems: NavigationItem[] = [
   { label: "Dashboard", href: "/dashboard" },
@@ -16,7 +9,7 @@ const navigationItems: NavigationItem[] = [
 
 describe("AppNavigation", () => {
   beforeEach(() => {
-    usePathname.mockReturnValue("/orders");
+    setMockPathname("/orders");
   });
 
   it("highlights the active route", () => {

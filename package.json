@@ -14,8 +14,12 @@
     "format:check": "prettier --check .",
     "test": "pnpm test:frontend && pnpm test:backend && pnpm test:e2e",
     "test:frontend": "jest",
+    "test:frontend:coverage": "jest --coverage",
     "test:backend": "NODE_OPTIONS=--require=./vitest.polyfill.js vitest run",
     "test:backend:watch": "NODE_OPTIONS=--require=./vitest.polyfill.js vitest",
+    "test:backend:coverage": "NODE_OPTIONS=--require=./vitest.polyfill.js vitest run --coverage",
+    "test:coverage": "pnpm test:frontend:coverage && pnpm test:backend:coverage",
+    "test:ci": "pnpm lint && pnpm test:coverage && pnpm test:e2e:dry-run",
     "test:e2e": "playwright test",
     "test:e2e:dry-run": "playwright test --list",
     "prepare": "simple-git-hooks"
@@ -45,6 +49,7 @@
     "@types/react-dom": "18.2.18",
     "@typescript-eslint/eslint-plugin": "6.21.0",
     "@typescript-eslint/parser": "6.21.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "autoprefixer": "10.4.16",
     "concurrently": "8.2.2",
     "eslint": "8.56.0",
@@ -67,7 +72,7 @@
     "ts-jest": "29.1.1",
     "ts-node": "10.9.2",
     "typescript": "5.3.3",
-    "vitest": "1.2.0"
+    "vitest": "3.2.4"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged"
