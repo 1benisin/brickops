@@ -1,12 +1,22 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+type AuthPayload = {
+  action?: string;
+  args?: {
+    params?: {
+      flow?: string;
+      code?: string;
+    };
+  };
+};
+
 async function mockAuthApi(page: Page) {
   await page.route("**/api/auth", async (route) => {
     const request = route.request();
-    let payload: { action?: string; args?: any } = {};
+    let payload: AuthPayload = {};
     try {
-      payload = JSON.parse(request.postData() ?? "{}");
+      payload = JSON.parse(request.postData() ?? "{}") as AuthPayload;
     } catch (error) {
       console.warn("[auth-test] Unable to parse auth payload", error);
     }
