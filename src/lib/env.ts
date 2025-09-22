@@ -20,7 +20,10 @@ function requireValue(raw: string | undefined, key: string): string {
 
 function validateUrl(value: string, key: string): string {
   try {
-    return new URL(value).toString();
+    const url = new URL(value);
+    // Normalize to origin WITHOUT a trailing slash to avoid constructing URLs like
+    // "wss://<deployment>.convex.cloud//api/..." in Convex client internals.
+    return url.origin;
   } catch (error) {
     throw new Error(`${key} must be a valid URL`);
   }

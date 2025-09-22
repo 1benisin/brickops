@@ -44,7 +44,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev:next",
+    command: "pnpm dev",
     port: 3000,
     reuseExistingServer: !IS_CI,
     timeout: 120_000,

@@ -1,21 +1,22 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { mutation, query } from "../_generated/server";
+import { mutation, query, MutationCtx, QueryCtx } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
 import { randomHex } from "../lib/webcrypto";
 import { ConvexError, v } from "convex/values";
 
 type RequireUserReturn = {
-  userId: string;
-  user: any;
-  businessAccountId: string;
+  userId: Id<"users">;
+  user: Doc<"users">;
+  businessAccountId: Id<"businessAccounts">;
 };
 
-async function requireActiveUser(ctx: any): Promise<RequireUserReturn> {
+async function requireActiveUser(ctx: QueryCtx | MutationCtx): Promise<RequireUserReturn> {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new ConvexError("Authentication required");
   }
 
-  const user = await ctx.db.get(userId as any);
+  const user = await ctx.db.get(userId);
   if (!user) {
     throw new ConvexError("Authenticated user not found");
   }
@@ -31,7 +32,7 @@ async function requireActiveUser(ctx: any): Promise<RequireUserReturn> {
   return {
     userId,
     user,
-    businessAccountId: user.businessAccountId,
+    businessAccountId: user.businessAccountId as Id<"businessAccounts">,
   };
 }
 
@@ -39,7 +40,7 @@ export const getCurrentUser = query({
   args: {},
   handler: async (ctx) => {
     const { user, userId, businessAccountId } = await requireActiveUser(ctx);
-    const businessAccount = await ctx.db.get(businessAccountId as any);
+    const businessAccount = await ctx.db.get(businessAccountId);
 
     if (!businessAccount) {
       throw new ConvexError("Business account not found");
@@ -57,9 +58,9 @@ export const getCurrentUser = query({
       },
       businessAccount: {
         _id: businessAccount._id,
-        name: (businessAccount as any).name,
-        inviteCode: (businessAccount as any).inviteCode,
-        ownerUserId: (businessAccount as any).ownerUserId,
+        name: businessAccount.name,
+        inviteCode: businessAccount.inviteCode,
+        ownerUserId: businessAccount.ownerUserId,
       },
     };
   },
@@ -72,10 +73,10 @@ export const listMembers = query({
 
     const members = await ctx.db
       .query("users")
-      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId as any))
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
-    return members.map((member: any) => ({
+    return members.map((member: Doc<"users">) => ({
       _id: member._id,
       email: member.email,
       firstName: member.firstName,
@@ -102,7 +103,7 @@ export const updateProfile = mutation({
       throw new ConvexError("First and last name are required");
     }
 
-    await ctx.db.patch(userId as any, {
+    await ctx.db.patch(userId, {
       firstName: normalizedFirst,
       lastName: normalizedLast,
       name: `${normalizedFirst} ${normalizedLast}`.trim(),
@@ -129,7 +130,7 @@ export const regenerateInviteCode = mutation({
         .withIndex("by_inviteCode", (q) => q.eq("inviteCode", code))
         .first();
       if (!existing) {
-        await ctx.db.patch(businessAccountId as any, { inviteCode: code });
+        await ctx.db.patch(businessAccountId, { inviteCode: code });
         return { inviteCode: code };
       }
     }
