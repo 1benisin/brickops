@@ -18,6 +18,8 @@ Single repository containing the Next.js application and any shared packages, al
 - **Styling**: Tailwind CSS with shadcn/ui component library for consistent, accessible design system across all devices. **CRITICAL**: All UI components MUST be installed via shadcn/ui CLI (`pnpm dlx shadcn@latest add [component]`). Do NOT install Radix UI components directly.
 - **State Management**: Built-in React state management (useState, useContext, useReducer) with Zustand available if needed for complex state management
 - **Backend Services**: Convex for real-time database, authentication, and serverless functions
+  - **Authentication**: Convex Auth with role-based access control and multi-user support
+  - **Documentation**: [Convex Auth Setup](../external-documentation/convex-auth/setup.md), [Configuration](../external-documentation/convex-auth/configure-auth.md), [Authorization](../external-documentation/convex-auth/authorization.md)
 - **Database**: Convex's built-in database with real-time subscriptions for live updates
 - **Hosting**: Vercel for frontend deployment, Convex for backend services
 - **Computer Vision**: Integration with Brickognize API for Lego part identification
@@ -27,6 +29,7 @@ Single repository containing the Next.js application and any shared packages, al
   - Brickowl API with intelligent caching and data freshness validation
   - Brickognize API for part identification
 - **Security**: Convex authentication with role-based access control, API key management for external services, data encryption at rest and in transit, GDPR compliance
+  - **Authentication Implementation**: Follow [Convex Auth patterns](../external-documentation/convex-auth/authorization.md) for backend functions and [Next.js middleware](../external-documentation/convex-auth/authorization-nextjs.md) for route protection
 - **Performance**: <3 second page load times, <1 second API response times, 99.9% uptime target
 - **Browser Support**: Modern browsers (Chrome, Firefox, Safari, Edge) on desktop and mobile
 - **Mobile Optimization**: Web-first responsive design with mobile camera integration

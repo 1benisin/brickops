@@ -1,13 +1,47 @@
-import { NextResponse } from "next/server";
+import {
+  convexAuthNextjsMiddleware,
+  createRouteMatcher,
+  nextjsMiddlewareRedirect,
+} from "@convex-dev/auth/nextjs/server";
 
-export function middleware() {
-  const response = NextResponse.next();
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/login",
+  "/signup",
+  "/reset-password",
+  "/reset-password/(.*)",
+  "/api/auth/(.*)",
+  "/api/health/(.*)",
+]);
 
-  // Example of where auth or feature flags would be enforced.
-  response.headers.set("x-brickops-middleware", "enabled");
-  return response;
-}
+const isAuthRoute = createRouteMatcher([
+  "/login",
+  "/signup",
+  "/reset-password",
+  "/reset-password/(.*)",
+]);
+
+export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
+  if (isPublicRoute(request)) {
+    return;
+  }
+
+  const authenticated = await convexAuth.isAuthenticated();
+  if (!authenticated) {
+    return nextjsMiddlewareRedirect(request, "/login");
+  }
+
+  if (isAuthRoute(request)) {
+    return nextjsMiddlewareRedirect(request, "/dashboard");
+  }
+
+  return;
+}, {
+  cookieConfig: {
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+  },
+});
 
 export const config = {
-  matcher: "/((?!_next/static|_next/image|favicon.ico).*)",
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

@@ -1,0 +1,194 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState, useTransition } from "react";
+import { useAuthActions } from "@convex-dev/auth/react";
+
+import { Button, Input } from "@/components/ui";
+
+const MIN_PASSWORD_LENGTH = 8;
+
+export default function SignupPage() {
+  const router = useRouter();
+  const { signIn } = useAuthActions();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedFirstName = firstName.trim();
+    const normalizedLastName = lastName.trim();
+    const normalizedBusiness = businessName.trim();
+    const normalizedInviteCode = inviteCode.trim();
+
+    if (!normalizedEmail || !normalizedFirstName || !normalizedLastName) {
+      setError("Please complete all required fields");
+      return;
+    }
+
+    if (!normalizedInviteCode && !normalizedBusiness) {
+      setError("Provide a business name or invite code");
+      return;
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long`);
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await signIn("password", {
+          flow: "signUp",
+          email: normalizedEmail,
+          password,
+          firstName: normalizedFirstName,
+          lastName: normalizedLastName,
+          businessName: normalizedInviteCode ? undefined : normalizedBusiness,
+          inviteCode: normalizedInviteCode || undefined,
+        });
+        router.push("/dashboard");
+      } catch (signupError) {
+        const message =
+          signupError instanceof Error ? signupError.message : "Unable to create account";
+        setError(message);
+      }
+    });
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4 py-12">
+      <div className="w-full max-w-2xl rounded-lg border bg-background p-8 shadow-sm">
+        <div className="mb-6 space-y-1 text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-primary">BrickOps</p>
+          <h1 className="text-2xl font-semibold">Create your BrickOps workspace</h1>
+          <p className="text-sm text-muted-foreground">
+            Invite your team with a shared business account and manage inventory together.
+          </p>
+        </div>
+
+        <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
+          <div className="space-y-2">
+            <label htmlFor="firstName" className="text-sm font-medium text-foreground">
+              First name
+            </label>
+            <Input
+              id="firstName"
+              autoComplete="given-name"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              disabled={isPending}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="lastName" className="text-sm font-medium text-foreground">
+              Last name
+            </label>
+            <Input
+              id="lastName"
+              autoComplete="family-name"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              disabled={isPending}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-medium text-foreground">
+              Work email
+            </label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              disabled={isPending}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium text-foreground">
+              Password
+            </label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              disabled={isPending}
+              required
+            />
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <label htmlFor="businessName" className="text-sm font-medium text-foreground">
+              Business name
+            </label>
+            <Input
+              id="businessName"
+              placeholder="Brick Central LLC"
+              value={businessName}
+              onChange={(event) => setBusinessName(event.target.value)}
+              disabled={isPending || Boolean(inviteCode.trim())}
+              required={!inviteCode.trim()}
+            />
+            <p className="text-xs text-muted-foreground">
+              Already invited to an existing team? Enter the invite code below instead.
+            </p>
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <label htmlFor="inviteCode" className="text-sm font-medium text-foreground">
+              Team invite code (optional)
+            </label>
+            <Input
+              id="inviteCode"
+              placeholder="abcd1234"
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value)}
+              disabled={isPending}
+            />
+          </div>
+
+          {error ? (
+            <p className="sm:col-span-2 text-sm text-destructive">{error}</p>
+          ) : null}
+
+          <div className="sm:col-span-2">
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? "Creating workspace…" : "Create account"}
+            </Button>
+          </div>
+        </form>
+
+        <div className="mt-6 space-y-1 text-center text-sm text-muted-foreground">
+          <p>
+            Already have a business account?{" "}
+            <Link href="/login" className="text-primary underline-offset-4 hover:underline">
+              Sign in instead
+            </Link>
+          </p>
+          <Link href="/" className="text-xs">
+            Return to marketing site
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -40,13 +40,13 @@ BrickOps uses Convex serverless functions instead of a traditional REST API. The
 ### Documentation Cross-References
 
 - Credential acquisition details live in the provider-specific architecture docs:
-  - Brickognize: `docs/architecture/api-brickognize.md`
-  - Bricklink: `docs/architecture/api-bricklink.md`
-  - Brickowl: `docs/architecture/api-brickowl.md`
+  - Brickognize: `docs/external/apis/brickognize.md`
+  - Bricklink: `docs/external/apis/bricklink.md`
+  - Brickowl: `docs/external/apis/brickowl.md`
 - Security and secret handling standards: `docs/architecture/security-and-performance.md#security-requirements`.
 
 ## External API Documents
 
-- Bricklink API: `docs/architecture/api-bricklink.md`
-- Brickowl API: `docs/architecture/api-brickowl.md`
-- Brickognize API: `docs/architecture/api-brickognize.md`
+- Bricklink API: `docs/external/apis/bricklink.md`
+- Brickowl API: `docs/external/apis/brickowl.md`
+- Brickognize API: `docs/external/apis/brickognize.md`

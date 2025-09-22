@@ -16,7 +16,6 @@ import {
 describe("inventory functions", () => {
   const businessAccountId = "businessAccounts:1";
   const ownerUserId = "users:1";
-  const tokenIdentifier = "tenant-123|user-1";
 
   const baseSeed = buildSeedData({
     businessAccounts: [
@@ -24,6 +23,7 @@ describe("inventory functions", () => {
         _id: businessAccountId,
         name: "BrickOps",
         ownerUserId,
+        inviteCode: "abc12345",
         createdAt: 1,
       },
     ],
@@ -35,8 +35,10 @@ describe("inventory functions", () => {
         role: "owner",
         firstName: "Olivia",
         lastName: "Ops",
-        tokenIdentifier,
+        name: "Olivia Ops",
+        status: "active",
         createdAt: 1,
+        updatedAt: 1,
       },
     ],
   });
@@ -44,7 +46,7 @@ describe("inventory functions", () => {
   it("creates an inventory item for an authenticated user", async () => {
     const ctx = createConvexTestContext({
       seed: baseSeed,
-      identity: createTestIdentity({ tokenIdentifier }),
+      identity: createTestIdentity({ subject: `${ownerUserId}|session-1` }),
     });
 
     const itemId = await (addInventoryItem as any)._handler(ctx, {
@@ -92,7 +94,7 @@ describe("inventory functions", () => {
 
     const ctx = createConvexTestContext({
       seed,
-      identity: createTestIdentity({ tokenIdentifier }),
+      identity: createTestIdentity({ subject: `${ownerUserId}|session-1` }),
     });
 
     await expect(
@@ -129,7 +131,7 @@ describe("inventory functions", () => {
 
     const ctx = createConvexTestContext({
       seed,
-      identity: createTestIdentity({ tokenIdentifier }),
+      identity: createTestIdentity({ subject: `${ownerUserId}|session-1` }),
     });
 
     await expect(
@@ -138,6 +140,64 @@ describe("inventory functions", () => {
         quantityAvailable: -3,
       }),
     ).rejects.toThrow("Quantity available cannot be negative");
+  });
+
+  it("only returns inventory items belonging to the current business account", async () => {
+    const otherBusinessId = "businessAccounts:2";
+    const seed = buildSeedData({
+      businessAccounts: [
+        ...(baseSeed.businessAccounts ?? []),
+        {
+          _id: otherBusinessId,
+          name: "Other BrickOps",
+          ownerUserId: "users:3",
+          inviteCode: "xyz98765",
+          createdAt: 1,
+        },
+      ],
+      users: baseSeed.users,
+      inventoryItems: [
+        {
+          _id: "inventoryItems:1",
+          businessAccountId,
+          sku: "3001",
+          name: "Brick 2x4",
+          colorId: "5",
+          location: "A1-B2",
+          quantityAvailable: 10,
+          condition: "new",
+          createdBy: ownerUserId,
+          createdAt: 1,
+        },
+        {
+          _id: "inventoryItems:2",
+          businessAccountId: otherBusinessId,
+          sku: "3002",
+          name: "Plate 2x2",
+          colorId: "1",
+          location: "B1-C3",
+          quantityAvailable: 5,
+          condition: "used",
+          createdBy: ownerUserId,
+          createdAt: 1,
+        },
+      ],
+    });
+
+    const ctx = createConvexTestContext({
+      seed,
+      identity: createTestIdentity({ subject: `${ownerUserId}|session-1` }),
+    });
+
+    const items = await (listInventoryItems as any)._handler(ctx, {
+      businessAccountId,
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      businessAccountId,
+      sku: "3001",
+    });
   });
 
   it("denies access when identity is missing", async () => {

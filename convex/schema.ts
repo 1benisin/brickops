@@ -1,24 +1,39 @@
 import { defineSchema, defineTable } from "convex/server";
+import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  ...authTables,
+
   businessAccounts: defineTable({
     name: v.string(),
-    ownerUserId: v.string(),
-    createdAt: v.number(),
-  }).index("by_owner", ["ownerUserId"]),
-
-  users: defineTable({
-    businessAccountId: v.id("businessAccounts"),
-    email: v.string(),
-    role: v.union(v.literal("owner"), v.literal("manager"), v.literal("picker")),
-    firstName: v.string(),
-    lastName: v.string(),
-    tokenIdentifier: v.string(),
+    ownerUserId: v.optional(v.id("users")),
+    inviteCode: v.string(),
     createdAt: v.number(),
   })
+    .index("by_owner", ["ownerUserId"])
+    .index("by_inviteCode", ["inviteCode"]),
+
+  users: defineTable({
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+
+    businessAccountId: v.optional(v.id("businessAccounts")),
+    role: v.union(v.literal("owner"), v.literal("manager"), v.literal("picker")),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    status: v.union(v.literal("active"), v.literal("invited")),
+  })
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_token", ["tokenIdentifier"]),
+    .index("by_email", ["email"])
+    .index("by_status", ["status"]),
 
   inventoryItems: defineTable({
     businessAccountId: v.id("businessAccounts"),

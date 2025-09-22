@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 
 import { mutation, query } from "../_generated/server";
@@ -15,24 +16,29 @@ type InventoryInput = {
 
 const now = () => Date.now();
 
-async function requireAuthentication(ctx: { auth: { getUserIdentity: () => Promise<any> } }) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+async function requireUser(ctx: any) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
     throw new ConvexError("Authentication required");
   }
-  return identity;
-}
 
-async function getUserByToken(ctx: any, tokenIdentifier: string) {
-  const users = await ctx.db.query("users").collect();
-  return users.find((user: any) => user.tokenIdentifier === tokenIdentifier) ?? null;
+  const user = await ctx.db.get(userId);
+  if (!user) {
+    throw new ConvexError("Authenticated user not found");
+  }
+
+  if (user.status !== "active") {
+    throw new ConvexError("User account is not active");
+  }
+
+  if (!user.businessAccountId) {
+    throw new ConvexError("User is not linked to a business account");
+  }
+
+  return { userId, user };
 }
 
 function assertBusinessMembership(user: any, businessAccountId: string) {
-  if (!user) {
-    throw new ConvexError("User context missing");
-  }
-
   if (user.businessAccountId !== businessAccountId) {
     throw new ConvexError("User cannot modify another business account");
   }
@@ -49,17 +55,18 @@ export const addInventoryItem = mutation({
     condition: v.union(v.literal("new"), v.literal("used")),
   },
   handler: async (ctx, args) => {
-    const identity = await requireAuthentication(ctx);
-    const user = await getUserByToken(ctx, identity.tokenIdentifier);
+    const { user } = await requireUser(ctx);
     assertBusinessMembership(user, args.businessAccountId);
 
     if (args.quantityAvailable < 0) {
       throw new ConvexError("Quantity available cannot be negative");
     }
 
-    const existingItem = ((await ctx.db.query("inventoryItems").collect()) as any[]).find(
-      (item: any) => item.businessAccountId === args.businessAccountId && item.sku === args.sku,
-    );
+    const existingItem = await ctx.db
+      .query("inventoryItems")
+      .withIndex("by_sku", (q: any) => q.eq("businessAccountId", args.businessAccountId))
+      .filter((item: any) => item.sku === args.sku)
+      .first();
 
     if (existingItem) {
       throw new ConvexError("Inventory item already exists for this SKU");
@@ -86,15 +93,15 @@ export const listInventoryItems = query({
     businessAccountId: v.id("businessAccounts"),
   },
   handler: async (ctx, args) => {
-    const identity = await requireAuthentication(ctx);
-    const user = await getUserByToken(ctx, identity.tokenIdentifier);
+    const { user } = await requireUser(ctx);
     assertBusinessMembership(user, args.businessAccountId);
 
-    const items = (await ctx.db.query("inventoryItems").collect()) as any[];
+    const items = (await ctx.db
+      .query("inventoryItems")
+      .withIndex("by_businessAccount", (q: any) => q.eq("businessAccountId", args.businessAccountId))
+      .collect()) as any[];
 
-    return items
-      .filter((item) => item.businessAccountId === args.businessAccountId)
-      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+    return items.sort((a: any, b: any) => a.name.localeCompare(b.name));
   },
 });
 
@@ -104,8 +111,7 @@ export const updateInventoryQuantity = mutation({
     quantityAvailable: v.number(),
   },
   handler: async (ctx, args) => {
-    const identity = await requireAuthentication(ctx);
-    const user = await getUserByToken(ctx, identity.tokenIdentifier);
+    const { user } = await requireUser(ctx);
 
     const item = await ctx.db.get(args.itemId);
     if (!item) {

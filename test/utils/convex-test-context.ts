@@ -18,8 +18,13 @@ type SeedData = Record<string, TableSeed[]>;
 
 type QueryBuilder<T> = {
   filter: (predicate: (doc: T) => boolean) => QueryBuilder<T>;
+  withIndex: (
+    _indexName: string,
+    handler?: (query: { eq: (field: keyof T & string, value: unknown) => QueryBuilder<T> }) => void,
+  ) => QueryBuilder<T>;
   collect: () => Promise<T[]>;
   first: () => Promise<T | null>;
+  unique: () => Promise<T | null>;
 };
 
 type Patch<T> = Partial<Omit<T, "_id" | "_creationTime">>;
@@ -119,8 +124,30 @@ export class MockDb {
         records = records.filter((doc) => predicate(doc as T));
         return builder;
       },
+      withIndex: (_indexName, handler) => {
+        if (handler) {
+          handler({
+            eq: (field, value) => {
+              records = records.filter((doc) => (doc as Record<string, unknown>)[field] === value);
+              return builder;
+            },
+          });
+        }
+        return builder;
+      },
       collect: async () => records as T[],
       first: async () => (records.length > 0 ? (records[0] as T) : null),
+      unique: async () => {
+        if (records.length === 0) {
+          return null;
+        }
+
+        if (records.length > 1) {
+          throw new ConvexError("Expected unique result but found multiple");
+        }
+
+        return records[0] as T;
+      },
     };
 
     return builder;
@@ -155,18 +182,21 @@ export const createConvexTestContext = (
 
 type BusinessAccountSeed = {
   name: string;
-  ownerUserId: string;
+  ownerUserId?: string;
+  inviteCode?: string;
   createdAt?: number;
 };
 
 type UserSeed = {
   businessAccountId: string;
   email: string;
+  name?: string;
   role?: "owner" | "manager" | "picker";
-  firstName: string;
-  lastName: string;
-  tokenIdentifier: string;
+  status?: "active" | "invited";
+  firstName?: string;
+  lastName?: string;
   createdAt?: number;
+  updatedAt?: number;
 };
 
 type InventorySeed = {

@@ -58,6 +58,13 @@ export const addInventoryItem = mutation({
 
 Convex Auth with JWT/session management enforces role-based access control at every function boundary:
 
+**External Documentation References:**
+
+- [Convex Auth Setup Guide](../external-documentation/convex-auth/setup.md) - Initial project setup and schema configuration
+- [Convex Auth Configuration](../external-documentation/convex-auth/configure-auth.md) - Authentication methods and providers
+- [Convex Auth Authorization](../external-documentation/convex-auth/authorization.md) - Backend function authentication patterns
+- [Next.js Authorization](../external-documentation/convex-auth/authorization-nextjs.md) - Server-side authentication in Next.js
+
 ```mermaid
 sequenceDiagram
     participant UI as Next.js Frontend

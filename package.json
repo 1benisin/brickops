@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "pnpm@8.15.4",
   "scripts": {
-    "dev": "concurrently --kill-others --names next,convex \"pnpm dev:next\" \"pnpm dev:convex\"",
+    "dev": "concurrently --continue-on-error --names next,convex \"pnpm dev:next\" \"pnpm dev:convex\"",
     "dev:next": "next dev",
-    "dev:convex": "convex dev",
+    "dev:convex": "CONVEX_DEPLOYMENT= convex dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
@@ -25,6 +25,8 @@
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
+    "@auth/core": "0.37.0",
+    "@convex-dev/auth": "^0.0.89",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.13",
