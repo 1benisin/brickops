@@ -1,4 +1,40 @@
-import { randomUUID } from "crypto";
+// Local UUID generator that prefers Web Crypto and avoids Node-only 'crypto'
+function generateRequestId(): string {
+  try {
+    // @ts-expect-error: crypto may not exist in all runtimes
+    const c = globalThis.crypto as Crypto | undefined;
+    if (c && typeof (c as any).randomUUID === "function") {
+      return (c as any).randomUUID();
+    }
+    if (c && typeof c.getRandomValues === "function") {
+      const bytes = new Uint8Array(16);
+      c.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40; // version
+      bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+      return (
+        hex.slice(0, 4).join("") +
+        "-" +
+        hex.slice(4, 6).join("") +
+        "-" +
+        hex.slice(6, 8).join("") +
+        "-" +
+        hex.slice(8, 10).join("") +
+        "-" +
+        hex.slice(10, 16).join("")
+      );
+    }
+  } catch {
+    // ignore
+  }
+  return (
+    Date.now().toString(36) +
+    "-" +
+    Math.random().toString(36).slice(2, 10) +
+    "-" +
+    Math.random().toString(36).slice(2, 10)
+  );
+}
 
 export type ExternalProvider = "brickognize" | "bricklink" | "brickowl";
 
@@ -36,7 +72,7 @@ export const toApiError = (
     message,
     details,
     timestamp: new Date().toISOString(),
-    requestId: randomUUID(),
+    requestId: generateRequestId(),
   },
 });
 

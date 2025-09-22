@@ -321,6 +321,12 @@ app/
 
 ### Protected Route Pattern
 
+**External Documentation References:**
+
+- [Next.js Authorization](../external-documentation/convex-auth/authorization-nextjs.md) - Server-side authentication and middleware setup
+- [Convex Auth Authorization](../external-documentation/convex-auth/authorization.md) - Frontend authentication state management
+- [Convex Auth Configuration](../external-documentation/convex-auth/configure-auth.md) - Authentication method setup
+
 ```typescript
 // middleware.ts - Authentication and route protection
 import { NextRequest, NextResponse } from "next/server";

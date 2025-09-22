@@ -98,3 +98,8 @@
   - [Next Steps](./next-steps.md)
     - [UX Expert Prompt](./next-steps.md#ux-expert-prompt)
     - [Architect Prompt](./next-steps.md#architect-prompt)
+  - [External Documentation](../external-documentation/convex-auth/setup.md)
+    - [Convex Auth Setup](../external-documentation/convex-auth/setup.md)
+    - [Convex Auth Configuration](../external-documentation/convex-auth/configure-auth.md)
+    - [Convex Auth Authorization](../external-documentation/convex-auth/authorization.md)
+    - [Next.js Authorization](../external-documentation/convex-auth/authorization-nextjs.md)

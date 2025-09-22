@@ -4,7 +4,9 @@ type EnvKey =
   | "BRICKLINK_CONSUMER_KEY"
   | "BRICKLINK_CONSUMER_SECRET"
   | "BRICKLINK_ACCESS_TOKEN"
-  | "BRICKLINK_TOKEN_SECRET";
+  | "BRICKLINK_TOKEN_SECRET"
+  | "RESEND_API_KEY"
+  | "AUTH_EMAIL_FROM";
 
 const cache = new Map<EnvKey, string>();
 
@@ -39,3 +41,7 @@ export const getBricklinkCredentials = (): BricklinkCredentials => ({
   accessToken: getSecret("BRICKLINK_ACCESS_TOKEN"),
   tokenSecret: getSecret("BRICKLINK_TOKEN_SECRET"),
 });
+
+export const getResendApiKey = () => getSecret("RESEND_API_KEY");
+
+export const getAuthEmailFromAddress = () => getSecret("AUTH_EMAIL_FROM");

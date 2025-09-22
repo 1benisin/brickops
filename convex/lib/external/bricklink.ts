@@ -1,3 +1,4 @@
+"use node";
 import { createHmac, randomBytes } from "crypto";
 
 import { getBricklinkCredentials } from "./env";
@@ -167,7 +168,7 @@ export class BricklinkClient {
     ];
 
     const allParams: [string, string][] = [
-      ...queryEntries.map(([key, value]) => [key, String(value)]),
+      ...queryEntries.map(([key, value]): [string, string] => [key, String(value)]),
       ...oauthParams,
     ];
 

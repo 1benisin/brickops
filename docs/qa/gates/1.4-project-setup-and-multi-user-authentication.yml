@@ -1,0 +1,9 @@
+schema: 1
+story: "1.4"
+gate: PASS
+status_reason: "Password recovery now delivers emails and inventory access stays tenant-scoped with indexed queries."
+reviewer: "Quinn"
+updated: "2025-09-22T05:58:33Z"
+top_issues: []
+waiver:
+  active: false

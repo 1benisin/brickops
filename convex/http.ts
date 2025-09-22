@@ -1,8 +1,11 @@
 import { httpRouter } from "convex/server";
 
 import { validateBricklink, validateBrickognize, validateBrickowl } from "./lib/external/validate";
+import { auth } from "./auth";
 
 const http = httpRouter();
+
+auth.addHttpRoutes(http);
 
 http.route({
   path: "/healthz",
