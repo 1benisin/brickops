@@ -13,11 +13,10 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as actions_crypto from "../actions/crypto.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
-import type * as functions_hello_impl from "../functions/hello-impl.js";
 import type * as functions_hello from "../functions/hello.js";
+import type * as functions_hello_impl from "../functions/hello_impl.js";
 import type * as functions_internal from "../functions/internal.js";
 import type * as functions_inventory from "../functions/inventory.js";
 import type * as functions_users from "../functions/users.js";
@@ -34,6 +33,7 @@ import type * as lib_external_rateLimiter from "../lib/external/rateLimiter.js";
 import type * as lib_external_retry from "../lib/external/retry.js";
 import type * as lib_external_types from "../lib/external/types.js";
 import type * as lib_external_validate from "../lib/external/validate.js";
+import type * as lib_webcrypto from "../lib/webcrypto.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -44,11 +44,10 @@ import type * as lib_external_validate from "../lib/external/validate.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  "actions/crypto": typeof actions_crypto;
   auth: typeof auth;
   crons: typeof crons;
-  "functions/hello-impl": typeof functions_hello_impl;
   "functions/hello": typeof functions_hello;
+  "functions/hello_impl": typeof functions_hello_impl;
   "functions/internal": typeof functions_internal;
   "functions/inventory": typeof functions_inventory;
   "functions/users": typeof functions_users;
@@ -65,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   "lib/external/retry": typeof lib_external_retry;
   "lib/external/types": typeof lib_external_types;
   "lib/external/validate": typeof lib_external_validate;
+  "lib/webcrypto": typeof lib_webcrypto;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

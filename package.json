@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently --continue-on-error --names next,convex \"pnpm dev:next\" \"pnpm dev:convex\"",
     "dev:next": "next dev",
-    "dev:convex": "CONVEX_DEPLOYMENT= convex dev",
+    "dev:convex": "convex dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",

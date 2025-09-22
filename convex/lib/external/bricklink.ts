@@ -1,5 +1,4 @@
-"use node";
-import { createHmac, randomBytes } from "crypto";
+import { hmacSha1Base64, randomHex } from "../webcrypto";
 
 import { getBricklinkCredentials } from "./env";
 import { ExternalHttpClient, RequestOptions, RequestResult } from "./httpClient";
@@ -52,7 +51,7 @@ const buildBaseString = (method: string, url: URL, params: [string, string][]) =
   return [method.toUpperCase(), percentEncode(baseUrl), percentEncode(normalizedParams)].join("&");
 };
 
-const buildSignature = (
+const buildSignature = async (
   method: string,
   url: URL,
   params: [string, string][],
@@ -61,7 +60,7 @@ const buildSignature = (
 ) => {
   const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(tokenSecret)}`;
   const baseString = buildBaseString(method, url, params);
-  return createHmac("sha1", signingKey).update(baseString).digest("base64");
+  return hmacSha1Base64(signingKey, baseString);
 };
 
 const toAuthHeader = (params: [string, string][]) =>
@@ -90,7 +89,7 @@ export class BricklinkClient {
 
   constructor(options: BricklinkClientOptions = {}) {
     this.credentials = options.credentials ?? getBricklinkCredentials();
-    this.nonce = options.nonce ?? (() => randomBytes(16).toString("hex"));
+    this.nonce = options.nonce ?? (() => randomHex(16));
     this.timestamp = options.timestamp ?? (() => Math.floor(Date.now() / 1000));
     this.http = new ExternalHttpClient(
       "bricklink",
@@ -172,7 +171,7 @@ export class BricklinkClient {
       ...oauthParams,
     ];
 
-    const signature = buildSignature(
+    const signature = await buildSignature(
       method,
       url,
       allParams,

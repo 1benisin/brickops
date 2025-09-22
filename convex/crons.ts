@@ -1,10 +1,16 @@
 import { cronJobs } from "convex/server";
+import { internal } from "./_generated/api";
+import { internalAction } from "./_generated/server";
 
 const crons = cronJobs();
 
-crons.interval("log-heartbeat", { seconds: 60 * 60 }, async (ctx) => {
-  const log = ctx.scheduler.logger;
-  log.info("Cron heartbeat executed");
+export const logHeartbeat = internalAction({
+  args: {},
+  handler: async (_ctx) => {
+    console.log("Cron heartbeat executed");
+  },
 });
+
+crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbeat);
 
 export default crons;

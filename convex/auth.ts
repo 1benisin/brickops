@@ -3,17 +3,21 @@ import { Email } from "@convex-dev/auth/providers/Email";
 import { Password } from "@convex-dev/auth/providers/Password";
 import type { GenericMutationCtx } from "convex/server";
 import { ConvexError } from "convex/values";
+import type { DataModel, Id } from "./_generated/dataModel";
 
 import { sendPasswordResetEmail } from "./lib/external/email";
 
 type Role = "owner" | "manager" | "picker";
 type UserStatus = "active" | "invited";
 
-type CreateOrUpdateUserArgs = Parameters<
-  NonNullable<Parameters<typeof convexAuth>[0]["callbacks"]>["createOrUpdateUser"]
->[1];
+type CreateOrUpdateUserArgs = {
+  existingUserId: Id<"users"> | null;
+  provider: { id: string };
+  profile: Record<string, unknown>;
+  shouldLink?: boolean;
+};
 
-type AuthMutationCtx = GenericMutationCtx<Record<string, never>>;
+type AuthMutationCtx = GenericMutationCtx<DataModel>;
 
 type ProfileParams = {
   email: string;
@@ -98,23 +102,20 @@ const passwordProvider = Password({
   profile: (params: Record<string, unknown>) => buildProfile(params),
   reset: Email({
     id: "password-reset",
-    sendVerificationRequest: async ({
-      identifier,
-      code,
-      url,
-      expires,
-    }: {
-      identifier: string;
-      code: string;
-      url: string | null;
-      expires: Date | null;
-    }) =>
-      sendPasswordResetEmail({
+    sendVerificationRequest: async (params) => {
+      const { identifier, token, url, expires } = params as unknown as {
+        identifier: string;
+        token: string;
+        url: string;
+        expires: Date;
+      };
+      await sendPasswordResetEmail({
         identifier,
-        code,
-        url: url ?? undefined,
-        expires: expires ?? undefined,
-      }),
+        code: token,
+        url,
+        expires,
+      });
+    },
   }),
 });
 
@@ -160,7 +161,7 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
   const lastName = assertString(profile.lastName, "lastName");
   const name = profile.name ?? `${firstName} ${lastName}`.trim();
 
-  let businessAccountId: string;
+  let businessAccountId: Id<"businessAccounts">;
   let role: Role = "owner";
 
   if (profile.inviteCode) {
@@ -202,7 +203,7 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
   });
 
   if (role === "owner") {
-    await ctx.db.patch(businessAccountId as any, {
+    await ctx.db.patch(businessAccountId, {
       ownerUserId: userId,
     });
   }

@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation, query } from "../_generated/server";
+import { randomHex } from "../lib/webcrypto";
 import { ConvexError, v } from "convex/values";
 
 type RequireUserReturn = {
@@ -119,13 +120,18 @@ export const regenerateInviteCode = mutation({
       throw new ConvexError("Only business owners can reset the invite code");
     }
 
-    // Call the action to generate unique invite code
-    const newCode = await ctx.runAction("actions/crypto:generateUniqueInviteCode", {});
-
-    await ctx.db.patch(businessAccountId as any, {
-      inviteCode: newCode,
-    });
-
-    return { inviteCode: newCode };
+    const INVITE_CODE_BYTES = 4;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const code = randomHex(INVITE_CODE_BYTES);
+      const existing = await ctx.db
+        .query("businessAccounts")
+        .withIndex("by_inviteCode", (q) => q.eq("inviteCode", code))
+        .first();
+      if (!existing) {
+        await ctx.db.patch(businessAccountId as any, { inviteCode: code });
+        return { inviteCode: code };
+      }
+    }
   },
 });

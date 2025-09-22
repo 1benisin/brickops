@@ -9,6 +9,31 @@ import { Button, Input } from "@/components/ui";
 
 const MIN_PASSWORD_LENGTH = 8;
 
+function getFriendlySignupErrorMessage(error: unknown) {
+  const rawMessage =
+    typeof error === "string" ? error : error instanceof Error ? error.message : "";
+
+  const message = rawMessage.toLowerCase();
+
+  if (message.includes("missing environment variable") && message.includes("jwt")) {
+    return "We're setting up authentication. Please try again in a moment or contact support if this persists.";
+  }
+
+  if (message.includes("invite code not found")) {
+    return "That invite code wasn't recognized. Please check with your team owner.";
+  }
+
+  if (message.includes("business account is not fully provisioned")) {
+    return "This team invite isn't ready yet. Ask the owner to finish setup.";
+  }
+
+  if (message.includes("email") && message.includes("exists")) {
+    return "An account with this email already exists. Try signing in instead.";
+  }
+
+  return "Unable to create account right now. Please review your details and try again.";
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const { signIn } = useAuthActions();
@@ -59,9 +84,8 @@ export default function SignupPage() {
         });
         router.push("/dashboard");
       } catch (signupError) {
-        const message =
-          signupError instanceof Error ? signupError.message : "Unable to create account";
-        setError(message);
+        console.error(signupError);
+        setError(getFriendlySignupErrorMessage(signupError));
       }
     });
   };
@@ -166,9 +190,7 @@ export default function SignupPage() {
             />
           </div>
 
-          {error ? (
-            <p className="sm:col-span-2 text-sm text-destructive">{error}</p>
-          ) : null}
+          {error ? <p className="sm:col-span-2 text-sm text-destructive">{error}</p> : null}
 
           <div className="sm:col-span-2">
             <Button type="submit" className="w-full" disabled={isPending}>
