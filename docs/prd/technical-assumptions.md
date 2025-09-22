@@ -10,7 +10,13 @@ Single repository containing the Next.js application and any shared packages, al
 
 ## Testing Requirements
 
-**Unit + Integration testing** approach with comprehensive test coverage for business logic, API integrations, and user workflows. This includes unit tests for individual functions, integration tests for API interactions with Bricklink, Brickowl, and Brickognize, and end-to-end tests for critical user journeys.
+**Unit + Integration testing by default (CI)** with comprehensive coverage for business logic, API integrations, and key user workflows. End-to-end (Playwright) tests are run locally during relevant changes and via an on-demand/scheduled GitHub Actions workflow for regression coverage.
+
+Scope:
+
+- Unit: components, hooks, utilities, Convex functions
+- Integration: API interactions (Bricklink, Brickowl, Brickognize), cross-function flows
+- E2E: Critical journeys (auth, signup, dashboard load) executed on-demand (not every PR)
 
 ## Additional Technical Assumptions and Requests
 

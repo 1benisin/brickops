@@ -52,6 +52,26 @@ e2e/
 └── picking/             # Complete picking session workflows
 ```
 
+## Execution Policy (CI vs Local/On-Demand)
+
+- CI Pipeline (default): Run unit and integration tests only (`pnpm test:coverage`). This keeps CI fast and reliable.
+- E2E (Playwright): Run locally during feature work affecting routing/auth/hydration OR via the on-demand GitHub workflow (`E2E`) or scheduled weekly run. CI does not run E2E on every PR by default.
+
+Rationale: Browser E2E is valuable but heavy. We prioritize fast feedback in CI and reserve E2E for smoke/regression checks when needed.
+
+### Local E2E commands
+
+```bash
+pnpm exec playwright install
+pnpm build && pnpm start &
+PLAYWRIGHT_BASE_URL=http://localhost:3000 pnpm exec playwright test --project=chromium-desktop
+```
+
+### GitHub E2E workflow
+
+- Manual trigger: Actions → E2E → Run workflow
+- Scheduled: weekly Monday 06:00 UTC
+
 ## Test Examples
 
 ### Frontend Component Test
@@ -130,15 +150,12 @@ test("addInventoryItem creates item with correct data", async () => {
 // e2e/inventory/add-inventory.spec.ts
 import { test, expect } from "@playwright/test";
 
-test("user can add inventory item via camera identification", async ({
-  page,
-}) => {
+test("user can add inventory item via camera identification", async ({ page }) => {
   await page.goto("/identify");
 
   // Mock camera access and part identification
   await page.evaluate(() => {
-    navigator.mediaDevices.getUserMedia = () =>
-      Promise.resolve(new MediaStream());
+    navigator.mediaDevices.getUserMedia = () => Promise.resolve(new MediaStream());
   });
 
   await page.click('[data-testid="capture-button"]');
