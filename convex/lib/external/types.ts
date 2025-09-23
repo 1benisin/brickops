@@ -1,12 +1,12 @@
 // Local UUID generator that prefers Web Crypto and avoids Node-only 'crypto'
 function generateRequestId(): string {
   try {
-    // @ts-expect-error: crypto may not exist in all runtimes
-    const c = globalThis.crypto as Crypto | undefined;
-    if (c && typeof (c as any).randomUUID === "function") {
-      return (c as any).randomUUID();
+    type MinimalCrypto = { getRandomValues?: (arr: Uint8Array) => void; randomUUID?: () => string };
+    const c = (globalThis as { crypto?: MinimalCrypto }).crypto;
+    if (typeof c?.randomUUID === "function") {
+      return c.randomUUID();
     }
-    if (c && typeof c.getRandomValues === "function") {
+    if (typeof c?.getRandomValues === "function") {
       const bytes = new Uint8Array(16);
       c.getRandomValues(bytes);
       bytes[6] = (bytes[6] & 0x0f) | 0x40; // version

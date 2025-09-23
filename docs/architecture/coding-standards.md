@@ -14,3 +14,9 @@
 - Hooks: camelCase with use prefix (e.g., useInventory)
 - Database Tables: camelCase singular (Convex tables)
 - Routes: App Router conventions
+
+## Testing Standards
+
+- Follow the comprehensive [Testing Strategy](./testing-strategy.md) for all test implementations
+- Use `act()` for React state updates and `waitFor()` for async assertions
+- Prefer `userEvent` over `fireEvent` for better user simulation

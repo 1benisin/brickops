@@ -2,13 +2,46 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useEffect, useState, useTransition } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 import { Button, Input } from "@/components/ui";
 
 function normalize(value: string) {
   return value.trim();
+}
+
+function getFriendlyAuthErrorMessage(error: unknown) {
+  const rawMessage =
+    typeof error === "string" ? error : error instanceof Error ? error.message : "";
+
+  const message = rawMessage.toLowerCase();
+
+  if (
+    message.includes("invalidaccountid") ||
+    message.includes("account not found") ||
+    message.includes("no account")
+  ) {
+    return "We couldn't find an account with that email. You can create one below.";
+  }
+
+  if (
+    message.includes("invalidcredentials") ||
+    message.includes("invalid credentials") ||
+    message.includes("password")
+  ) {
+    return "Incorrect email or password.";
+  }
+
+  if (message.includes("missing environment variable") && message.includes("jwt")) {
+    return "We're finishing authentication setup. Please try again shortly or contact support.";
+  }
+
+  if (message.includes("too many") || message.includes("rate limit")) {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+
+  return "Unable to sign in. Please check your email and password.";
 }
 
 export default function LoginPage() {
@@ -19,6 +52,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [mounted, setMounted] = useState(false);
+
+  // Avoid hydration mismatches from browser extensions/autofill by
+  // rendering the interactive form only after client mount.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -43,9 +83,8 @@ export default function LoginPage() {
         setSuccessMessage("Signed in successfully");
         router.push("/dashboard");
       } catch (signinError) {
-        const message =
-          signinError instanceof Error ? signinError.message : "Unable to sign in";
-        setError(message);
+        console.error(signinError);
+        setError(getFriendlyAuthErrorMessage(signinError));
       }
     });
   };
@@ -61,45 +100,50 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium text-foreground">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              disabled={isPending}
-              required
-            />
-          </div>
+        {mounted ? (
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium text-foreground">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={isPending}
+                required
+              />
+            </div>
 
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium text-foreground">
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              disabled={isPending}
-              required
-            />
-          </div>
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium text-foreground">
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                disabled={isPending}
+                required
+              />
+            </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          {successMessage ? <p className="text-sm text-green-600">{successMessage}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {successMessage ? <p className="text-sm text-green-600">{successMessage}</p> : null}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? "Signing in…" : "Sign in"}
-          </Button>
-        </form>
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+        ) : (
+          // Initial server render and pre-hydration client render placeholder
+          <div className="space-y-4" aria-hidden />
+        )}
 
         <div className="space-y-2 text-center text-sm text-muted-foreground">
           <Link href="/reset-password" className="text-primary underline-offset-4 hover:underline">

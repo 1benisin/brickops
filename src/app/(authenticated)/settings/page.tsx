@@ -19,10 +19,10 @@ interface MemberRow {
 }
 
 export default function SettingsPage() {
-  const currentUser = useQuery(api.users.getCurrentUser);
-  const members = useQuery(api.users.listMembers);
-  const updateProfile = useMutation(api.users.updateProfile);
-  const regenerateInviteCode = useMutation(api.users.regenerateInviteCode);
+  const currentUser = useQuery(api.functions.users.getCurrentUser);
+  const members = useQuery(api.functions.users.listMembers);
+  const updateProfile = useMutation(api.functions.users.updateProfile);
+  const regenerateInviteCode = useMutation(api.functions.users.regenerateInviteCode);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function SettingsPage() {
       setFirstName(currentUser.user.firstName ?? "");
       setLastName(currentUser.user.lastName ?? "");
     }
-  }, [currentUser?.user?.firstName, currentUser?.user?.lastName]);
+  }, [currentUser?.user]);
 
   const isOwner = currentUser?.user?.role === "owner";
   const inviteCode = currentUser?.businessAccount?.inviteCode ?? "";
@@ -86,8 +86,7 @@ export default function SettingsPage() {
         setInviteFeedback(`Invite code rotated: ${result.inviteCode}`);
         setTimeout(() => setInviteFeedback(null), 4000);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unable to regenerate invite code";
+        const message = error instanceof Error ? error.message : "Unable to regenerate invite code";
         setInviteFeedback(message);
       }
     });
@@ -115,7 +114,9 @@ export default function SettingsPage() {
     <div className="space-y-10">
       <section className="space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Account settings</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Account settings
+          </h1>
           <p className="text-sm text-muted-foreground">
             Update your personal details and manage workspace access for your team.
           </p>
@@ -137,6 +138,8 @@ export default function SettingsPage() {
                 </label>
                 <Input
                   id="firstName"
+                  autoComplete="off"
+                  data-lpignore="true"
                   value={firstName}
                   onChange={(event) => setFirstName(event.target.value)}
                   disabled={isUpdatingProfile}
@@ -148,14 +151,25 @@ export default function SettingsPage() {
                 </label>
                 <Input
                   id="lastName"
+                  autoComplete="off"
+                  data-lpignore="true"
                   value={lastName}
                   onChange={(event) => setLastName(event.target.value)}
                   disabled={isUpdatingProfile}
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Email</label>
-                <Input value={currentUser.user?.email ?? ""} disabled readOnly />
+                <label htmlFor="email" className="text-sm font-medium text-foreground">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  value={currentUser.user?.email ?? ""}
+                  disabled
+                  readOnly
+                />
               </div>
             </div>
 
@@ -177,7 +191,12 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input value={inviteCode} readOnly disabled className="sm:max-w-xs" />
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={handleCopyInvite} disabled={!inviteCode}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCopyInvite}
+                  disabled={!inviteCode}
+                >
                   <Copy className="mr-2 size-4" /> Copy
                 </Button>
                 <Button
@@ -191,7 +210,9 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </div>
-            {inviteFeedback ? <p className="text-sm text-muted-foreground">{inviteFeedback}</p> : null}
+            {inviteFeedback ? (
+              <p className="text-sm text-muted-foreground">{inviteFeedback}</p>
+            ) : null}
             {!isOwner ? (
               <p className="text-xs text-muted-foreground">
                 Invite code rotation is limited to business owners.
@@ -205,8 +226,7 @@ export default function SettingsPage() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Team members</h2>
           <p className="text-sm text-muted-foreground">
-            Everyone listed here shares access to inventory, orders, and catalog data for
-            {" "}
+            Everyone listed here shares access to inventory, orders, and catalog data for{" "}
             <span className="font-medium text-foreground">
               {currentUser.businessAccount?.name ?? "your business"}
             </span>
@@ -225,7 +245,8 @@ export default function SettingsPage() {
             {sortedMembers.map((member) => (
               <div key={member._id} className="grid grid-cols-4 gap-4 p-3 text-sm">
                 <span className="font-medium text-foreground">
-                  {member.name ?? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() || "—"}
+                  {member.name ??
+                    (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() || "—")}
                   {member.isCurrentUser ? " (you)" : ""}
                 </span>
                 <span className="capitalize text-muted-foreground">{member.role}</span>

@@ -4,23 +4,21 @@ import type { ConvexReactClient } from "convex/react";
 export type MockWatch = {
   onUpdate: jest.Mock<() => void, [() => void]>;
   localQueryResult: jest.Mock<unknown | undefined, []>;
-  journal: jest.Mock<unknown | undefined, []>;
+  journal: jest.Mock<any, []>;
 };
 
-type ConvexClientOverrides = Partial<ConvexReactClient> & {
-  watchQuery?: jest.Mock<MockWatch, any>;
-};
+type ConvexClientOverrides = Partial<ConvexReactClient>;
 
 export const createMockConvexClient = (
-  overrides: Partial<ConvexClientOverrides> = {},
+  overrides: ConvexClientOverrides = {},
 ): ConvexReactClient => {
   const watchQuery = jest.fn(
     (): MockWatch => ({
-      onUpdate: jest.fn(() => () => undefined),
+      onUpdate: jest.fn((_callback: () => void) => () => {}),
       localQueryResult: jest.fn(),
       journal: jest.fn(),
     }),
-  );
+  ) as any;
 
   const base: Partial<ConvexReactClient> = {
     mutation: jest.fn(),

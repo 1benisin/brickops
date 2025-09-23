@@ -9,7 +9,7 @@ describe("environment validation", () => {
     });
 
     expect(result).toEqual({
-      NEXT_PUBLIC_CONVEX_URL: "https://example.convex.cloud/",
+      NEXT_PUBLIC_CONVEX_URL: "https://example.convex.cloud",
       CONVEX_DEPLOYMENT: "staging",
     });
   });

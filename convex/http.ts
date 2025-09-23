@@ -1,4 +1,5 @@
 import { httpRouter } from "convex/server";
+import { httpAction } from "./_generated/server";
 
 import { validateBricklink, validateBrickognize, validateBrickowl } from "./lib/external/validate";
 import { auth } from "./auth";
@@ -7,84 +8,94 @@ const http = httpRouter();
 
 auth.addHttpRoutes(http);
 
+const healthz = httpAction(
+  async (_ctx, _req) =>
+    new Response("ok", {
+      status: 200,
+    }),
+);
+
 http.route({
   path: "/healthz",
   method: "GET",
-  handler: async () => ({
-    status: 200,
-    body: "ok",
-  }),
+  handler: healthz,
 });
 
-const toJsonResponse = (data: unknown, status: number) => ({
-  status,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(data),
+const toJsonResponse = (data: unknown, status: number) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+const brickognizeHealth = httpAction(async (_ctx, _req) => {
+  try {
+    const result = await validateBrickognize();
+    const status = result.ok ? 200 : 503;
+    return toJsonResponse(result, status);
+  } catch (error) {
+    return toJsonResponse(
+      {
+        provider: "brickognize",
+        ok: false,
+        error: (error as Error).message,
+      },
+      500,
+    );
+  }
 });
 
 http.route({
   path: "/api/health/brickognize",
   method: "GET",
-  handler: async () => {
-    try {
-      const result = await validateBrickognize();
-      const status = result.ok ? 200 : 503;
-      return toJsonResponse(result, status);
-    } catch (error) {
-      return toJsonResponse(
-        {
-          provider: "brickognize",
-          ok: false,
-          error: (error as Error).message,
-        },
-        500,
-      );
-    }
-  },
+  handler: brickognizeHealth,
+});
+
+const bricklinkHealth = httpAction(async (_ctx, _req) => {
+  try {
+    const result = await validateBricklink("system");
+    const status = result.ok ? 200 : 503;
+    return toJsonResponse(result, status);
+  } catch (error) {
+    return toJsonResponse(
+      {
+        provider: "bricklink",
+        ok: false,
+        error: (error as Error).message,
+      },
+      500,
+    );
+  }
 });
 
 http.route({
   path: "/api/health/bricklink",
   method: "GET",
-  handler: async () => {
-    try {
-      const result = await validateBricklink("system");
-      const status = result.ok ? 200 : 503;
-      return toJsonResponse(result, status);
-    } catch (error) {
-      return toJsonResponse(
-        {
-          provider: "bricklink",
-          ok: false,
-          error: (error as Error).message,
-        },
-        500,
-      );
-    }
-  },
+  handler: bricklinkHealth,
+});
+
+const brickowlHealth = httpAction(async (_ctx, _req) => {
+  try {
+    const result = await validateBrickowl();
+    const status = result.ok ? 200 : 503;
+    return toJsonResponse(result, status);
+  } catch (error) {
+    return toJsonResponse(
+      {
+        provider: "brickowl",
+        ok: false,
+        error: (error as Error).message,
+      },
+      500,
+    );
+  }
 });
 
 http.route({
   path: "/api/health/brickowl",
   method: "GET",
-  handler: async () => {
-    try {
-      const result = await validateBrickowl();
-      const status = result.ok ? 200 : 503;
-      return toJsonResponse(result, status);
-    } catch (error) {
-      return toJsonResponse(
-        {
-          provider: "brickowl",
-          ok: false,
-          error: (error as Error).message,
-        },
-        500,
-      );
-    }
-  },
+  handler: brickowlHealth,
 });
 
 export default http;

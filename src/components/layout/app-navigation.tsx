@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
+import type { Route } from "next";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export interface NavigationItem {
   label: string;
-  href: string;
+  href: Route;
   icon?: ComponentType<{ className?: string }>;
 }
 

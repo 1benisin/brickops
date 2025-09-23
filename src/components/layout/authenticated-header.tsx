@@ -9,6 +9,7 @@ import {
   Button,
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -64,6 +65,7 @@ export function AuthenticatedHeader({ navigation, onSignOut }: AuthenticatedHead
             <SheetContent side="right" className="w-full max-w-xs">
               <SheetHeader className="pb-4 text-left">
                 <SheetTitle>Navigation</SheetTitle>
+                <SheetDescription>Access navigation links and sign out options</SheetDescription>
               </SheetHeader>
               <div className="flex flex-col gap-4">
                 <AppNavigation

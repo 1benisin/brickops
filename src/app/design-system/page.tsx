@@ -36,10 +36,10 @@ export const metadata: Metadata = {
 };
 
 const navigation = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Inventory", href: "/inventory" },
-  { label: "Orders", href: "/orders" },
-  { label: "Catalog", href: "/catalog" },
+  { label: "Dashboard", href: "/dashboard" as const },
+  { label: "Inventory", href: "/inventory" as const },
+  { label: "Orders", href: "/orders" as const },
+  { label: "Catalog", href: "/catalog" as const },
 ];
 
 const buttonVariantsConfig = [

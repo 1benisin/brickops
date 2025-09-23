@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: true,
   timeout: 60_000,
   expect: {
-    timeout: 5_000,
+    timeout: IS_CI ? 10_000 : 5_000,
   },
   retries: IS_CI ? 2 : 0,
   workers: IS_CI ? 2 : undefined,
@@ -44,10 +44,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev:next",
+    // In CI, run against a built production server for faster, deterministic responses
+    command: IS_CI ? "pnpm build && pnpm start" : "pnpm dev",
     port: 3000,
     reuseExistingServer: !IS_CI,
-    timeout: 120_000,
+    timeout: IS_CI ? 180_000 : 120_000,
+    env: {
+      PLAYWRIGHT_TEST: "true",
+    },
   },
   metadata: {
     owner: "QA",

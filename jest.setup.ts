@@ -2,6 +2,26 @@ import "@testing-library/jest-dom";
 
 import { resetMockNavigation } from "@/test-utils/next-navigation";
 
+// Suppress Next.js internal act warnings in tests
+const originalError = console.error;
+// eslint-disable-next-line no-undef
+beforeAll(() => {
+  console.error = (...args) => {
+    if (
+      typeof args[0] === "string" &&
+      args[0].includes("The current testing environment is not configured to support act")
+    ) {
+      return;
+    }
+    originalError.call(console, ...args);
+  };
+});
+
+// eslint-disable-next-line no-undef
+afterAll(() => {
+  console.error = originalError;
+});
+
 // eslint-disable-next-line no-undef
 beforeEach(() => {
   resetMockNavigation();
@@ -38,6 +58,5 @@ if (typeof global.ResizeObserver === "undefined") {
     }
   }
 
-  // @ts-expect-error - Provide minimal ResizeObserver implementation for tests
   global.ResizeObserver = ResizeObserver;
 }
