@@ -16,12 +16,13 @@ type TableSeed = Record<string, unknown> & {
 
 type SeedData = Record<string, TableSeed[]>;
 
+type ChainableQuery<T> = {
+  eq: (field: keyof T & string, value: unknown) => ChainableQuery<T>;
+};
+
 type QueryBuilder<T> = {
   filter: (predicate: (doc: T) => boolean) => QueryBuilder<T>;
-  withIndex: (
-    _indexName: string,
-    handler?: (query: { eq: (field: keyof T & string, value: unknown) => QueryBuilder<T> }) => void,
-  ) => QueryBuilder<T>;
+  withIndex: (_indexName: string, handler?: (query: ChainableQuery<T>) => void) => QueryBuilder<T>;
   collect: () => Promise<T[]>;
   first: () => Promise<T | null>;
   unique: () => Promise<T | null>;
@@ -126,12 +127,15 @@ export class MockDb {
       },
       withIndex: (_indexName, handler) => {
         if (handler) {
-          handler({
-            eq: (field, value) => {
+          // Create a chainable query object that supports multiple .eq() calls
+          const createChainableQuery = (): ChainableQuery<T> => ({
+            eq: (field: keyof T & string, value: unknown) => {
               records = records.filter((doc) => (doc as Record<string, unknown>)[field] === value);
-              return builder;
+              return createChainableQuery();
             },
           });
+
+          handler(createChainableQuery());
         }
         return builder;
       },
@@ -211,10 +215,29 @@ type InventorySeed = {
   createdAt?: number;
 };
 
+type LegoPartCatalogSeed = {
+  businessAccountId: string;
+  partNumber: string;
+  name: string;
+  description?: string;
+  category?: string;
+  imageUrl?: string;
+  bricklinkPartId?: string;
+  bricklinkCategoryId?: number;
+  dataSource: "brickops" | "bricklink" | "manual";
+  lastUpdated: number;
+  lastFetchedFromBricklink?: number;
+  dataFreshness: "fresh" | "stale" | "expired";
+  createdBy: string;
+  createdAt: number;
+  updatedAt?: number;
+};
+
 export const buildSeedData = (seed: {
   businessAccounts?: BusinessAccountSeed[];
   users?: UserSeed[];
   inventoryItems?: InventorySeed[];
+  legoPartCatalog?: LegoPartCatalogSeed[];
 }) => seed as SeedData;
 
 export const createTestIdentity = (overrides: Partial<Identity> = {}): Identity => ({

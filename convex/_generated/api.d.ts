@@ -8,13 +8,10 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
+import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
+import type * as functions_catalog from "../functions/catalog.js";
 import type * as functions_hello from "../functions/hello.js";
 import type * as functions_hello_impl from "../functions/hello_impl.js";
 import type * as functions_internal from "../functions/internal.js";
@@ -46,6 +43,7 @@ import type * as lib_webcrypto from "../lib/webcrypto.js";
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
+  "functions/catalog": typeof functions_catalog;
   "functions/hello": typeof functions_hello;
   "functions/hello_impl": typeof functions_hello_impl;
   "functions/internal": typeof functions_internal;
@@ -66,11 +64,5 @@ declare const fullApi: ApiFromModules<{
   "lib/external/validate": typeof lib_external_validate;
   "lib/webcrypto": typeof lib_webcrypto;
 }>;
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
+export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
+export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
