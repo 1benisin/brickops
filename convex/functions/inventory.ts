@@ -73,8 +73,9 @@ export const addInventoryItem = mutation({
 
     const existingItem = await ctx.db
       .query("inventoryItems")
-      .withIndex("by_sku", (q) => q.eq("businessAccountId", args.businessAccountId))
-      .filter((item) => item.sku === args.sku)
+      .withIndex("by_sku", (q) =>
+        q.eq("businessAccountId", args.businessAccountId).eq("sku", args.sku),
+      )
       .first();
 
     if (existingItem) {
