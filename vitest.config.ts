@@ -36,16 +36,16 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: "@/test-utils",
-        replacement: fileURLToPath(new URL("./test/utils", import.meta.url)),
+        find: /^@\/test-utils\//,
+        replacement: fileURLToPath(new URL("./test/utils/", import.meta.url)),
       },
       {
-        find: "@/convex",
-        replacement: fileURLToPath(new URL("./convex", import.meta.url)),
+        find: /^@\/convex\//,
+        replacement: fileURLToPath(new URL("./convex/", import.meta.url)),
       },
       {
-        find: "@",
-        replacement: fileURLToPath(new URL("./src", import.meta.url)),
+        find: /^@\//,
+        replacement: fileURLToPath(new URL("./src/", import.meta.url)),
       },
     ],
   },
