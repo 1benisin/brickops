@@ -3,11 +3,11 @@ import { AppHeader, PageContainer } from "@/components/layout";
 import { Button } from "@/components/ui";
 
 const navigation = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Inventory", href: "/inventory" },
-  { label: "Orders", href: "/orders" },
-  { label: "Catalog", href: "/catalog" },
-  { label: "Design System", href: "/design-system" },
+  { label: "Dashboard", href: "/dashboard" as const },
+  { label: "Inventory", href: "/inventory" as const },
+  { label: "Orders", href: "/orders" as const },
+  { label: "Catalog", href: "/catalog" as const },
+  { label: "Design System", href: "/design-system" as const },
 ];
 
 export default function HomePage() {
