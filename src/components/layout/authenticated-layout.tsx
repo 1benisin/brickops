@@ -15,7 +15,7 @@ const NAVIGATION: NavigationItem[] = [
   { label: "Catalog", href: "/catalog" },
   { label: "Identify", href: "/identify" },
   { label: "Settings", href: "/settings" },
-];
+] as const;
 
 interface AuthenticatedLayoutProps {
   children: ReactNode;
