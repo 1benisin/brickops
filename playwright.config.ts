@@ -49,6 +49,9 @@ export default defineConfig({
     port: 3000,
     reuseExistingServer: !IS_CI,
     timeout: IS_CI ? 180_000 : 120_000,
+    env: {
+      PLAYWRIGHT_TEST: "true",
+    },
   },
   metadata: {
     owner: "QA",
