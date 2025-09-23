@@ -42,13 +42,46 @@ export default defineSchema({
     colorId: v.string(),
     location: v.string(),
     quantityAvailable: v.number(),
+    // Quantity splits to support status tracking
+    quantityReserved: v.number(),
+    quantitySold: v.number(),
+    status: v.union(v.literal("available"), v.literal("reserved"), v.literal("sold")),
     condition: v.union(v.literal("new"), v.literal("used")),
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
+    // Soft delete support
+    isArchived: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
   })
     .index("by_businessAccount", ["businessAccountId"])
     .index("by_sku", ["businessAccountId", "sku"]),
+
+  // Audit log for inventory changes
+  inventoryAuditLogs: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    itemId: v.id("inventoryItems"),
+    changeType: v.union(
+      v.literal("create"),
+      v.literal("update"),
+      v.literal("adjust"),
+      v.literal("delete"),
+    ),
+    // Deltas for quantities (optional per event)
+    deltaAvailable: v.optional(v.number()),
+    deltaReserved: v.optional(v.number()),
+    deltaSold: v.optional(v.number()),
+    fromStatus: v.optional(
+      v.union(v.literal("available"), v.literal("reserved"), v.literal("sold")),
+    ),
+    toStatus: v.optional(v.union(v.literal("available"), v.literal("reserved"), v.literal("sold"))),
+    actorUserId: v.id("users"),
+    reason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_item", ["itemId"]) // fetch logs per item
+    .index("by_businessAccount", ["businessAccountId"]) // fetch logs per tenant
+    .index("by_createdAt", ["businessAccountId", "createdAt"]),
 
   legoPartCatalog: defineTable({
     businessAccountId: v.id("businessAccounts"),

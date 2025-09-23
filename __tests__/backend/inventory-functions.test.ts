@@ -6,6 +6,9 @@ import {
   addInventoryItem,
   listInventoryItems,
   updateInventoryQuantity,
+  deleteInventoryItem,
+  getInventoryTotals,
+  listInventoryAuditLogs,
 } from "@/convex/functions/inventory";
 import {
   buildSeedData,
@@ -208,5 +211,102 @@ describe("inventory functions", () => {
         businessAccountId,
       }),
     ).rejects.toThrow("Authentication required");
+  });
+
+  it("excludes archived items from listings and totals", async () => {
+    const seed = buildSeedData({
+      ...baseSeed,
+      inventoryItems: [
+        {
+          _id: "inventoryItems:1",
+          businessAccountId,
+          sku: "3001",
+          name: "Brick 2x4",
+          colorId: "5",
+          location: "A1-B2",
+          quantityAvailable: 10,
+          quantityReserved: 2,
+          quantitySold: 1,
+          condition: "new",
+          createdBy: ownerUserId,
+          createdAt: 1,
+        },
+        {
+          _id: "inventoryItems:2",
+          businessAccountId,
+          sku: "3002",
+          name: "Plate 2x2",
+          colorId: "1",
+          location: "B1-C3",
+          quantityAvailable: 5,
+          quantityReserved: 1,
+          quantitySold: 0,
+          condition: "used",
+          createdBy: ownerUserId,
+          createdAt: 1,
+          isArchived: true,
+          deletedAt: 2,
+        },
+      ],
+    });
+
+    const ctx = createConvexTestContext({
+      seed,
+      identity: createTestIdentity({ subject: `${ownerUserId}|session-1` }),
+    });
+
+    const items = await (listInventoryItems as any)._handler(ctx, {
+      businessAccountId,
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]._id).toBe("inventoryItems:1");
+
+    const totals = await (getInventoryTotals as any)._handler(ctx, {
+      businessAccountId,
+    });
+    expect(totals).toMatchObject({
+      counts: { items: 1 },
+      totals: { available: 10, reserved: 2, sold: 1 },
+    });
+  });
+
+  it("records audit logs for create/update/delete and lists them by item and by tenant", async () => {
+    const ctx = createConvexTestContext({
+      seed: baseSeed,
+      identity: createTestIdentity({ subject: `${ownerUserId}|session-1` }),
+    });
+
+    const itemId = await (addInventoryItem as any)._handler(ctx, {
+      businessAccountId,
+      sku: "3001",
+      name: "Brick 2x4",
+      colorId: "5",
+      location: "A1-B2",
+      quantityAvailable: 10,
+      condition: "new",
+    });
+
+    await (updateInventoryQuantity as any)._handler(ctx, {
+      itemId,
+      quantityAvailable: 12,
+    });
+
+    await (deleteInventoryItem as any)._handler(ctx, {
+      itemId,
+      reason: "test cleanup",
+    });
+
+    const byItem = await (listInventoryAuditLogs as any)._handler(ctx, {
+      businessAccountId,
+      itemId,
+    });
+    expect(byItem.length).toBeGreaterThanOrEqual(3);
+    expect(byItem[0]).toHaveProperty("changeType");
+
+    const byTenant = await (listInventoryAuditLogs as any)._handler(ctx, {
+      businessAccountId,
+      limit: 2,
+    });
+    expect(byTenant.length).toBeLessThanOrEqual(2);
   });
 });

@@ -10,7 +10,7 @@ so that **I can quickly migrate my current inventory without manual entry**.
 
 ### Acceptance Criteria
 
-1. **3.1.1:** User can upload CSV/Excel files with inventory data
+1. **3.1.1:** User can upload XML files with inventory data
 2. **3.1.2:** System validates uploaded data format and provides error feedback
 3. **3.1.3:** System maps uploaded columns to inventory fields (part number, quantity, location, etc.)
 4. **3.1.4:** User can preview and confirm data before import
