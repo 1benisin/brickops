@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import LoginPage from "@/app/(auth)/login/page";
@@ -24,21 +24,27 @@ describe("LoginPage", () => {
 
     render(<LoginPage />);
 
-    await user.type(screen.getByLabelText(/email/i), "owner@example.com");
-    await user.type(screen.getByLabelText(/password/i), "secret123");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    // Wrap all user interactions in act() to handle state updates
+    await act(async () => {
+      await user.type(await screen.findByLabelText(/email/i), "owner@example.com");
+      await user.type(await screen.findByLabelText(/password/i), "secret123");
+    });
 
+    const submit = await screen.findByRole("button", { name: /sign in/i });
+
+    await act(async () => {
+      await user.click(submit);
+    });
+
+    const { push } = getRouterMocks();
     await waitFor(() => {
       expect(signInMock).toHaveBeenCalledWith("password", {
         flow: "signIn",
         email: "owner@example.com",
         password: "secret123",
       });
-    });
-
-    const { push } = getRouterMocks();
-    await waitFor(() => {
       expect(push).toHaveBeenCalledWith("/dashboard");
+      expect(screen.queryByRole("button", { name: /signing in/i })).not.toBeInTheDocument();
     });
   });
 });
