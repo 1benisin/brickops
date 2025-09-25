@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
+import Image from "next/image";
 
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
@@ -248,8 +250,8 @@ export function CameraIdentificationPanel() {
       setStage("identifying");
 
       const identification = await service.identifyPartFromImage({
-        storageId,
-        businessAccountId,
+        storageId: storageId as Id<"_storage">,
+        businessAccountId: businessAccountId!,
       });
 
       setResult(identification);
@@ -340,12 +342,16 @@ export function CameraIdentificationPanel() {
               ) : null}
 
               {showPreview && capturedImage ? (
-                <img
-                  src={capturedImage.dataUrl}
-                  alt="Captured LEGO part"
-                  className="aspect-video w-full bg-muted object-cover"
-                  data-testid="identify-preview"
-                />
+                <div className="relative aspect-video w-full bg-muted">
+                  <Image
+                    src={capturedImage.dataUrl}
+                    alt="Captured LEGO part"
+                    fill
+                    className="object-cover"
+                    data-testid="identify-preview"
+                    unoptimized
+                  />
+                </div>
               ) : null}
 
               {stage === "idle" ? (
@@ -514,11 +520,15 @@ export function CameraIdentificationPanel() {
               <ul className="grid gap-4 sm:grid-cols-2">
                 {attempts.map((attempt) => (
                   <li key={attempt.id} className="space-y-2">
-                    <img
-                      src={attempt.imageDataUrl}
-                      alt="Previous identification attempt"
-                      className="aspect-video w-full rounded-md border object-cover"
-                    />
+                    <div className="relative aspect-video w-full rounded-md border overflow-hidden">
+                      <Image
+                        src={attempt.imageDataUrl}
+                        alt="Previous identification attempt"
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>{new Date(attempt.timestamp).toLocaleTimeString()}</span>
                       {attempt.result ? (

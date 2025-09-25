@@ -1,11 +1,12 @@
 import type { ConvexReactClient } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { getConvexClient } from "@/lib/convexClient";
 
 export interface PartIdentificationRequest {
-  storageId: string;
-  businessAccountId: string;
+  storageId: Id<"_storage">;
+  businessAccountId: Id<"businessAccounts">;
 }
 
 export interface PartIdentificationExternalLink {

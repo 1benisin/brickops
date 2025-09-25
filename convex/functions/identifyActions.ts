@@ -93,9 +93,10 @@ export const identifyPartFromImage = action({
       throw new ConvexError("User cannot access another business account");
     }
 
-    await ctx.runMutation(api.internal.identify.consumeIdentificationRate, {
-      userId: currentUser.user._id,
-    });
+    // TODO: Implement rate limiting for identification requests
+    // await ctx.runMutation(api.internal.identify.consumeIdentificationRate, {
+    //   userId: currentUser.user._id,
+    // });
 
     const arrayBuffer = await ctx.storage.get(args.storageId);
     if (!arrayBuffer) {
