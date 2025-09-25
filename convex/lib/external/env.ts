@@ -31,7 +31,20 @@ export type BricklinkCredentials = {
   tokenSecret: string;
 };
 
-export const getBrickognizeApiKey = () => getSecret("BRICKOGNIZE_API_KEY");
+export const getBrickognizeApiKey = (): string | null => {
+  if (cache.has("BRICKOGNIZE_API_KEY")) {
+    return cache.get("BRICKOGNIZE_API_KEY")!;
+  }
+
+  const value = process.env.BRICKOGNIZE_API_KEY;
+  if (!value || !value.trim()) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  cache.set("BRICKOGNIZE_API_KEY", normalized);
+  return normalized;
+};
 
 export const getBrickowlApiKey = () => getSecret("BRICKOWL_API_KEY");
 

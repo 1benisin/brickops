@@ -4,15 +4,15 @@ import { RateLimitConfig } from "./httpClient";
 import { recordMetric } from "./metrics";
 import { ValidationResult, normalizeApiError } from "./types";
 
-const BASE_URL = "https://brickognize.com/api";
-const HEALTH_ENDPOINT = "/health/";
+const BASE_URL = "https://api.brickognize.com";
+const HEALTH_ENDPOINT = "/health";
 const DEFAULT_RATE_LIMIT: RateLimitConfig = {
   capacity: 100,
   intervalMs: 60_000,
 };
 
 export class BrickognizeClient {
-  private readonly apiKey: string;
+  private readonly apiKey: string | null;
   private readonly http: ExternalHttpClient;
 
   constructor(options: { apiKey?: string } = {}) {
@@ -26,12 +26,17 @@ export class BrickognizeClient {
   async request<T>(
     options: Omit<RequestOptions, "rateLimit"> & { rateLimit?: RateLimitConfig },
   ): Promise<RequestResult<T>> {
+    const headers = {
+      ...(options.headers ?? {}),
+    } as Record<string, string>;
+
+    if (this.apiKey) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+
     return this.http.request<T>({
       ...options,
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        ...(options.headers ?? {}),
-      },
+      headers,
       rateLimit: options.rateLimit ?? DEFAULT_RATE_LIMIT,
     });
   }
