@@ -7,7 +7,7 @@ import {
   validateExternalApis,
 } from "@/convex/lib/external/validate";
 import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
-import { sharedRateLimiter } from "@/convex/lib/external/rateLimiter";
+import { sharedRateLimiter } from "@/convex/lib/external/inMemoryRateLimiter";
 
 const successResponse = (data: unknown, status = 200) => ({
   ok: status >= 200 && status < 300,

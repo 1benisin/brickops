@@ -3,11 +3,12 @@ import { Email } from "@convex-dev/auth/providers/Email";
 import { Password } from "@convex-dev/auth/providers/Password";
 import type { GenericMutationCtx } from "convex/server";
 import { ConvexError } from "convex/values";
+import { checkAndConsumeRateLimitDirect } from "./lib/dbRateLimiter";
 import type { DataModel, Id } from "./_generated/dataModel";
 
 import { sendPasswordResetEmail } from "./lib/external/email";
 
-type Role = "owner" | "manager" | "picker";
+type Role = "owner" | "manager" | "picker" | "viewer";
 type UserStatus = "active" | "invited";
 
 type CreateOrUpdateUserArgs = {
@@ -69,12 +70,16 @@ function buildProfile(params: Record<string, unknown>): ProfileParams {
   let lastName = typeof params.lastName === "string" ? params.lastName.trim() : undefined;
 
   const inviteCode = typeof params.inviteCode === "string" ? params.inviteCode.trim() : undefined;
+  const rawInviteToken =
+    typeof (params as { inviteToken?: unknown }).inviteToken === "string"
+      ? (params as { inviteToken?: string }).inviteToken!.trim()
+      : undefined;
 
   if (flow === "signUp") {
     firstName = assertString(firstName, "firstName");
     lastName = assertString(lastName, "lastName");
     if (!inviteCode) {
-      profile.businessName = assertString(params.businessName, "businessName");
+      profile.businessName = assertString(params.businessName as string, "businessName");
     }
   }
 
@@ -91,7 +96,9 @@ function buildProfile(params: Record<string, unknown>): ProfileParams {
     profile.name = derivedName;
   }
 
-  if (inviteCode) {
+  if (rawInviteToken) {
+    (profile as ProfileParams & { inviteToken?: string }).inviteToken = rawInviteToken;
+  } else if (inviteCode) {
     profile.inviteCode = inviteCode;
   }
 
@@ -164,7 +171,43 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
   let businessAccountId: Id<"businessAccounts">;
   let role: Role = "owner";
 
-  if (profile.inviteCode) {
+  const profWithToken = profile as ProfileParams & { inviteToken?: string };
+  let usedInviteToken = false;
+  if (profWithToken.inviteToken) {
+    // Redeem explicit invite token → sets account and role from userInvites
+    const token = profWithToken.inviteToken;
+    // Rate limit by token to prevent brute-force redemption attempts
+    const tokenKey = `token:${token}:invite_redeem`;
+    const tokenLimit = await checkAndConsumeRateLimitDirect(ctx, {
+      key: tokenKey,
+      kind: "invite_redeem",
+      limit: 5, // 5 attempts per hour per token
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!tokenLimit.allowed) {
+      throw new ConvexError("Too many attempts. Please try again later.");
+    }
+    const invite = await ctx.db
+      .query("userInvites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .unique();
+
+    if (!invite) {
+      throw new ConvexError("Invite not found");
+    }
+    if (invite.expiresAt < now) {
+      throw new ConvexError("Invite has expired");
+    }
+    if (invite.redeemedAt) {
+      throw new ConvexError("Invite already redeemed");
+    }
+
+    businessAccountId = invite.businessAccountId;
+    role = invite.role as Role;
+
+    await ctx.db.patch(invite._id, { redeemedAt: now });
+    usedInviteToken = true;
+  } else if (profile.inviteCode) {
     const account = await ctx.db
       .query("businessAccounts")
       .withIndex("by_inviteCode", (q) => q.eq("inviteCode", profile.inviteCode!))
@@ -201,6 +244,16 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
     createdAt: now,
     updatedAt: now,
   });
+
+  if (usedInviteToken) {
+    await ctx.db.insert("userAuditLogs", {
+      businessAccountId,
+      targetUserId: userId,
+      action: "invite_redeemed",
+      actorUserId: userId,
+      createdAt: now,
+    });
+  }
 
   if (role === "owner") {
     await ctx.db.patch(businessAccountId, {

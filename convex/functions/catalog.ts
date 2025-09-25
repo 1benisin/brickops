@@ -3,7 +3,7 @@ import { mutation, query, MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { BricklinkClient } from "../lib/external/bricklink";
-import { sharedRateLimiter } from "../lib/external/rateLimiter";
+import { sharedRateLimiter } from "../lib/external/inMemoryRateLimiter";
 import { recordMetric } from "../lib/external/metrics";
 
 type RequireUserReturn = {

@@ -20,7 +20,7 @@ vi.mock("@/convex/lib/external/bricklink", () => ({
   })),
 }));
 
-vi.mock("@/convex/lib/external/rateLimiter", () => ({
+vi.mock("@/convex/lib/external/inMemoryRateLimiter", () => ({
   sharedRateLimiter: {
     consume: vi.fn(),
   },

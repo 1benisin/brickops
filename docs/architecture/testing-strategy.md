@@ -279,3 +279,289 @@ test("user can add inventory item via camera identification", async ({ page }) =
   await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
 });
 ```
+
+## E2E Testing Best Practices
+
+### Authentication & Role-Based Testing
+
+**Critical Pattern**: Always mock authentication state with the appropriate user role for the feature being tested.
+
+```typescript
+test.beforeEach(async ({ page }) => {
+  // Mock authentication state - CRITICAL: Use correct role for test scenario
+  await page.route("**/convex/function/users.getAuthState", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        isAuthenticated: true,
+        user: {
+          role: "owner", // ⚠️ CRITICAL: Use "owner" for admin features, not "manager"
+          status: "active",
+          businessAccountId: "businessAccounts:1",
+        },
+      }),
+    });
+  });
+
+  // Mock current user details
+  await page.route("**/convex/function/users.getCurrentUser", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: {
+          role: "owner", // Must match getAuthState
+          firstName: "Test",
+          lastName: "Owner",
+          email: "owner@example.com",
+        },
+        businessAccount: { name: "Test Business" },
+      }),
+    });
+  });
+});
+```
+
+### Comprehensive API Mocking
+
+**Pattern**: Mock ALL API endpoints that the page will call, not just the primary ones.
+
+```typescript
+test.beforeEach(async ({ page }) => {
+  // Primary data endpoints
+  await page.route("**/convex/function/users.listMembers", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          _id: "users:1",
+          email: "owner@example.com",
+          firstName: "Test",
+          lastName: "Owner",
+          role: "owner",
+          status: "active",
+          isCurrentUser: true,
+        },
+      ]),
+    });
+  });
+
+  // Mutation endpoints that forms will call
+  await page.route("**/convex/mutation/users.createUserInvite", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        token: "test-invite-token",
+        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+      }),
+    });
+  });
+});
+```
+
+### URL Redirect Testing
+
+**Critical**: Verify actual redirect behavior, not assumed behavior.
+
+```typescript
+// ❌ WRONG: Assuming redirect pattern
+await expect(page).toHaveURL(/\/signup\?token=expired-token/);
+
+// ✅ CORRECT: Test actual redirect from invite page
+await page.goto("/invite?token=expired-token");
+await expect(page).toHaveURL(/\/signup\?inviteToken=expired-token/); // Note: inviteToken, not token
+```
+
+## Frontend Testing Patterns
+
+### Authentication State Mocking
+
+**Pattern**: Create consistent mock structures across all frontend tests.
+
+```typescript
+// ✅ CORRECT: Consistent auth state mocking
+const mockAuthState = {
+  isAuthenticated: true,
+  user: {
+    role: "owner",
+    status: "active",
+    businessAccountId: "businessAccounts:1",
+  },
+};
+
+const mockCurrentUser = {
+  user: {
+    role: "owner", // Must match authState.user.role
+    firstName: "Test",
+    lastName: "Owner",
+    email: "owner@example.com",
+  },
+  businessAccount: { name: "Test Business" },
+};
+
+// Apply consistently across test files
+jest.mock("convex/react", () => ({
+  useQuery: jest.fn((api) => {
+    if (api._name === "users.getAuthState") return mockAuthState;
+    if (api._name === "users.getCurrentUser") return mockCurrentUser;
+    return undefined;
+  }),
+}));
+```
+
+### Role-Based UI Testing
+
+**Pattern**: Test UI behavior for different user roles systematically.
+
+```typescript
+describe("Role-based access control", () => {
+  it.each([
+    ["owner", true, "should show invite button"],
+    ["manager", false, "should hide invite button"],
+    ["viewer", false, "should hide invite button"],
+  ])("for %s role - %s", (role, shouldShowInvite, description) => {
+    // Mock auth with specific role
+    const mockAuthWithRole = { ...mockAuthState, user: { ...mockAuthState.user, role } };
+
+    render(<UsersPage />);
+
+    const inviteButton = screen.queryByTestId("invite-button");
+    if (shouldShowInvite) {
+      expect(inviteButton).toBeInTheDocument();
+    } else {
+      expect(inviteButton).not.toBeInTheDocument();
+    }
+  });
+});
+```
+
+## Test ID Guidelines
+
+### Required Test IDs
+
+**Requirement**: All interactive elements in forms and critical UI components must have `data-testid` attributes.
+
+```typescript
+// ✅ REQUIRED: Form inputs must have test IDs
+<Input
+  id="firstName"
+  data-testid="signup-form-firstName" // Pattern: {form}-{field}
+  value={firstName}
+  onChange={(e) => setFirstName(e.target.value)}
+/>
+
+// ✅ REQUIRED: Action buttons must have test IDs
+<Button
+  onClick={handleInvite}
+  data-testid="invite-button" // Pattern: {action}-button
+>
+  Invite user
+</Button>
+
+// ✅ REQUIRED: Navigation elements
+<Link href="/settings" data-testid="nav-settings-link">
+  Settings
+</Link>
+```
+
+### Test ID Naming Convention
+
+```text
+Pattern: {component}-{element}-{modifier?}
+
+Examples:
+- signup-form-firstName      (form field)
+- invite-button             (action button)
+- users-table-row-1         (table row)
+- nav-settings-link         (navigation)
+- modal-confirm-button      (modal action)
+- error-message            (status display)
+```
+
+## Common Anti-Patterns & Solutions
+
+### ❌ Anti-Pattern: Inconsistent Role Mocking
+
+```typescript
+// ❌ WRONG: Using "manager" role for admin functionality tests
+await page.route("**/convex/function/users.getCurrentUser", (route) => {
+  route.fulfill({
+    body: JSON.stringify({
+      user: { role: "manager" }, // Manager cannot invite users!
+    }),
+  });
+});
+
+await expect(page.getByTestId("invite-button")).toBeVisible(); // Will fail!
+```
+
+**✅ Solution**: Use appropriate roles for the functionality being tested.
+
+### ❌ Anti-Pattern: Incomplete API Mocking
+
+```typescript
+// ❌ WRONG: Only mocking some endpoints
+test("invite flow", async ({ page }) => {
+  await page.route("**/users.getCurrentUser", () => {...}); // Missing other required endpoints
+  await page.goto("/settings/users"); // Will fail due to unmocked API calls
+});
+```
+
+**✅ Solution**: Mock ALL endpoints the page will call.
+
+### ❌ Anti-Pattern: Missing Test IDs
+
+```typescript
+// ❌ WRONG: Components without test IDs
+<Button onClick={handleSubmit}>Submit</Button>
+
+// E2E test fails to find element
+await page.click("button"); // Fragile - could click wrong button
+```
+
+**✅ Solution**: Add semantic test IDs to all interactive elements.
+
+### ❌ Anti-Pattern: Assuming URL Patterns
+
+```typescript
+// ❌ WRONG: Assuming redirect implementation
+await page.goto("/invite?token=abc123");
+await expect(page).toHaveURL(/\/signup\?token=abc123/); // Wrong parameter name
+```
+
+**✅ Solution**: Test actual redirect behavior by checking implementation.
+
+## Testing Checklist
+
+Before submitting a PR with new features:
+
+### Frontend Components
+
+- [ ] All interactive elements have `data-testid` attributes
+- [ ] Role-based access control is tested for all applicable roles
+- [ ] Authentication state mocking is consistent and complete
+- [ ] Form validation and error states are tested
+
+### Backend Functions
+
+- [ ] Authorization checks are tested (especially owner-only operations)
+- [ ] Rate limiting behavior is tested where applicable
+- [ ] Error conditions and edge cases are covered
+- [ ] Database operations are properly mocked/isolated
+
+### E2E Tests
+
+- [ ] Authentication state mocked with correct roles for test scenario
+- [ ] ALL API endpoints used by the page are mocked
+- [ ] URL redirects are tested against actual implementation
+- [ ] Critical user journeys are covered end-to-end
+- [ ] Security scenarios (unauthorized access) are tested
+
+### Integration Points
+
+- [ ] Cross-component interactions are tested
+- [ ] API contract compliance is verified
+- [ ] Error propagation is tested across layers

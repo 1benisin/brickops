@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { vi } from "vitest";
 import { ConvexError } from "convex/values";
 
 type Identity = {
@@ -106,7 +107,11 @@ export class MockDb {
       throw new ConvexError(`Document with id ${id} not found`);
     }
     const current = table.get(id)!;
-    const next = { ...current, ...clone(updates) };
+    // Apply updates explicitly so `undefined` values overwrite existing fields
+    const next: Record<string, unknown> = { ...current };
+    for (const key of Object.keys(updates)) {
+      (next as any)[key] = (updates as any)[key];
+    }
     table.set(id, next);
   }
 
@@ -168,6 +173,11 @@ export interface ConvexTestContext {
   auth: {
     getUserIdentity: () => Promise<Identity | null>;
   };
+  scheduler: {
+    runAfter: ReturnType<typeof vi.fn>;
+    runAt: ReturnType<typeof vi.fn>;
+    cancel: ReturnType<typeof vi.fn>;
+  };
 }
 
 export const createConvexTestContext = (
@@ -181,10 +191,17 @@ export const createConvexTestContext = (
     auth: {
       getUserIdentity: async () => identity,
     },
+    scheduler: {
+      runAfter: vi.fn().mockResolvedValue(undefined),
+      runAt: vi.fn().mockResolvedValue(undefined),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    },
   };
 };
 
 type BusinessAccountSeed = {
+  _id?: string;
+  _creationTime?: number;
   name: string;
   ownerUserId?: string;
   inviteCode?: string;
@@ -192,10 +209,12 @@ type BusinessAccountSeed = {
 };
 
 type UserSeed = {
+  _id?: string;
+  _creationTime?: number;
   businessAccountId: string;
   email: string;
   name?: string;
-  role?: "owner" | "manager" | "picker";
+  role?: "owner" | "manager" | "picker" | "viewer";
   status?: "active" | "invited";
   firstName?: string;
   lastName?: string;
