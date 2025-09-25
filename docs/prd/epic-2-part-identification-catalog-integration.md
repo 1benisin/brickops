@@ -65,3 +65,12 @@ so that **I can make informed decisions about my inventory**.
 5. **2.4.5:** User can add parts directly to inventory from detail view
 6. **2.4.6:** System displays related or similar parts for reference
 7. **2.4.7:** Part information updates in real-time across all views
+
+## Catalog Data Strategy
+
+- BrickOps treats Bricklink as the system of record but keeps a full local copy of catalog data so searches, filters, and detail views remain performant and resilient.
+- The repository includes Bricklink XML exports (`docs/external-documentation/bricklink-data/*.xml`) that seed parts, colors, categories, item types, minifigures, and element codes before any live API traffic is used.
+- Internal BrickOps sort locations (grid letter + bin number) are maintained in `bin_lookup_v3.json` and must be merged into catalog records during seeding and refresh cycles so UI and operations share a consistent location map.
+- Catalog refresh windows: records <7 days old are considered fresh, 7–30 days trigger background refresh jobs, and >30 days are treated as expired and must be refreshed on demand.
+- Refresh pipelines orchestrate multiple Bricklink endpoints (`/items/part`, `/items/part/{no}`, `/items/part/{no}/price`, `/colors`, `/categories`) per part while honoring rate limits through shared budgeting and exponential backoff.
+- The catalog exposes LEGO element IDs per part-color combination so downstream workflows (inventory auditing, exports) can reference exact design numbers alongside Bricklink IDs.

@@ -25,6 +25,9 @@
 - Real-time connection counts and message throughput
 - Rate limit hit rates and API quota usage
   - Bricklink daily quota usage (% of 5,000/day) with alert threshold at ≥80%
+  - Catalog refresh latency broken out by Bricklink endpoint (`/items/part`, `/priceguide`, `/colors`, `/categories`)
+- Catalog freshness distribution (fresh/stale/expired counts) with alerts when expired records exceed 2% of active catalog
+- Bricklink fallback usage rate (percentage of searches requiring external calls) with regression alerts when above baseline
 
 **Business Metrics:**
 

@@ -6,6 +6,92 @@ The database schema is defined in `convex/schema.ts` using Convex's type-safe sc
 
 ## Key Tables and Indexes
 
+### legoPartCatalog (Upcoming Story 2.2 Enhancements)
+
+**Purpose**: Central catalog cache seeded from Bricklink XML exports and kept fresh via scheduled API refreshes
+
+```typescript
+legoPartCatalog: defineTable({
+  businessAccountId: v.id("businessAccounts"),
+  partNumber: v.string(),
+  name: v.string(),
+  description: v.optional(v.string()),
+  category: v.optional(v.string()),
+  imageUrl: v.optional(v.string()),
+  bricklinkPartId: v.optional(v.string()),
+  dataSource: v.union(v.literal("brickops"), v.literal("bricklink"), v.literal("manual")),
+  searchKeywords: v.string(), // space-delimited normalized tokens
+  primaryColorId: v.optional(v.string()),
+  availableColorIds: v.array(v.string()),
+  categoryPath: v.array(v.string()),
+  sortGrid: v.optional(v.string()),
+  sortBin: v.optional(v.number()),
+  marketPrice: v.optional(v.number()),
+  marketPriceLastSyncedAt: v.optional(v.number()),
+  lastUpdated: v.number(),
+  lastFetchedFromBricklink: v.optional(v.number()),
+  dataFreshness: v.union(v.literal("fresh"), v.literal("stale"), v.literal("expired")),
+})
+  .index("by_businessAccount", ["businessAccountId"])
+  .index("by_partNumber", ["businessAccountId", "partNumber"])
+  .index("by_category", ["businessAccountId", "category"])
+  .index("by_dataFreshness", ["businessAccountId", "dataFreshness"])
+  .searchIndex("search_parts", {
+    searchField: "searchKeywords",
+    filterFields: ["businessAccountId", "category", "primaryColorId", "sortGrid"],
+  });
+```
+
+### bricklinkColorReference / bricklinkCategoryReference / bricklinkElementReference
+
+**Purpose**: Reference datasets seeded from `colors.xml`, `categories.xml`, and `codes.xml`, refreshed weekly via Bricklink API jobs
+
+```typescript
+bricklinkColorReference: defineTable({
+  colorId: v.string(),
+  name: v.string(),
+  rgbHex: v.optional(v.string()),
+  type: v.optional(v.string()),
+  introducedYear: v.optional(v.number()),
+  retiredYear: v.optional(v.number()),
+  lastSyncedAt: v.number(),
+}).index("by_colorId", ["colorId"]);
+
+bricklinkCategoryReference: defineTable({
+  categoryId: v.string(),
+  name: v.string(),
+  parentCategoryId: v.optional(v.string()),
+  path: v.array(v.string()),
+  lastSyncedAt: v.number(),
+}).index("by_categoryId", ["categoryId"]);
+
+bricklinkElementReference: defineTable({
+  partNumber: v.string(),
+  colorId: v.string(),
+  elementId: v.string(),
+  isActive: v.optional(v.boolean()),
+  lastSyncedAt: v.number(),
+})
+  .index("by_part_color", ["partNumber", "colorId"])
+  .index("by_elementId", ["elementId"]);
+```
+
+### bricklinkPartColorAvailability
+
+**Purpose**: Tracks available colors per part including Bricklink inventory insights and retirement status
+
+```typescript
+bricklinkPartColorAvailability: defineTable({
+  partNumber: v.string(),
+  colorId: v.string(),
+  hasInventory: v.optional(v.boolean()),
+  isRetired: v.optional(v.boolean()),
+  lastSyncedAt: v.number(),
+})
+  .index("by_partNumber", ["partNumber"])
+  .index("by_colorId", ["colorId"]);
+```
+
 ### inventoryItems
 
 **Purpose**: Core inventory tracking with status splits and audit support

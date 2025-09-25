@@ -65,6 +65,12 @@ BrickLink API supports returning resource representations as JSON with the follo
 				}
 ```
 
+## Bricklink Data Exports (BrickOps Baseline)
+
+- The repository includes Bricklink XML exports (parts, colors, categories, item types, codes, minifigures) under `docs/external-documentation/bricklink-data/`.
+- Use these files to seed the BrickOps catalog tables during bootstrapping so the application can service catalog lookups before live API traffic is enabled.
+- When refreshing stale entries, compare against the seed data, persist the new `lastFetchedFromBricklink` timestamps, and respect rate-limiting budgets by avoiding redundant pulls when the cached snapshot still satisfies queries.
+
 # Authentication & Authorization
 
 ## Make the request with OAuth protocol parameters
