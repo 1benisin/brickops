@@ -60,11 +60,19 @@ const serializeBody = (body: unknown) => {
     return undefined;
   }
 
-  if (
-    typeof body === "string" ||
-    body instanceof ArrayBuffer ||
-    (typeof Blob !== "undefined" && body instanceof Blob)
-  ) {
+  if (typeof body === "string") {
+    return body as BodyInit;
+  }
+
+  if (body instanceof ArrayBuffer) {
+    return body as BodyInit;
+  }
+
+  if (typeof Blob !== "undefined" && body instanceof Blob) {
+    return body as BodyInit;
+  }
+
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
     return body as BodyInit;
   }
 
@@ -172,7 +180,8 @@ export class ExternalHttpClient {
       body &&
       typeof body === "object" &&
       !(body instanceof ArrayBuffer) &&
-      !(typeof Blob !== "undefined" && body instanceof Blob);
+      !(typeof Blob !== "undefined" && body instanceof Blob) &&
+      !(typeof FormData !== "undefined" && body instanceof FormData);
 
     if (hasJsonBody && !lowercaseKeys["content-type"]) {
       merged["Content-Type"] = "application/json";
