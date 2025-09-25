@@ -24,7 +24,12 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
 
     businessAccountId: v.optional(v.id("businessAccounts")),
-    role: v.union(v.literal("owner"), v.literal("manager"), v.literal("picker")),
+    role: v.union(
+      v.literal("owner"),
+      v.literal("manager"),
+      v.literal("picker"),
+      v.literal("viewer"),
+    ),
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
     createdAt: v.number(),
@@ -34,6 +39,46 @@ export default defineSchema({
     .index("by_businessAccount", ["businessAccountId"])
     .index("by_email", ["email"])
     .index("by_status", ["status"]),
+
+  // Per-user invitations for onboarding with explicit roles
+  userInvites: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    email: v.string(),
+    token: v.string(),
+    role: v.union(v.literal("manager"), v.literal("picker"), v.literal("viewer")),
+    // epoch ms
+    expiresAt: v.number(),
+    redeemedAt: v.optional(v.number()),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["token"]) // resolve invite token quickly
+    .index("by_email", ["email"]) // enforce uniqueness/window if desired
+    .index("by_businessAccount", ["businessAccountId"]),
+
+  // Audit log for user management events
+  userAuditLogs: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    targetUserId: v.optional(v.id("users")),
+    action: v.union(
+      v.literal("invite_created"),
+      v.literal("invite_redeemed"),
+      v.literal("role_updated"),
+      v.literal("user_removed"),
+    ),
+    fromRole: v.optional(
+      v.union(v.literal("owner"), v.literal("manager"), v.literal("picker"), v.literal("viewer")),
+    ),
+    toRole: v.optional(
+      v.union(v.literal("owner"), v.literal("manager"), v.literal("picker"), v.literal("viewer")),
+    ),
+    actorUserId: v.id("users"),
+    reason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_targetUser", ["targetUserId"]) // fetch logs per user
+    .index("by_businessAccount", ["businessAccountId"]) // fetch logs per tenant
+    .index("by_createdAt", ["businessAccountId", "createdAt"]),
 
   inventoryItems: defineTable({
     businessAccountId: v.id("businessAccounts"),
@@ -82,6 +127,13 @@ export default defineSchema({
     .index("by_item", ["itemId"]) // fetch logs per item
     .index("by_businessAccount", ["businessAccountId"]) // fetch logs per tenant
     .index("by_createdAt", ["businessAccountId", "createdAt"]),
+
+  // Generic rate limiting events to protect sensitive endpoints
+  rateLimitEvents: defineTable({
+    key: v.string(), // e.g., ba:{id}:invite_create, email:{addr}:invite_create, token:{token}:invite_redeem
+    kind: v.string(), // logical bucket, e.g., invite_create, invite_redeem
+    createdAt: v.number(),
+  }).index("by_key_kind", ["key", "kind"]),
 
   legoPartCatalog: defineTable({
     businessAccountId: v.id("businessAccounts"),

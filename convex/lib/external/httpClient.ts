@@ -1,6 +1,6 @@
 import { CircuitBreaker } from "./circuitBreaker";
-import { sharedRateLimiter } from "./rateLimiter";
-import { RateLimiter } from "./rateLimiter";
+import { sharedRateLimiter } from "./inMemoryRateLimiter";
+import { RateLimiter } from "./inMemoryRateLimiter";
 import { RetryOptions, withRetry } from "./retry";
 import { ApiError, ExternalProvider, RequestContext, toApiError } from "./types";
 

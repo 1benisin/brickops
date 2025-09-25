@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 import { Button, Input } from "@/components/ui";
@@ -36,6 +36,7 @@ function getFriendlySignupErrorMessage(error: unknown) {
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn } = useAuthActions();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -52,6 +53,16 @@ export default function SignupPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Prefill invite code from URL (?inviteCode=abcd1234 or ?code=abcd1234)
+  useEffect(() => {
+    const code = searchParams?.get("inviteCode") || searchParams?.get("code");
+    if (code) {
+      setInviteCode(code);
+    }
+  }, [searchParams]);
+
+  const inviteProvided = useMemo(() => Boolean(inviteCode.trim()), [inviteCode]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -122,6 +133,7 @@ export default function SignupPage() {
                 onChange={(event) => setFirstName(event.target.value)}
                 disabled={isPending}
                 required
+                data-testid="signup-form-firstName"
               />
             </div>
 
@@ -136,6 +148,7 @@ export default function SignupPage() {
                 onChange={(event) => setLastName(event.target.value)}
                 disabled={isPending}
                 required
+                data-testid="signup-form-lastName"
               />
             </div>
 
@@ -151,6 +164,7 @@ export default function SignupPage() {
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={isPending}
                 required
+                data-testid="signup-form-email"
               />
             </div>
 
@@ -166,6 +180,7 @@ export default function SignupPage() {
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={isPending}
                 required
+                data-testid="signup-form-password"
               />
             </div>
 
@@ -178,8 +193,8 @@ export default function SignupPage() {
                 placeholder="Brick Central LLC"
                 value={businessName}
                 onChange={(event) => setBusinessName(event.target.value)}
-                disabled={isPending || Boolean(inviteCode.trim())}
-                required={!inviteCode.trim()}
+                disabled={isPending || inviteProvided}
+                required={!inviteProvided}
               />
               <p className="text-xs text-muted-foreground">
                 Already invited to an existing team? Enter the invite code below instead.

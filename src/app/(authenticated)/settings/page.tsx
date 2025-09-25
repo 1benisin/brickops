@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Copy, RefreshCw } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import { Button, Input } from "@/components/ui";
+import Link from "next/link";
 
 interface MemberRow {
   _id: string;
@@ -19,6 +21,8 @@ interface MemberRow {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const authState = useQuery(api.functions.users.getAuthState);
   const currentUser = useQuery(api.functions.users.getCurrentUser);
   const members = useQuery(api.functions.users.listMembers);
   const updateProfile = useMutation(api.functions.users.updateProfile);
@@ -100,6 +104,20 @@ export default function SettingsPage() {
       return (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "");
     }) as MemberRow[];
   }, [members]);
+
+  // Redirect unauthenticated or not-onboarded users
+  if (
+    authState &&
+    (authState.isAuthenticated === false ||
+      !authState.user ||
+      authState.user.status !== "active" ||
+      !authState.user.businessAccountId)
+  ) {
+    if (typeof window !== "undefined") {
+      router.push("/signup");
+    }
+    return null;
+  }
 
   if (currentUser === undefined || members === undefined) {
     return (
@@ -183,6 +201,52 @@ export default function SettingsPage() {
 
           <div className="space-y-4">
             <div>
+              <h2 className="text-lg font-semibold text-foreground">Your role & permissions</h2>
+              <p className="text-sm text-muted-foreground">
+                Your current access level in this workspace.
+              </p>
+            </div>
+            <div className="rounded-md border bg-card p-4" data-testid="role-permissions">
+              <p className="text-sm">
+                <span className="font-medium text-foreground">Role:</span>{" "}
+                <span className="capitalize text-muted-foreground">
+                  {currentUser.user?.role ?? "—"}
+                </span>
+              </p>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                {currentUser.user?.role === "owner" ? (
+                  <>
+                    <li>
+                      Full access to all features including user management and account settings
+                    </li>
+                    <li>Can invite, remove, and change roles of users</li>
+                    <li>Can rotate the business invite code</li>
+                  </>
+                ) : null}
+                {currentUser.user?.role === "manager" ? (
+                  <>
+                    <li>Full inventory and order management</li>
+                    <li>Cannot manage users or account settings</li>
+                  </>
+                ) : null}
+                {currentUser.user?.role === "picker" ? (
+                  <>
+                    <li>Access to picking workflows and inventory adjustments</li>
+                    <li>Read-only elsewhere</li>
+                  </>
+                ) : null}
+                {currentUser.user?.role === "viewer" ? (
+                  <>
+                    <li>Read-only access to inventory and orders</li>
+                    <li>Cannot make changes</li>
+                  </>
+                ) : null}
+              </ul>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
               <h2 className="text-lg font-semibold text-foreground">Team invite</h2>
               <p className="text-sm text-muted-foreground">
                 Share this invite code during sign-up so teammates join the same business account.
@@ -232,6 +296,12 @@ export default function SettingsPage() {
             </span>
             .
           </p>
+        </div>
+
+        <div>
+          <Button asChild variant="link" data-testid="nav-users-link">
+            <Link href="/settings/users">Manage users</Link>
+          </Button>
         </div>
 
         <div className="overflow-hidden rounded-lg border bg-background">

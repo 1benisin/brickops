@@ -3,7 +3,7 @@ import { hmacSha1Base64, randomHex } from "../webcrypto";
 import { getBricklinkCredentials } from "./env";
 import { ExternalHttpClient, RequestOptions, RequestResult } from "./httpClient";
 import { RateLimitConfig } from "./httpClient";
-import { sharedRateLimiter } from "./rateLimiter";
+import { sharedRateLimiter } from "./inMemoryRateLimiter";
 import { recordMetric } from "./metrics";
 import { ValidationResult, normalizeApiError } from "./types";
 

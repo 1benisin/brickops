@@ -9,6 +9,7 @@
  */
 
 import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
+import type * as actions_email from "../actions/email.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as functions_catalog from "../functions/catalog.js";
@@ -18,6 +19,7 @@ import type * as functions_internal from "../functions/internal.js";
 import type * as functions_inventory from "../functions/inventory.js";
 import type * as functions_users from "../functions/users.js";
 import type * as http from "../http.js";
+import type * as lib_dbRateLimiter from "../lib/dbRateLimiter.js";
 import type * as lib_external_bricklink from "../lib/external/bricklink.js";
 import type * as lib_external_brickognize from "../lib/external/brickognize.js";
 import type * as lib_external_brickowl from "../lib/external/brickowl.js";
@@ -25,11 +27,13 @@ import type * as lib_external_circuitBreaker from "../lib/external/circuitBreake
 import type * as lib_external_email from "../lib/external/email.js";
 import type * as lib_external_env from "../lib/external/env.js";
 import type * as lib_external_httpClient from "../lib/external/httpClient.js";
+import type * as lib_external_inMemoryRateLimiter from "../lib/external/inMemoryRateLimiter.js";
 import type * as lib_external_metrics from "../lib/external/metrics.js";
 import type * as lib_external_rateLimiter from "../lib/external/rateLimiter.js";
 import type * as lib_external_retry from "../lib/external/retry.js";
 import type * as lib_external_types from "../lib/external/types.js";
 import type * as lib_external_validate from "../lib/external/validate.js";
+import type * as lib_rateLimiterAdapter from "../lib/rateLimiterAdapter.js";
 import type * as lib_webcrypto from "../lib/webcrypto.js";
 
 /**
@@ -41,6 +45,7 @@ import type * as lib_webcrypto from "../lib/webcrypto.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "actions/email": typeof actions_email;
   auth: typeof auth;
   crons: typeof crons;
   "functions/catalog": typeof functions_catalog;
@@ -50,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   "functions/inventory": typeof functions_inventory;
   "functions/users": typeof functions_users;
   http: typeof http;
+  "lib/dbRateLimiter": typeof lib_dbRateLimiter;
   "lib/external/bricklink": typeof lib_external_bricklink;
   "lib/external/brickognize": typeof lib_external_brickognize;
   "lib/external/brickowl": typeof lib_external_brickowl;
@@ -57,11 +63,13 @@ declare const fullApi: ApiFromModules<{
   "lib/external/email": typeof lib_external_email;
   "lib/external/env": typeof lib_external_env;
   "lib/external/httpClient": typeof lib_external_httpClient;
+  "lib/external/inMemoryRateLimiter": typeof lib_external_inMemoryRateLimiter;
   "lib/external/metrics": typeof lib_external_metrics;
   "lib/external/rateLimiter": typeof lib_external_rateLimiter;
   "lib/external/retry": typeof lib_external_retry;
   "lib/external/types": typeof lib_external_types;
   "lib/external/validate": typeof lib_external_validate;
+  "lib/rateLimiterAdapter": typeof lib_rateLimiterAdapter;
   "lib/webcrypto": typeof lib_webcrypto;
 }>;
 export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
