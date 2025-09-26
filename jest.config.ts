@@ -15,6 +15,8 @@ const customJestConfig: Config = {
     "^@/(.*)$": "<rootDir>/src/$1",
     "^next/navigation$": "<rootDir>/test/mocks/next-navigation.ts",
     "^.+\\.(css|less|sass|scss)$": "<rootDir>/test/mocks/style-mock.ts",
+    "^zustand$": "<rootDir>/test/mocks/zustand.ts",
+    "^zustand/middleware$": "<rootDir>/test/mocks/zustand-middleware.ts",
   },
   collectCoverageFrom: [
     "src/components/**/*.{ts,tsx}",

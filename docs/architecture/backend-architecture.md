@@ -93,3 +93,13 @@ Every protected function validates:
 1. User authentication via `ctx.auth.getUserIdentity()`
 2. Business account membership and role permissions
 3. Tenant isolation by filtering all queries with `businessAccountId`
+
+---
+
+## Global Catalog & Tenant Overlays (Update 2025-09-26)
+
+- The LEGO parts catalog and Bricklink references are GLOBAL datasets and are not tenant-filtered.
+- `catalog.searchParts` and `catalog.getPartDetails` read from global tables; they still require authentication but do not apply tenant filters.
+- Tenant-specific attributes (tags, notes, sort grid/bin) live in a separate `catalogPartOverlay` table keyed by `(businessAccountId, partNumber)` and are not merged into search results for now.
+- Inventory stays tenant-scoped and references catalog by `partNumber`.
+- Seeding runs once globally (script no longer requires `--businessAccount`).

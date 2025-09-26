@@ -141,9 +141,21 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     category: v.optional(v.string()),
+    categoryPath: v.optional(v.array(v.number())),
+    categoryPathKey: v.optional(v.string()),
     imageUrl: v.optional(v.string()),
     bricklinkPartId: v.optional(v.string()),
     bricklinkCategoryId: v.optional(v.number()),
+
+    // Catalog enrichment
+    searchKeywords: v.optional(v.string()),
+    primaryColorId: v.optional(v.number()),
+    availableColorIds: v.optional(v.array(v.number())),
+    sortGrid: v.optional(v.string()),
+    sortBin: v.optional(v.string()),
+    marketPrice: v.optional(v.number()),
+    marketPriceCurrency: v.optional(v.string()),
+    marketPriceLastSyncedAt: v.optional(v.number()),
 
     // Data freshness and source tracking
     dataSource: v.union(v.literal("brickops"), v.literal("bricklink"), v.literal("manual")),
@@ -159,10 +171,78 @@ export default defineSchema({
     .index("by_businessAccount", ["businessAccountId"])
     .index("by_partNumber", ["businessAccountId", "partNumber"])
     .index("by_category", ["businessAccountId", "category"])
+    .index("by_categoryPathKey", ["businessAccountId", "categoryPathKey"])
+    .index("by_primaryColor", ["businessAccountId", "primaryColorId"])
+    .index("by_sortLocation", ["businessAccountId", "sortGrid", "sortBin"])
     .index("by_dataFreshness", ["businessAccountId", "dataFreshness"])
     .index("by_lastUpdated", ["businessAccountId", "lastUpdated"])
     .searchIndex("search_parts", {
-      searchField: "name",
-      filterFields: ["businessAccountId", "category"],
+      searchField: "searchKeywords",
+      filterFields: ["businessAccountId", "category", "primaryColorId", "categoryPathKey"],
     }),
+
+  bricklinkColorReference: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    bricklinkColorId: v.number(),
+    name: v.string(),
+    rgb: v.optional(v.string()),
+    colorType: v.optional(v.string()),
+    isTransparent: v.optional(v.boolean()),
+    syncedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_businessAccount", ["businessAccountId"])
+    .index("by_colorId", ["businessAccountId", "bricklinkColorId"])
+    .searchIndex("search_color_name", {
+      searchField: "name",
+      filterFields: ["businessAccountId", "colorType"],
+    }),
+
+  bricklinkCategoryReference: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    bricklinkCategoryId: v.number(),
+    name: v.string(),
+    parentCategoryId: v.optional(v.number()),
+    path: v.optional(v.array(v.number())),
+    pathKey: v.optional(v.string()),
+    syncedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_businessAccount", ["businessAccountId"])
+    .index("by_categoryId", ["businessAccountId", "bricklinkCategoryId"])
+    .index("by_parent", ["businessAccountId", "parentCategoryId"])
+    .index("by_pathKey", ["businessAccountId", "pathKey"])
+    .searchIndex("search_category_name", {
+      searchField: "name",
+      filterFields: ["businessAccountId", "parentCategoryId"],
+    }),
+
+  bricklinkPartColorAvailability: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    partNumber: v.string(),
+    bricklinkPartId: v.optional(v.string()),
+    colorId: v.number(),
+    elementIds: v.optional(v.array(v.string())),
+    isLegacy: v.optional(v.boolean()),
+    syncedAt: v.number(),
+  })
+    .index("by_businessAccount", ["businessAccountId"])
+    .index("by_part", ["businessAccountId", "partNumber"])
+    .index("by_color", ["businessAccountId", "colorId"]),
+
+  bricklinkElementReference: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    elementId: v.string(),
+    partNumber: v.string(),
+    colorId: v.number(),
+    bricklinkPartId: v.optional(v.string()),
+    designId: v.optional(v.string()),
+    syncedAt: v.number(),
+  })
+    .index("by_businessAccount", ["businessAccountId"])
+    .index("by_element", ["businessAccountId", "elementId"])
+    .index("by_part", ["businessAccountId", "partNumber"])
+    .index("by_color", ["businessAccountId", "colorId"]),
 });

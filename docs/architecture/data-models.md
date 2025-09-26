@@ -83,3 +83,12 @@ The following core business entities are used across the stack:
 
 - Purpose: Order fulfillment and workflow entities
 - Relationships: As defined in schema, supporting audit logs and picking flows
+
+---
+
+## Global Catalog & Tenant Overlays (Update 2025-09-26)
+
+- Catalog/reference datasets (`LegoPartCatalog`, `Bricklink*`) are GLOBAL (shared across tenants; no `businessAccountId`).
+- Tenant-specific attributes must live in an overlay table keyed by `(businessAccountId, partNumber)` (e.g., `catalogPartOverlay`) with fields like `tags`, `notes`, `sortGrid`, `sortBin`.
+- Inventory remains tenant-scoped and links to the global catalog by `partNumber`.
+- Search/browse reads from the global catalog only (overlays are not merged into search results for now).

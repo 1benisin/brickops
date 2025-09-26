@@ -565,3 +565,11 @@ Before submitting a PR with new features:
 - [ ] Cross-component interactions are tested
 - [ ] API contract compliance is verified
 - [ ] Error propagation is tested across layers
+
+---
+
+## Global Catalog & Overlay Testing (Update 2025-09-26)
+
+- Backend catalog/reference reads should not require a tenant and must return global results.
+- Overlay CRUD (tenant-scoped) should be unit-tested separately with RBAC assertions.
+- Search tests remain unchanged for now (no overlay merge into results).
