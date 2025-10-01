@@ -573,3 +573,4 @@ Before submitting a PR with new features:
 - Backend catalog/reference reads should not require a tenant and must return global results.
 - Overlay CRUD (tenant-scoped) should be unit-tested separately with RBAC assertions.
 - Search tests remain unchanged for now (no overlay merge into results).
+- Backend regression pack includes unit tests for `catalog.getPartOverlay` / `catalog.upsertPartOverlay` (CRUD + tenant isolation) and guards that restrict global catalog write paths to system administrators.

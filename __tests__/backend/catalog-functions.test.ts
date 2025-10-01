@@ -6,10 +6,13 @@ import {
   getPartDetails,
   savePartToLocalCatalog,
   batchImportParts,
+  getPartOverlay,
+  upsertPartOverlay,
   seedBricklinkColors,
   seedBricklinkCategories,
   seedPartColorAvailability,
   seedElementReferences,
+  refreshCatalogEntries,
 } from "../../convex/functions/catalog";
 import {
   buildSeedData,
@@ -36,6 +39,7 @@ vi.mock("@/convex/lib/external/metrics", () => ({
 describe("Catalog Functions", () => {
   const businessAccountId = "businessAccounts:1";
   const ownerUserId = "users:1";
+  const managerUserId = "users:2";
 
   const now = Date.now();
 
@@ -60,15 +64,28 @@ describe("Catalog Functions", () => {
         createdAt: 1,
         updatedAt: 1,
       },
+      {
+        businessAccountId,
+        email: "manager@example.com",
+        role: "manager",
+        firstName: "Test",
+        lastName: "Manager",
+        name: "Test Manager",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      },
     ],
   });
 
   beforeEach(() => {
+    process.env.BRICKOPS_SYSTEM_ADMIN_EMAILS = "owner@example.com";
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    delete process.env.BRICKOPS_SYSTEM_ADMIN_EMAILS;
   });
 
   describe("searchParts", () => {
@@ -77,7 +94,6 @@ describe("Catalog Functions", () => {
         ...baseSeed,
         legoPartCatalog: [
           {
-            businessAccountId,
             partNumber: "3001",
             name: "Brick 2 x 4",
             description: "Standard brick",
@@ -103,7 +119,6 @@ describe("Catalog Functions", () => {
             createdAt: now,
           },
           {
-            businessAccountId,
             partNumber: "3002",
             name: "Brick 2 x 3",
             description: "Smaller brick",
@@ -131,7 +146,6 @@ describe("Catalog Functions", () => {
         ],
         bricklinkColorReference: [
           {
-            businessAccountId,
             bricklinkColorId: 1,
             name: "White",
             rgb: "FFFFFF",
@@ -142,7 +156,6 @@ describe("Catalog Functions", () => {
             updatedAt: now,
           },
           {
-            businessAccountId,
             bricklinkColorId: 2,
             name: "Black",
             rgb: "000000",
@@ -155,7 +168,6 @@ describe("Catalog Functions", () => {
         ],
         bricklinkCategoryReference: [
           {
-            businessAccountId,
             bricklinkCategoryId: 100,
             name: "Bricks",
             parentCategoryId: null,
@@ -191,7 +203,6 @@ describe("Catalog Functions", () => {
         ...baseSeed,
         legoPartCatalog: [
           {
-            businessAccountId,
             partNumber: "111",
             name: "Red Brick",
             category: "Bricks",
@@ -208,7 +219,6 @@ describe("Catalog Functions", () => {
             createdAt: now,
           },
           {
-            businessAccountId,
             partNumber: "222",
             name: "Blue Brick",
             category: "Bricks",
@@ -248,7 +258,6 @@ describe("Catalog Functions", () => {
         ...baseSeed,
         legoPartCatalog: [
           {
-            businessAccountId,
             partNumber: "3001",
             name: "Brick 2 x 4",
             description: "Standard brick",
@@ -268,7 +277,6 @@ describe("Catalog Functions", () => {
         ],
         bricklinkColorReference: [
           {
-            businessAccountId,
             bricklinkColorId: 1,
             name: "White",
             rgb: "FFFFFF",
@@ -281,7 +289,6 @@ describe("Catalog Functions", () => {
         ],
         bricklinkPartColorAvailability: [
           {
-            businessAccountId,
             partNumber: "3001",
             bricklinkPartId: "3001",
             colorId: 1,
@@ -292,7 +299,6 @@ describe("Catalog Functions", () => {
         ],
         bricklinkElementReference: [
           {
-            businessAccountId,
             elementId: "300101",
             partNumber: "3001",
             colorId: 1,
@@ -316,6 +322,167 @@ describe("Catalog Functions", () => {
       expect(result.colorAvailability).toHaveLength(1);
       expect(result.elementReferences).toHaveLength(1);
       expect(result.marketPricing).toBeNull();
+    });
+  });
+
+  describe("part overlays", () => {
+    it("returns overlay scoped to the current tenant", async () => {
+      const seed = buildSeedData({
+        ...baseSeed,
+        catalogPartOverlay: [
+          {
+            businessAccountId,
+            partNumber: "3001",
+            tags: ["bin-ready"],
+            notes: "Keep near station",
+            sortGrid: "A",
+            sortBin: "1",
+            createdBy: ownerUserId,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-010` }),
+      });
+
+      const overlay = await (getPartOverlay as any)._handler(ctx, {
+        partNumber: "3001",
+      });
+
+      expect(overlay?.tags).toEqual(["bin-ready"]);
+      expect(overlay?.notes).toBe("Keep near station");
+    });
+
+    it("creates a new overlay when none exists", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-011` }),
+      });
+
+      const result = await (upsertPartOverlay as any)._handler(ctx, {
+        partNumber: "4001",
+        notes: "New overlay",
+        tags: ["new"],
+      });
+
+      expect(result?.notes).toBe("New overlay");
+      expect(result?.tags).toEqual(["new"]);
+
+      const stored = await ctx.db.query("catalogPartOverlay").collect();
+      expect(stored).toHaveLength(1);
+      expect(stored[0].partNumber).toBe("4001");
+    });
+
+    it("allows any tenant member to upsert overlays", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-012a`,
+          email: "manager@example.com",
+        }),
+      });
+
+      const overlay = await (upsertPartOverlay as any)._handler(ctx, {
+        partNumber: "5000",
+        notes: "Manager note",
+      });
+
+      expect(overlay?.notes).toBe("Manager note");
+    });
+
+    it("updates existing overlay fields", async () => {
+      const seed = buildSeedData({
+        ...baseSeed,
+        catalogPartOverlay: [
+          {
+            businessAccountId,
+            partNumber: "5001",
+            tags: ["old"],
+            notes: "Legacy note",
+            createdBy: ownerUserId,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-012` }),
+      });
+
+      const result = await (upsertPartOverlay as any)._handler(ctx, {
+        partNumber: "5001",
+        tags: ["updated"],
+        sortGrid: "Z",
+        sortBin: "99",
+        notes: "Updated note",
+      });
+
+      expect(result?.tags).toEqual(["updated"]);
+      expect(result?.sortGrid).toBe("Z");
+      expect(result?.notes).toBe("Updated note");
+    });
+
+    it("isolates overlays per tenant", async () => {
+      const otherBusinessAccountId = "businessAccounts:2";
+      const otherOwnerUserId = "users:3";
+
+      const seed = buildSeedData({
+        businessAccounts: [
+          ...(baseSeed.businessAccounts ?? []),
+          {
+            _id: otherBusinessAccountId,
+            name: "Other Business",
+            ownerUserId: otherOwnerUserId,
+            inviteCode: "OTHER123",
+            createdAt: 1,
+          },
+        ],
+        users: [
+          ...(baseSeed.users ?? []),
+          {
+            _id: otherOwnerUserId,
+            businessAccountId: otherBusinessAccountId,
+            email: "other-owner@example.com",
+            role: "owner",
+            firstName: "Other",
+            lastName: "Owner",
+            name: "Other Owner",
+            status: "active",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+        catalogPartOverlay: [
+          {
+            businessAccountId,
+            partNumber: "shared",
+            tags: ["primary"],
+            createdBy: ownerUserId,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({
+          subject: `${otherOwnerUserId}|session-013`,
+          email: "other-owner@example.com",
+        }),
+      });
+
+      const overlay = await (getPartOverlay as any)._handler(ctx, {
+        partNumber: "shared",
+      });
+
+      expect(overlay).toBeNull();
     });
   });
 
@@ -351,6 +518,24 @@ describe("Catalog Functions", () => {
       expect(stored?.categoryPathKey).toBe("200/201");
       expect(stored?.availableColorIds).toEqual([1, 21]);
     });
+
+    it("rejects non-system administrators", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-002`,
+          email: "manager@example.com",
+        }),
+      });
+
+      await expect(
+        (savePartToLocalCatalog as any)._handler(ctx, {
+          partNumber: "999",
+          name: "Restricted Part",
+          dataSource: "manual",
+        }),
+      ).rejects.toThrow("System administrator access required");
+    });
   });
 
   describe("batchImportParts", () => {
@@ -359,7 +544,6 @@ describe("Catalog Functions", () => {
         ...baseSeed,
         legoPartCatalog: [
           {
-            businessAccountId,
             partNumber: "888",
             name: "Old Part",
             category: "Legacy",
@@ -392,11 +576,6 @@ describe("Catalog Functions", () => {
             categoryPath: [10],
             primaryColorId: 2,
             availableColorIds: [2, 3],
-            sortGrid: "D",
-            sortBin: "4",
-            marketPrice: 4.5,
-            marketPriceCurrency: "USD",
-            marketPriceLastSyncedAt: now,
             aliases: ["updated"],
           },
         ],
@@ -405,9 +584,32 @@ describe("Catalog Functions", () => {
 
       expect(result.updated).toBe(1);
       const stored = await ctx.db.get("legoPartCatalog:1" as any);
-      expect(stored?.sortGrid).toBe("D");
-      expect(stored?.marketPrice).toBe(4.5);
+      expect(stored?.name).toBe("Updated Part");
+      expect(stored?.primaryColorId).toBe(2);
       expect(stored?.dataFreshness).toBe("fresh");
+    });
+
+    it("blocks imports from non-system administrators", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-003`,
+          email: "manager@example.com",
+        }),
+      });
+
+      await expect(
+        (batchImportParts as any)._handler(ctx, {
+          parts: [
+            {
+              partNumber: "restricted",
+              name: "Restricted",
+              dataSource: "manual",
+            },
+          ],
+          dataSource: "manual",
+        }),
+      ).rejects.toThrow("System administrator access required");
     });
   });
 
@@ -419,7 +621,6 @@ describe("Catalog Functions", () => {
       });
 
       const colorResult = await (seedBricklinkColors as any)._handler(ctx, {
-        businessAccountId,
         records: [
           {
             bricklinkColorId: 1,
@@ -436,7 +637,6 @@ describe("Catalog Functions", () => {
       expect(colorResult.inserted).toBe(1);
 
       const categoryResult = await (seedBricklinkCategories as any)._handler(ctx, {
-        businessAccountId,
         records: [
           {
             bricklinkCategoryId: 100,
@@ -452,7 +652,6 @@ describe("Catalog Functions", () => {
       expect(categoryResult.inserted).toBe(1);
 
       const availabilityResult = await (seedPartColorAvailability as any)._handler(ctx, {
-        businessAccountId,
         records: [
           {
             partNumber: "3001",
@@ -469,7 +668,6 @@ describe("Catalog Functions", () => {
       expect(availabilityResult.inserted).toBe(1);
 
       const elementsResult = await (seedElementReferences as any)._handler(ctx, {
-        businessAccountId,
         records: [
           {
             elementId: "300101",
@@ -484,6 +682,40 @@ describe("Catalog Functions", () => {
       });
 
       expect(elementsResult.inserted).toBe(1);
+    });
+
+    it("requires system administrator permissions", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-004`,
+          email: "manager@example.com",
+        }),
+      });
+
+      await expect(
+        (seedBricklinkColors as any)._handler(ctx, {
+          records: [],
+        }),
+      ).rejects.toThrow("System administrator access required");
+    });
+  });
+
+  describe("refreshCatalogEntries", () => {
+    it("requires system administrator access", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-005`,
+          email: "manager@example.com",
+        }),
+      });
+
+      await expect(
+        (refreshCatalogEntries as any)._handler(ctx, {
+          limit: 5,
+        }),
+      ).rejects.toThrow("System administrator access required");
     });
   });
 });

@@ -66,6 +66,7 @@
   - `getCatalogFilters(args)`: compute from global references.
 - Bricklink calls: drop tenant identity key; use neutral/global identity if needed.
 - Overlays (separate slice): `upsertOverlay`, `getOverlay` with tenant RBAC.
+  - Implemented as `catalog.upsertPartOverlay` and `catalog.getPartOverlay`, enforcing `(businessAccountId, partNumber)` scoping.
 
 ## Seeding Changes
 
@@ -80,6 +81,7 @@
 
 - Global catalog writes restricted to system admins.
 - Overlays CRUD restricted to org-authenticated users within their tenant.
+- `BRICKOPS_SYSTEM_ADMIN_EMAILS` configures the admin allowlist; when unset, tenant owners remain eligible for maintenance flows.
 
 ## Migration Plan (Breaking OK)
 

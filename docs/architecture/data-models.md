@@ -92,3 +92,15 @@ The following core business entities are used across the stack:
 - Tenant-specific attributes must live in an overlay table keyed by `(businessAccountId, partNumber)` (e.g., `catalogPartOverlay`) with fields like `tags`, `notes`, `sortGrid`, `sortBin`.
 - Inventory remains tenant-scoped and links to the global catalog by `partNumber`.
 - Search/browse reads from the global catalog only (overlays are not merged into search results for now).
+
+### CatalogPartOverlay
+
+- Primary Key: implicit Convex `_id`
+- Composite identity: `(businessAccountId, partNumber)` via indexes `by_business_part` and `by_businessAccount`
+- Attributes:
+  - `businessAccountId` — tenant that owns the overlay metadata
+  - `partNumber` — reference to the global catalog entry
+  - `tags?: string[]`, `notes?: string` — free-form metadata maintained per tenant
+  - `sortGrid?: string`, `sortBin?: string` — tenant-specific location overrides
+  - `createdBy`, `createdAt`, `updatedAt?` — audit trail
+- Authorization: any active member of the tenant may create or update overlays; system APIs never merge overlay data into global catalog reads.
