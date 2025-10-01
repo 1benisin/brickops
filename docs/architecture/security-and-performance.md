@@ -12,7 +12,7 @@
 ## Performance Optimization
 
 - Frontend: Mobile-first, Tailwind, code-splitting, image optimization
-- Backend: Convex subscriptions, caching catalog data, exponential backoff and circuit breakers for APIs
+- Backend: Convex subscriptions, caching catalog data, exponential backoff and circuit breakers for APIs, scheduled refresh jobs enforcing catalog freshness windows (fresh <7 days, stale <30 days, expired ≥30 days)
 
 ### Theme and Responsive Design
 

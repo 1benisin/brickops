@@ -34,6 +34,7 @@ Scope:
   - Bricklink API with intelligent rate limiting and error handling
   - Brickowl API with intelligent caching and data freshness validation
   - Brickognize API for part identification
+- **Catalog Data Strategy**: BrickOps seeds Convex tables from Bricklink XML exports checked into `docs/external-documentation/bricklink-data/` and merges internal sort lookup data from `bin_lookup_v3.json`, then enforces freshness windows (fresh <7 days, stale <30 days, expired ≥30 days) with scheduled jobs that hydrate LEGO element IDs, colors, categories, sort locations, and pricing via Bricklink API fan-out requests.
 - **Security**: Convex authentication with role-based access control, API key management for external services, data encryption at rest and in transit, GDPR compliance
   - **Authentication Implementation**: Follow [Convex Auth patterns](../external-documentation/convex-auth/authorization.md) for backend functions and [Next.js middleware](../external-documentation/convex-auth/authorization-nextjs.md) for route protection
 - **Performance**: <3 second page load times, <1 second API response times, 99.9% uptime target

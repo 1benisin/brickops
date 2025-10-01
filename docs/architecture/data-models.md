@@ -17,8 +17,43 @@ The following core business entities are used across the stack:
 ## LegoPartCatalog
 
 - Purpose: Central catalog of Lego parts with BrickLink integration
-- Key Attributes: partNumber, name, category, imageUrl, bricklinkPartId, dataSource, dataFreshness
-- Relationships: Referenced by InventoryItems for part identification
+- Key Attributes:
+  - partNumber, name, description, category, imageUrl
+  - bricklinkPartId, dataSource, dataFreshness, lastUpdated, lastFetchedFromBricklink
+  - **Story 2.2 Extension**: `searchKeywords` (lowercased, space-delimited tokens including part numbers, aliases, keywords, and sort location), `primaryColorId`, `availableColorIds[]`, `categoryPath[]`, `sortGrid`, `sortBin`
+  - **Derived Metrics**: `marketPrice`, `marketPriceLastSyncedAt`
+- Relationships: Referenced by InventoryItems for part identification; linked to Bricklink color/category reference tables via ids
+- Source of Truth: Bricklink datasets (API + XML baseline in `docs/external-documentation/bricklink-data` plus BrickOps sort-grid lookup in `bin_lookup_v3.json`)
+
+> Implementation note: the Story 2.2 backlog item requires extending `convex/schema.ts` to add the new search and color fields, plus search indexes covering `partNumber`, `description`, and the new keyword array to satisfy catalog filter requirements.
+
+## BricklinkColorReference
+
+- Purpose: Local cache of Bricklink color taxonomy used for filtering and UI display
+- Key Attributes: `colorId`, `name`, `rgbHex`, `type`, `isActive`, `introducedYear`, `retiredYear`
+- Relationships: Referenced by `LegoPartCatalog.availableColorIds`
+- Seed Source: `colors.xml` baseline file in `docs/external-documentation/bricklink-data`, refreshed via Bricklink `/colors` API when stale
+
+## BricklinkCategoryReference
+
+- Purpose: Local cache of Bricklink category hierarchy
+- Key Attributes: `categoryId`, `name`, `parentCategoryId`, `path`
+- Relationships: Referenced by `LegoPartCatalog.category` and `categoryPath`
+- Seed Source: `categories.xml` baseline file plus Bricklink `/categories` API refreshes
+
+## BricklinkPartColorAvailability
+
+- Purpose: Tracks which colors Bricklink recognizes for each part number
+- Key Attributes: `partNumber`, `colorId`, `hasInventory`, `isRetired`, `lastSyncedAt`
+- Relationships: Joins `LegoPartCatalog.partNumber` and `BricklinkColorReference.colorId`
+- Seed Source: Derived from `Parts.xml` + Bricklink `/items/part/{no}/supersets` & `/priceguide` endpoints, refreshed when part data becomes stale
+
+## BricklinkElementReference
+
+- Purpose: Maps Bricklink part + color combinations to LEGO Element IDs (a.k.a. design numbers) for manufacturing-level traceability
+- Key Attributes: `partNumber`, `colorId`, `elementId`, `isActive`, `notes`
+- Relationships: Links to `LegoPartCatalog` and `BricklinkColorReference` to expose exact element variants in detail views and exports
+- Seed Source: `codes.xml` dataset in `docs/external-documentation/bricklink-data` with updates from Bricklink API element endpoints when available. Maintains multiple element IDs per part-color to reflect historical mold changes tracked by LEGO
 
 ## InventoryItem
 
@@ -48,3 +83,24 @@ The following core business entities are used across the stack:
 
 - Purpose: Order fulfillment and workflow entities
 - Relationships: As defined in schema, supporting audit logs and picking flows
+
+---
+
+## Global Catalog & Tenant Overlays (Update 2025-09-26)
+
+- Catalog/reference datasets (`LegoPartCatalog`, `Bricklink*`) are GLOBAL (shared across tenants; no `businessAccountId`).
+- Tenant-specific attributes must live in an overlay table keyed by `(businessAccountId, partNumber)` (e.g., `catalogPartOverlay`) with fields like `tags`, `notes`, `sortGrid`, `sortBin`.
+- Inventory remains tenant-scoped and links to the global catalog by `partNumber`.
+- Search/browse reads from the global catalog only (overlays are not merged into search results for now).
+
+### CatalogPartOverlay
+
+- Primary Key: implicit Convex `_id`
+- Composite identity: `(businessAccountId, partNumber)` via indexes `by_business_part` and `by_businessAccount`
+- Attributes:
+  - `businessAccountId` — tenant that owns the overlay metadata
+  - `partNumber` — reference to the global catalog entry
+  - `tags?: string[]`, `notes?: string` — free-form metadata maintained per tenant
+  - `sortGrid?: string`, `sortBin?: string` — tenant-specific location overrides
+  - `createdBy`, `createdAt`, `updatedAt?` — audit trail
+- Authorization: any active member of the tenant may create or update overlays; system APIs never merge overlay data into global catalog reads.

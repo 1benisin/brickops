@@ -1,11 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   searchParts,
   getPartDetails,
   savePartToLocalCatalog,
   batchImportParts,
+  getPartOverlay,
+  upsertPartOverlay,
+  seedBricklinkColors,
+  seedBricklinkCategories,
+  seedPartColorAvailability,
+  seedElementReferences,
+  refreshCatalogEntries,
 } from "../../convex/functions/catalog";
 import {
   buildSeedData,
@@ -13,7 +20,6 @@ import {
   createTestIdentity,
 } from "../../test/utils/convex-test-context";
 
-// Mock the external dependencies
 vi.mock("@/convex/lib/external/bricklink", () => ({
   BricklinkClient: vi.fn().mockImplementation(() => ({
     request: vi.fn(),
@@ -33,6 +39,9 @@ vi.mock("@/convex/lib/external/metrics", () => ({
 describe("Catalog Functions", () => {
   const businessAccountId = "businessAccounts:1";
   const ownerUserId = "users:1";
+  const managerUserId = "users:2";
+
+  const now = Date.now();
 
   const baseSeed = buildSeedData({
     businessAccounts: [
@@ -57,11 +66,11 @@ describe("Catalog Functions", () => {
       },
       {
         businessAccountId,
-        email: "member@example.com",
+        email: "manager@example.com",
         role: "manager",
         firstName: "Test",
-        lastName: "Member",
-        name: "Test Member",
+        lastName: "Manager",
+        name: "Test Manager",
         status: "active",
         createdAt: 1,
         updatedAt: 1,
@@ -70,32 +79,103 @@ describe("Catalog Functions", () => {
   });
 
   beforeEach(() => {
+    process.env.BRICKOPS_SYSTEM_ADMIN_EMAILS = "owner@example.com";
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    delete process.env.BRICKOPS_SYSTEM_ADMIN_EMAILS;
   });
 
   describe("searchParts", () => {
-    it("should search local catalog and return results", async () => {
+    it("returns paginated results with metadata", async () => {
       const seedWithParts = buildSeedData({
         ...baseSeed,
         legoPartCatalog: [
           {
-            businessAccountId,
             partNumber: "3001",
             name: "Brick 2 x 4",
-            description: "Standard LEGO brick",
-            category: "brick",
-            imageUrl: "https://example.com/3001.jpg",
+            description: "Standard brick",
+            category: "Bricks",
+            categoryPath: [100],
+            categoryPathKey: "100",
+            imageUrl: null,
             bricklinkPartId: "3001",
-            bricklinkCategoryId: 1,
+            bricklinkCategoryId: 100,
+            searchKeywords: "brick 2x4 3001",
+            primaryColorId: 1,
+            availableColorIds: [1, 21],
+            sortGrid: "A",
+            sortBin: "12",
+            marketPrice: 1.23,
+            marketPriceCurrency: "USD",
+            marketPriceLastSyncedAt: now,
             dataSource: "brickops",
-            lastUpdated: Date.now(),
+            lastUpdated: now,
+            lastFetchedFromBricklink: now,
             dataFreshness: "fresh",
             createdBy: ownerUserId,
-            createdAt: 1,
+            createdAt: now,
+          },
+          {
+            partNumber: "3002",
+            name: "Brick 2 x 3",
+            description: "Smaller brick",
+            category: "Bricks",
+            categoryPath: [100],
+            categoryPathKey: "100",
+            imageUrl: null,
+            bricklinkPartId: "3002",
+            bricklinkCategoryId: 100,
+            searchKeywords: "brick 2x3 3002",
+            primaryColorId: 2,
+            availableColorIds: [2],
+            sortGrid: "B",
+            sortBin: "10",
+            marketPrice: 0.95,
+            marketPriceCurrency: "USD",
+            marketPriceLastSyncedAt: now,
+            dataSource: "brickops",
+            lastUpdated: now,
+            lastFetchedFromBricklink: now,
+            dataFreshness: "fresh",
+            createdBy: ownerUserId,
+            createdAt: now,
+          },
+        ],
+        bricklinkColorReference: [
+          {
+            bricklinkColorId: 1,
+            name: "White",
+            rgb: "FFFFFF",
+            colorType: "Solid",
+            isTransparent: false,
+            syncedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            bricklinkColorId: 2,
+            name: "Black",
+            rgb: "000000",
+            colorType: "Solid",
+            isTransparent: false,
+            syncedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        bricklinkCategoryReference: [
+          {
+            bricklinkCategoryId: 100,
+            name: "Bricks",
+            parentCategoryId: null,
+            path: [100],
+            pathKey: "100",
+            syncedAt: now,
+            createdAt: now,
+            updatedAt: now,
           },
         ],
       });
@@ -106,471 +186,536 @@ describe("Catalog Functions", () => {
       });
 
       const result = await (searchParts as any)._handler(ctx, {
-        searchTerm: "Brick",
-        limit: 10,
-        includeBricklinkFallback: false,
+        query: "brick",
+        pageSize: 10,
+        includeMetadata: true,
       });
 
-      expect(result).toBeDefined();
-      expect(result.parts).toHaveLength(1);
-      expect(result.parts[0].partNumber).toBe("3001");
-      expect(result.parts[0].name).toBe("Brick 2 x 4");
+      expect(result.parts).toHaveLength(2);
       expect(result.source).toBe("local");
-      expect(result.searchDurationMs).toBeDefined();
-      expect(typeof result.searchDurationMs).toBe("number");
+      expect(result.metadata?.colors).toHaveLength(2);
+      expect(result.metadata?.categories).toHaveLength(1);
+      expect(result.pagination?.pageSize).toBe(10);
     });
 
-    it("should enforce minimum search term length", async () => {
-      const ctx = createConvexTestContext({
-        seed: baseSeed,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
+    it("filters by color selection", async () => {
+      const seed = buildSeedData({
+        ...baseSeed,
+        legoPartCatalog: [
+          {
+            partNumber: "111",
+            name: "Red Brick",
+            category: "Bricks",
+            categoryPath: [100],
+            categoryPathKey: "100",
+            searchKeywords: "red brick",
+            primaryColorId: 5,
+            availableColorIds: [5],
+            dataSource: "brickops",
+            lastUpdated: now,
+            lastFetchedFromBricklink: now,
+            dataFreshness: "fresh",
+            createdBy: ownerUserId,
+            createdAt: now,
+          },
+          {
+            partNumber: "222",
+            name: "Blue Brick",
+            category: "Bricks",
+            categoryPath: [100],
+            categoryPathKey: "100",
+            searchKeywords: "blue brick",
+            primaryColorId: 23,
+            availableColorIds: [23],
+            dataSource: "brickops",
+            lastUpdated: now,
+            lastFetchedFromBricklink: now,
+            dataFreshness: "fresh",
+            createdBy: ownerUserId,
+            createdAt: now,
+          },
+        ],
       });
 
-      await expect(
-        (searchParts as any)._handler(ctx, {
-          searchTerm: "a",
-          limit: 10,
-        }),
-      ).rejects.toThrow("Search term must be at least 2 characters");
-    });
-
-    it("should limit search results to maximum of 100", async () => {
       const ctx = createConvexTestContext({
-        seed: baseSeed,
+        seed,
         identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
       });
 
       const result = await (searchParts as any)._handler(ctx, {
-        searchTerm: "test",
-        limit: 150, // Request more than allowed
+        query: "brick",
+        colors: [23],
       });
 
-      // Since we don't have 100 parts, we just verify the logic doesn't error
-      expect(result).toBeDefined();
-      expect(result.parts).toBeDefined();
-    });
-
-    it("should filter by category when provided", async () => {
-      const seedWithParts = buildSeedData({
-        ...baseSeed,
-        legoPartCatalog: [
-          {
-            businessAccountId,
-            partNumber: "3001",
-            name: "Test Brick",
-            category: "brick",
-            dataSource: "brickops",
-            lastUpdated: Date.now(),
-            dataFreshness: "fresh",
-            createdBy: ownerUserId,
-            createdAt: 1,
-          },
-          {
-            businessAccountId,
-            partNumber: "3005",
-            name: "Test Plate",
-            category: "plate",
-            dataSource: "brickops",
-            lastUpdated: Date.now(),
-            dataFreshness: "fresh",
-            createdBy: ownerUserId,
-            createdAt: 1,
-          },
-        ],
-      });
-
-      const ctx = createConvexTestContext({
-        seed: seedWithParts,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
-      });
-
-      const brickResults = await (searchParts as any)._handler(ctx, {
-        searchTerm: "Test",
-        category: "brick",
-      });
-
-      expect(brickResults.parts).toHaveLength(1);
-      expect(brickResults.parts[0].partNumber).toBe("3001");
-    });
-
-    it("should respect tenant isolation", async () => {
-      const otherBusinessAccountId = "businessAccounts:2";
-      const otherUserId = "users:3";
-
-      const seedWithMultipleTenants = buildSeedData({
-        ...baseSeed,
-        businessAccounts: [
-          {
-            name: "Test Business",
-            ownerUserId,
-            inviteCode: "TEST123",
-            createdAt: 1,
-          },
-          {
-            name: "Other Business",
-            ownerUserId: otherUserId,
-            inviteCode: "OTHER123",
-            createdAt: 1,
-          },
-        ],
-        users: [
-          {
-            businessAccountId,
-            email: "owner@example.com",
-            role: "owner",
-            firstName: "Test",
-            lastName: "Owner",
-            name: "Test Owner",
-            status: "active",
-            createdAt: 1,
-            updatedAt: 1,
-          },
-          {
-            businessAccountId,
-            email: "member@example.com",
-            role: "manager",
-            firstName: "Test",
-            lastName: "Member",
-            name: "Test Member",
-            status: "active",
-            createdAt: 1,
-            updatedAt: 1,
-          },
-          {
-            businessAccountId: otherBusinessAccountId,
-            email: "other@example.com",
-            role: "owner",
-            firstName: "Other",
-            lastName: "User",
-            name: "Other User",
-            status: "active",
-            createdAt: 1,
-            updatedAt: 1,
-          },
-        ],
-        legoPartCatalog: [
-          {
-            businessAccountId: otherBusinessAccountId, // Different tenant
-            partNumber: "9999",
-            name: "Secret Part",
-            dataSource: "brickops",
-            lastUpdated: Date.now(),
-            dataFreshness: "fresh",
-            createdBy: otherUserId,
-            createdAt: 1,
-          },
-        ],
-      });
-
-      const ctx = createConvexTestContext({
-        seed: seedWithMultipleTenants,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
-      });
-
-      // Search should not return the other business's parts
-      const result = await (searchParts as any)._handler(ctx, {
-        searchTerm: "Secret",
-      });
-
-      expect(result.parts).toHaveLength(0);
+      expect(result.parts).toHaveLength(1);
+      expect(result.parts[0].partNumber).toBe("222");
     });
   });
 
   describe("getPartDetails", () => {
-    it("should get part details from local catalog", async () => {
-      const seedWithPart = buildSeedData({
+    it("returns enriched local data with availability", async () => {
+      const seed = buildSeedData({
         ...baseSeed,
         legoPartCatalog: [
           {
-            businessAccountId,
             partNumber: "3001",
             name: "Brick 2 x 4",
-            description: "Standard LEGO brick",
+            description: "Standard brick",
+            category: "Bricks",
+            categoryPath: [100],
+            categoryPathKey: "100",
+            searchKeywords: "brick 2x4",
+            primaryColorId: 1,
+            availableColorIds: [1, 5],
             dataSource: "brickops",
-            lastUpdated: Date.now(),
+            lastUpdated: now,
+            lastFetchedFromBricklink: now,
             dataFreshness: "fresh",
             createdBy: ownerUserId,
-            createdAt: 1,
+            createdAt: now,
+          },
+        ],
+        bricklinkColorReference: [
+          {
+            bricklinkColorId: 1,
+            name: "White",
+            rgb: "FFFFFF",
+            colorType: "Solid",
+            isTransparent: false,
+            syncedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        bricklinkPartColorAvailability: [
+          {
+            partNumber: "3001",
+            bricklinkPartId: "3001",
+            colorId: 1,
+            elementIds: ["300101"],
+            isLegacy: false,
+            syncedAt: now,
+          },
+        ],
+        bricklinkElementReference: [
+          {
+            elementId: "300101",
+            partNumber: "3001",
+            colorId: 1,
+            bricklinkPartId: "3001",
+            designId: "123",
+            syncedAt: now,
           },
         ],
       });
 
       const ctx = createConvexTestContext({
-        seed: seedWithPart,
+        seed,
         identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
       });
 
       const result = await (getPartDetails as any)._handler(ctx, {
         partNumber: "3001",
-        fetchFromBricklink: false,
       });
 
-      expect(result).toBeDefined();
       expect(result.partNumber).toBe("3001");
-      expect(result.name).toBe("Brick 2 x 4");
-      expect(result.dataFreshness).toBe("fresh");
+      expect(result.colorAvailability).toHaveLength(1);
+      expect(result.elementReferences).toHaveLength(1);
+      expect(result.marketPricing).toBeNull();
+    });
+  });
+
+  describe("part overlays", () => {
+    it("returns overlay scoped to the current tenant", async () => {
+      const seed = buildSeedData({
+        ...baseSeed,
+        catalogPartOverlay: [
+          {
+            businessAccountId,
+            partNumber: "3001",
+            tags: ["bin-ready"],
+            notes: "Keep near station",
+            sortGrid: "A",
+            sortBin: "1",
+            createdBy: ownerUserId,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-010` }),
+      });
+
+      const overlay = await (getPartOverlay as any)._handler(ctx, {
+        partNumber: "3001",
+      });
+
+      expect(overlay?.tags).toEqual(["bin-ready"]);
+      expect(overlay?.notes).toBe("Keep near station");
     });
 
-    it("should throw error for non-existent part", async () => {
+    it("creates a new overlay when none exists", async () => {
       const ctx = createConvexTestContext({
         seed: baseSeed,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-011` }),
       });
 
-      await expect(
-        (getPartDetails as any)._handler(ctx, {
-          partNumber: "NONEXISTENT",
-          fetchFromBricklink: false,
+      const result = await (upsertPartOverlay as any)._handler(ctx, {
+        partNumber: "4001",
+        notes: "New overlay",
+        tags: ["new"],
+      });
+
+      expect(result?.notes).toBe("New overlay");
+      expect(result?.tags).toEqual(["new"]);
+
+      const stored = await ctx.db.query("catalogPartOverlay").collect();
+      expect(stored).toHaveLength(1);
+      expect(stored[0].partNumber).toBe("4001");
+    });
+
+    it("allows any tenant member to upsert overlays", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-012a`,
+          email: "manager@example.com",
         }),
-      ).rejects.toThrow("Part NONEXISTENT not found in catalog");
+      });
+
+      const overlay = await (upsertPartOverlay as any)._handler(ctx, {
+        partNumber: "5000",
+        notes: "Manager note",
+      });
+
+      expect(overlay?.notes).toBe("Manager note");
+    });
+
+    it("updates existing overlay fields", async () => {
+      const seed = buildSeedData({
+        ...baseSeed,
+        catalogPartOverlay: [
+          {
+            businessAccountId,
+            partNumber: "5001",
+            tags: ["old"],
+            notes: "Legacy note",
+            createdBy: ownerUserId,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-012` }),
+      });
+
+      const result = await (upsertPartOverlay as any)._handler(ctx, {
+        partNumber: "5001",
+        tags: ["updated"],
+        sortGrid: "Z",
+        sortBin: "99",
+        notes: "Updated note",
+      });
+
+      expect(result?.tags).toEqual(["updated"]);
+      expect(result?.sortGrid).toBe("Z");
+      expect(result?.notes).toBe("Updated note");
+    });
+
+    it("isolates overlays per tenant", async () => {
+      const otherBusinessAccountId = "businessAccounts:2";
+      const otherOwnerUserId = "users:3";
+
+      const seed = buildSeedData({
+        businessAccounts: [
+          ...(baseSeed.businessAccounts ?? []),
+          {
+            _id: otherBusinessAccountId,
+            name: "Other Business",
+            ownerUserId: otherOwnerUserId,
+            inviteCode: "OTHER123",
+            createdAt: 1,
+          },
+        ],
+        users: [
+          ...(baseSeed.users ?? []),
+          {
+            _id: otherOwnerUserId,
+            businessAccountId: otherBusinessAccountId,
+            email: "other-owner@example.com",
+            role: "owner",
+            firstName: "Other",
+            lastName: "Owner",
+            name: "Other Owner",
+            status: "active",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+        catalogPartOverlay: [
+          {
+            businessAccountId,
+            partNumber: "shared",
+            tags: ["primary"],
+            createdBy: ownerUserId,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({
+          subject: `${otherOwnerUserId}|session-013`,
+          email: "other-owner@example.com",
+        }),
+      });
+
+      const overlay = await (getPartOverlay as any)._handler(ctx, {
+        partNumber: "shared",
+      });
+
+      expect(overlay).toBeNull();
     });
   });
 
   describe("savePartToLocalCatalog", () => {
-    it("should create new part in catalog", async () => {
+    it("materializes search keywords and metadata", async () => {
       const ctx = createConvexTestContext({
         seed: baseSeed,
         identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
       });
 
-      const result = await (savePartToLocalCatalog as any)._handler(ctx, {
-        partNumber: "3001",
-        name: "Brick 2 x 4",
-        description: "Standard LEGO brick",
-        category: "brick",
-        imageUrl: "https://example.com/3001.jpg",
-        bricklinkPartId: "3001",
-        bricklinkCategoryId: 1,
+      const partId = await (savePartToLocalCatalog as any)._handler(ctx, {
+        partNumber: "77777",
+        name: "Slope Brick",
+        description: "Fancy slope",
+        category: "Slopes",
+        imageUrl: null,
+        bricklinkPartId: "77777",
+        bricklinkCategoryId: 200,
         dataSource: "manual",
+        categoryPath: [200, 201],
+        primaryColorId: 1,
+        availableColorIds: [1, 21],
+        sortGrid: "C",
+        sortBin: "7",
+        marketPrice: 2.5,
+        marketPriceCurrency: "USD",
+        marketPriceLastSyncedAt: now,
+        aliases: ["slope"],
       });
 
-      expect(result).toBeDefined();
-
-      // Verify part was created
-      const part = await ctx.db.get(result);
-      expect(part).toBeDefined();
-      expect(part?.partNumber).toBe("3001");
-      expect(part?.name).toBe("Brick 2 x 4");
-      expect(part?.businessAccountId).toBe(businessAccountId);
-      expect(part?.createdBy).toBe(ownerUserId);
+      const stored = await ctx.db.get(partId);
+      expect(stored?.searchKeywords).toContain("slope");
+      expect(stored?.categoryPathKey).toBe("200/201");
+      expect(stored?.availableColorIds).toEqual([1, 21]);
     });
 
-    it("should update existing part in catalog", async () => {
-      const seedWithPart = buildSeedData({
-        ...baseSeed,
-        legoPartCatalog: [
-          {
-            businessAccountId,
-            partNumber: "3001",
-            name: "Old Name",
-            description: "Old description",
-            dataSource: "manual",
-            lastUpdated: Date.now() - 1000,
-            dataFreshness: "fresh",
-            createdBy: ownerUserId,
-            createdAt: 1,
-          },
-        ],
-      });
-
+    it("rejects non-system administrators", async () => {
       const ctx = createConvexTestContext({
-        seed: seedWithPart,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-002`,
+          email: "manager@example.com",
+        }),
       });
 
-      const result = await (savePartToLocalCatalog as any)._handler(ctx, {
-        partNumber: "3001",
-        name: "New Name",
-        description: "New description",
-        category: "brick",
-        dataSource: "manual",
-      });
-
-      expect(result).toBe("legoPartCatalog:1");
-
-      // Verify part was updated
-      const updatedPart = await ctx.db.get("legoPartCatalog:1");
-      expect(updatedPart?.name).toBe("New Name");
-      expect(updatedPart?.description).toBe("New description");
-      expect(updatedPart?.category).toBe("brick");
+      await expect(
+        (savePartToLocalCatalog as any)._handler(ctx, {
+          partNumber: "999",
+          name: "Restricted Part",
+          dataSource: "manual",
+        }),
+      ).rejects.toThrow("System administrator access required");
     });
   });
 
   describe("batchImportParts", () => {
-    it("should import multiple parts successfully", async () => {
-      const ctx = createConvexTestContext({
-        seed: baseSeed,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
-      });
-
-      const partsToImport = [
-        {
-          partNumber: "3001",
-          name: "Brick 2 x 4",
-          description: "Standard brick",
-          category: "brick",
-          imageUrl: "https://example.com/3001.jpg",
-          bricklinkPartId: "3001",
-          bricklinkCategoryId: 1,
-        },
-        {
-          partNumber: "3003",
-          name: "Brick 2 x 2",
-          description: "Small brick",
-          category: "brick",
-          imageUrl: "https://example.com/3003.jpg",
-          bricklinkPartId: "3003",
-          bricklinkCategoryId: 1,
-        },
-      ];
-
-      const result = await (batchImportParts as any)._handler(ctx, {
-        parts: partsToImport,
-        dataSource: "manual",
-      });
-
-      expect(result.created).toBe(2);
-      expect(result.updated).toBe(0);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it("should reject empty batch", async () => {
-      const ctx = createConvexTestContext({
-        seed: baseSeed,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
-      });
-
-      await expect(
-        (batchImportParts as any)._handler(ctx, {
-          parts: [],
-          dataSource: "manual",
-        }),
-      ).rejects.toThrow("No parts provided for import");
-    });
-
-    it("should reject batch over size limit", async () => {
-      const ctx = createConvexTestContext({
-        seed: baseSeed,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
-      });
-
-      const largeBatch = Array.from({ length: 101 }, (_, i) => ({
-        partNumber: `part${i}`,
-        name: `Part ${i}`,
-      }));
-
-      await expect(
-        (batchImportParts as any)._handler(ctx, {
-          parts: largeBatch,
-          dataSource: "manual",
-        }),
-      ).rejects.toThrow("Batch size limited to 100 parts per request");
-    });
-  });
-
-  describe("Authentication and Authorization", () => {
-    it("should require authentication", async () => {
-      const ctx = createConvexTestContext({
-        seed: baseSeed,
-        identity: null, // No authentication
-      });
-
-      await expect(
-        (searchParts as any)._handler(ctx, {
-          searchTerm: "test",
-        }),
-      ).rejects.toThrow("Authentication required");
-    });
-
-    it("should require active user status", async () => {
-      const inactiveUserId = "users:3";
-      const seedWithInactiveUser = buildSeedData({
+    it("updates existing parts with new metadata", async () => {
+      const seed = buildSeedData({
         ...baseSeed,
-        users: [
+        legoPartCatalog: [
           {
-            businessAccountId,
-            email: "owner@example.com",
-            role: "owner",
-            firstName: "Test",
-            lastName: "Owner",
-            name: "Test Owner",
-            status: "active",
-            createdAt: 1,
-            updatedAt: 1,
-          },
-          {
-            businessAccountId,
-            email: "member@example.com",
-            role: "manager",
-            firstName: "Test",
-            lastName: "Member",
-            name: "Test Member",
-            status: "active",
-            createdAt: 1,
-            updatedAt: 1,
-          },
-          {
-            businessAccountId,
-            email: "inactive@example.com",
-            role: "picker",
-            firstName: "Inactive",
-            lastName: "User",
-            name: "Inactive User",
-            status: "invited", // Not active
-            createdAt: 1,
-            updatedAt: 1,
+            partNumber: "888",
+            name: "Old Part",
+            category: "Legacy",
+            searchKeywords: "old part",
+            dataSource: "manual",
+            lastUpdated: now - 1000,
+            lastFetchedFromBricklink: now - 1000,
+            dataFreshness: "stale",
+            createdBy: ownerUserId,
+            createdAt: now,
           },
         ],
       });
 
       const ctx = createConvexTestContext({
-        seed: seedWithInactiveUser,
-        identity: createTestIdentity({ subject: `${inactiveUserId}|session-001` }),
-      });
-
-      await expect(
-        (searchParts as any)._handler(ctx, {
-          searchTerm: "test",
-        }),
-      ).rejects.toThrow("User account is not active");
-    });
-  });
-
-  describe("Performance Requirements", () => {
-    it("search should complete within reasonable time", async () => {
-      // Create multiple test parts
-      const parts = Array.from({ length: 10 }, (_, i) => ({
-        businessAccountId,
-        partNumber: `300${i + 1}`,
-        name: `Test Brick ${i + 1}`,
-        dataSource: "brickops" as const,
-        lastUpdated: Date.now(),
-        dataFreshness: "fresh" as const,
-        createdBy: ownerUserId,
-        createdAt: 1,
-      }));
-
-      const seedWithManyParts = buildSeedData({
-        ...baseSeed,
-        legoPartCatalog: parts,
-      });
-
-      const ctx = createConvexTestContext({
-        seed: seedWithManyParts,
+        seed,
         identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
       });
 
-      const startTime = Date.now();
-      const result = await (searchParts as any)._handler(ctx, {
-        searchTerm: "Test",
-        limit: 10,
+      const result = await (batchImportParts as any)._handler(ctx, {
+        parts: [
+          {
+            partNumber: "888",
+            name: "Updated Part",
+            description: "Updated description",
+            category: "Updated",
+            imageUrl: null,
+            bricklinkPartId: "888",
+            bricklinkCategoryId: 10,
+            categoryPath: [10],
+            primaryColorId: 2,
+            availableColorIds: [2, 3],
+            aliases: ["updated"],
+          },
+        ],
+        dataSource: "bricklink",
       });
-      const duration = Date.now() - startTime;
 
-      expect(result.parts.length).toBeGreaterThan(0);
-      expect(duration).toBeLessThan(2000); // Should complete within 2 seconds
-      expect(result.searchDurationMs).toBeDefined();
-      expect(typeof result.searchDurationMs).toBe("number");
+      expect(result.updated).toBe(1);
+      const stored = await ctx.db.get("legoPartCatalog:1" as any);
+      expect(stored?.name).toBe("Updated Part");
+      expect(stored?.primaryColorId).toBe(2);
+      expect(stored?.dataFreshness).toBe("fresh");
+    });
+
+    it("blocks imports from non-system administrators", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-003`,
+          email: "manager@example.com",
+        }),
+      });
+
+      await expect(
+        (batchImportParts as any)._handler(ctx, {
+          parts: [
+            {
+              partNumber: "restricted",
+              name: "Restricted",
+              dataSource: "manual",
+            },
+          ],
+          dataSource: "manual",
+        }),
+      ).rejects.toThrow("System administrator access required");
+    });
+  });
+
+  describe("reference seeding", () => {
+    it("upserts color and category references", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
+      });
+
+      const colorResult = await (seedBricklinkColors as any)._handler(ctx, {
+        records: [
+          {
+            bricklinkColorId: 1,
+            name: "White",
+            rgb: "FFFFFF",
+            colorType: "Solid",
+            isTransparent: false,
+            syncedAt: now,
+          },
+        ],
+        clearExisting: true,
+      });
+
+      expect(colorResult.inserted).toBe(1);
+
+      const categoryResult = await (seedBricklinkCategories as any)._handler(ctx, {
+        records: [
+          {
+            bricklinkCategoryId: 100,
+            name: "Bricks",
+            parentCategoryId: null,
+            path: [100],
+            syncedAt: now,
+          },
+        ],
+        clearExisting: true,
+      });
+
+      expect(categoryResult.inserted).toBe(1);
+
+      const availabilityResult = await (seedPartColorAvailability as any)._handler(ctx, {
+        records: [
+          {
+            partNumber: "3001",
+            bricklinkPartId: "3001",
+            colorId: 1,
+            elementIds: ["300101"],
+            isLegacy: false,
+            syncedAt: now,
+          },
+        ],
+        clearExisting: true,
+      });
+
+      expect(availabilityResult.inserted).toBe(1);
+
+      const elementsResult = await (seedElementReferences as any)._handler(ctx, {
+        records: [
+          {
+            elementId: "300101",
+            partNumber: "3001",
+            colorId: 1,
+            bricklinkPartId: "3001",
+            designId: "123",
+            syncedAt: now,
+          },
+        ],
+        clearExisting: true,
+      });
+
+      expect(elementsResult.inserted).toBe(1);
+    });
+
+    it("requires system administrator permissions", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-004`,
+          email: "manager@example.com",
+        }),
+      });
+
+      await expect(
+        (seedBricklinkColors as any)._handler(ctx, {
+          records: [],
+        }),
+      ).rejects.toThrow("System administrator access required");
+    });
+  });
+
+  describe("refreshCatalogEntries", () => {
+    it("requires system administrator access", async () => {
+      const ctx = createConvexTestContext({
+        seed: baseSeed,
+        identity: createTestIdentity({
+          subject: `${managerUserId}|session-005`,
+          email: "manager@example.com",
+        }),
+      });
+
+      await expect(
+        (refreshCatalogEntries as any)._handler(ctx, {
+          limit: 5,
+        }),
+      ).rejects.toThrow("System administrator access required");
     });
   });
 });

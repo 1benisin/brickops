@@ -69,3 +69,5 @@ recommendations:
       refs: ["src/app/(authenticated)/settings/audit/page.tsx"]
     - action: "Add performance monitoring for user management operations"
       refs: ["convex/functions/users.ts"]
+    - action: "Coordinate with catalog team to implement Bricklink XML seeding + freshness windows documented in PRD Epic 2 and architecture updates before expanding role-based features that depend on catalog permissions"
+      refs: ["docs/prd/epic-2-part-identification-catalog-integration.md", "docs/architecture/backend-architecture.md", "docs/architecture/data-models.md"]
