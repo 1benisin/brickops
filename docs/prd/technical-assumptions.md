@@ -41,3 +41,10 @@ Scope:
 - **Browser Support**: Modern browsers (Chrome, Firefox, Safari, Edge) on desktop and mobile
 - **Mobile Optimization**: Web-first responsive design with mobile camera integration
 - **Real-time Features**: Live inventory updates, order processing, and collaborative features using Convex subscriptions
+
+## Type Sharing Policy (Convex + TypeScript)
+
+- Prefer generated types over hand-rolled interfaces.
+- Use `Id`/`Doc` from `convex/_generated/dataModel` when referencing Convex tables.
+- Derive function result types from Convex references using `FunctionReturnType<typeof api.module.fn>` and re-export shared types from `src/types/` (e.g., `src/types/catalog.ts`).
+- When sharing literals/enums/objects between server and client, define a Convex validator and use `Infer` from `convex/values` to extract the TypeScript type.

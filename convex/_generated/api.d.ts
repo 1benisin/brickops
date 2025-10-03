@@ -19,6 +19,7 @@ import type * as functions_identify from "../functions/identify.js";
 import type * as functions_identifyActions from "../functions/identifyActions.js";
 import type * as functions_internal from "../functions/internal.js";
 import type * as functions_inventory from "../functions/inventory.js";
+import type * as functions_scriptOps from "../functions/scriptOps.js";
 import type * as functions_users from "../functions/users.js";
 import type * as http from "../http.js";
 import type * as internal_identify from "../internal/identify.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "functions/identifyActions": typeof functions_identifyActions;
   "functions/internal": typeof functions_internal;
   "functions/inventory": typeof functions_inventory;
+  "functions/scriptOps": typeof functions_scriptOps;
   "functions/users": typeof functions_users;
   http: typeof http;
   "internal/identify": typeof internal_identify;

@@ -34,10 +34,7 @@
  *    - Converts dimensions from studs to millimeters (1 stud = 8mm)
  *    - Updates by partNumber if exists, inserts new parts otherwise
  *
- * 6. **Filter Counts** (catalogFilterCounts)
- *    - Pre-computed counts for efficient catalog filtering UI
- *    - CLEARS and rebuilds from scratch after all data is loaded
- *    - Aggregates color/category counts across all parts
+ * (Removed) Filter Counts were previously pre-computed for the filtering UI.
  *
  * DATA BEHAVIOR (UPSERT-ONLY - SAFE & IDEMPOTENT):
  * - ✅ **All runs**: Updates existing records by ID match, inserts new ones
@@ -292,11 +289,6 @@ export const main = async () => {
       default: false,
       describe: "Seed only catalog parts (skip colors, categories, codes)",
     })
-    .option("onlyFilterCounts", {
-      type: "boolean",
-      default: false,
-      describe: "Compute and seed only catalog filter counts",
-    })
     .help()
     .parse();
 
@@ -331,31 +323,7 @@ export const main = async () => {
     } | null,
   };
 
-  // Early exit mode: compute only filter counts
-  if (argv.onlyFilterCounts) {
-    if (!argv.dryRun) {
-      log(`Computing and seeding catalog filter counts (only)...`);
-      const filterCountsResult = await convex.action(
-        api.functions.catalog.seedCatalogFilterCounts,
-        {
-          clearExisting: true,
-        },
-      );
-      log(
-        `Filter counts seeded: +${filterCountsResult.inserted} records (${filterCountsResult.colorCount} colors, ${filterCountsResult.categoryCount} categories from ${filterCountsResult.processedColorAvailability} color availabilities, ${filterCountsResult.processedCatalogParts} catalog parts).`,
-      );
-      stats.filterCounts = filterCountsResult;
-    } else {
-      log(`Dry run: would compute and seed catalog filter counts`);
-    }
-    log(`Completed seeding${argv.dryRun ? " (dry run)" : ""}.`);
-    if (stats.filterCounts) {
-      log(
-        `Filter counts: +${stats.filterCounts.inserted} records (${stats.filterCounts.colorCount} colors, ${stats.filterCounts.categoryCount} categories from ${stats.filterCounts.processedColorAvailability} color availabilities, ${stats.filterCounts.processedCatalogParts} catalog parts).`,
-      );
-    }
-    return;
-  }
+  // Removed: filter count only mode
 
   // Map human color names (lowercased) to Bricklink color IDs discovered during color seeding
   const colorNameToId = new Map<string, number>();
@@ -400,7 +368,7 @@ export const main = async () => {
         colorCount += colorBatch.length;
         logProgress("Colors", colorCount, "in progress");
         if (!argv.dryRun) {
-          const result = await convex.mutation(api.functions.catalog.seedBricklinkColors, {
+          const result = await convex.mutation(api.functions.scriptOps.seedBricklinkColors, {
             records: colorBatch,
           });
           stats.colors.inserted += result.inserted;
@@ -413,7 +381,7 @@ export const main = async () => {
       colorCount += colorBatch.length;
       logProgress("Colors", colorCount, "complete");
       if (!argv.dryRun) {
-        const result = await convex.mutation(api.functions.catalog.seedBricklinkColors, {
+        const result = await convex.mutation(api.functions.scriptOps.seedBricklinkColors, {
           records: colorBatch,
         });
         stats.colors.inserted += result.inserted;
@@ -447,7 +415,7 @@ export const main = async () => {
         categoryCount += categoryBatch.length;
         logProgress("Categories", categoryCount, "in progress");
         if (!argv.dryRun) {
-          const result = await convex.mutation(api.functions.catalog.seedBricklinkCategories, {
+          const result = await convex.mutation(api.functions.scriptOps.seedBricklinkCategories, {
             records: categoryBatch,
           });
           stats.categories.inserted += result.inserted;
@@ -460,7 +428,7 @@ export const main = async () => {
       categoryCount += categoryBatch.length;
       logProgress("Categories", categoryCount, "complete");
       if (!argv.dryRun) {
-        const result = await convex.mutation(api.functions.catalog.seedBricklinkCategories, {
+        const result = await convex.mutation(api.functions.scriptOps.seedBricklinkCategories, {
           records: categoryBatch,
         });
         stats.categories.inserted += result.inserted;
@@ -523,7 +491,7 @@ export const main = async () => {
         partColorCount += availabilityBatch.length;
         logProgress("Part-color availability", partColorCount, "in progress");
         if (!argv.dryRun) {
-          const result = await convex.mutation(api.functions.catalog.seedPartColorAvailability, {
+          const result = await convex.mutation(api.functions.scriptOps.seedPartColorAvailability, {
             records: availabilityBatch,
           });
           stats.partColors.inserted += result.inserted;
@@ -536,7 +504,7 @@ export const main = async () => {
         elementCount += elementBatch.length;
         logProgress("Element references", elementCount, "in progress");
         if (!argv.dryRun) {
-          const result = await convex.mutation(api.functions.catalog.seedElementReferences, {
+          const result = await convex.mutation(api.functions.scriptOps.seedElementReferences, {
             records: elementBatch,
           });
           stats.elements.inserted += result.inserted;
@@ -550,7 +518,7 @@ export const main = async () => {
       partColorCount += availabilityBatch.length;
       logProgress("Part-color availability", partColorCount, "complete");
       if (!argv.dryRun) {
-        const result = await convex.mutation(api.functions.catalog.seedPartColorAvailability, {
+        const result = await convex.mutation(api.functions.scriptOps.seedPartColorAvailability, {
           records: availabilityBatch,
         });
         stats.partColors.inserted += result.inserted;
@@ -562,7 +530,7 @@ export const main = async () => {
       elementCount += elementBatch.length;
       logProgress("Element references", elementCount, "complete");
       if (!argv.dryRun) {
-        const result = await convex.mutation(api.functions.catalog.seedElementReferences, {
+        const result = await convex.mutation(api.functions.scriptOps.seedElementReferences, {
           records: elementBatch,
         });
         stats.elements.inserted += result.inserted;
@@ -616,7 +584,7 @@ export const main = async () => {
       partCount += partBatch.length;
       logProgress("Catalog parts", partCount, "in progress");
       if (!argv.dryRun) {
-        const result = await convex.mutation(api.functions.catalog.seedLegoPartCatalog, {
+        const result = await convex.mutation(api.functions.scriptOps.seedLegoPartCatalog, {
           records: partBatch,
         });
         stats.catalogParts.inserted += result.inserted;
@@ -630,7 +598,7 @@ export const main = async () => {
     partCount += partBatch.length;
     logProgress("Catalog parts", partCount, "complete");
     if (!argv.dryRun) {
-      const result = await convex.mutation(api.functions.catalog.seedLegoPartCatalog, {
+      const result = await convex.mutation(api.functions.scriptOps.seedLegoPartCatalog, {
         records: partBatch,
       });
       stats.catalogParts.inserted += result.inserted;
@@ -643,16 +611,7 @@ export const main = async () => {
   // per business account via overlay management functions.
 
   // Seed filter counts for efficient catalog filtering
-  if (!argv.dryRun) {
-    log(`Computing and seeding catalog filter counts...`);
-    const filterCountsResult = await convex.action(api.functions.catalog.seedCatalogFilterCounts, {
-      clearExisting: true,
-    });
-    log(
-      `Filter counts seeded: +${filterCountsResult.inserted} records (${filterCountsResult.colorCount} colors, ${filterCountsResult.categoryCount} categories from ${filterCountsResult.processedColorAvailability} color availabilities, ${filterCountsResult.processedCatalogParts} catalog parts).`,
-    );
-    stats.filterCounts = filterCountsResult;
-  }
+  // Removed: computing/seeding catalog filter counts
 
   log(`Completed seeding${argv.dryRun ? " (dry run)" : ""}.`);
   log(`Color references: +${stats.colors.inserted} / ~${stats.colors.updated} updates.`);
@@ -662,11 +621,6 @@ export const main = async () => {
   );
   log(`Element references: +${stats.elements.inserted} / ~${stats.elements.updated} updates.`);
   log(`Catalog parts: +${stats.catalogParts.inserted} / ~${stats.catalogParts.updated} updates.`);
-  if (stats.filterCounts) {
-    log(
-      `Filter counts: +${stats.filterCounts.inserted} records (${stats.filterCounts.colorCount} colors, ${stats.filterCounts.categoryCount} categories from ${stats.filterCounts.processedColorAvailability} color availabilities, ${stats.filterCounts.processedCatalogParts} catalog parts).`,
-    );
-  }
 };
 
 const isDirectExecution = (() => {

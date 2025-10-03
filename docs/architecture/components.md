@@ -17,6 +17,11 @@
   - Enriches records with BrickOps sort locations from `bin_lookup_v3.json` so catalog rows expose grid/bin assignments alongside Bricklink metadata
 - Error Handling: Implements rate limiting, exponential backoff, and structured error mapping to align with frontend retry UX
 
+### Type Sharing
+
+- Frontend imports catalog types from `src/types/catalog.ts`, which derives from Convex function references (`FunctionReturnType<typeof api.functions.catalog.*>`).
+- Avoid hand-rolled interfaces for catalog entities; prefer types derived from Convex return values to prevent drift.
+
 ## InventoryService
 
 - Responsibility: Inventory management with real-time updates and status management

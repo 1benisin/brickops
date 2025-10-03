@@ -160,8 +160,8 @@ export default defineSchema({
     dimensionZMm: v.optional(v.number()), // Height in millimeters
     isObsolete: v.optional(v.boolean()), // Part is no longer in production
 
-    // Catalog enrichment
-    searchKeywords: v.optional(v.string()),
+    // Catalog enrichment (required: used for full text search)
+    searchKeywords: v.string(),
     primaryColorId: v.optional(v.number()),
     availableColorIds: v.optional(v.array(v.number())),
 
@@ -183,19 +183,18 @@ export default defineSchema({
     .index("by_printed", ["printed"])
     .index("by_dataFreshness", ["dataFreshness"])
     .index("by_lastUpdated", ["lastUpdated"])
-    // Compound indexes for efficient sorting with filters
-    .index("by_freshness_and_name", ["dataFreshness", "name"])
-    .index("by_freshness_and_updated", ["dataFreshness", "lastUpdated"])
+    // Sorting/browsing indexes
+    .index("by_name", ["name"])
     .index("by_category_and_name", ["bricklinkCategoryId", "name"])
-    .searchIndex("search_parts", {
-      searchField: "searchKeywords",
+    .searchIndex("search_parts_by_name", {
+      searchField: "name",
       filterFields: [
         "category",
         "primaryColorId",
         "categoryPathKey",
         "printed",
-        "dataFreshness",
         "bricklinkCategoryId",
+        "availableColorIds",
       ],
     }),
 
@@ -307,14 +306,4 @@ export default defineSchema({
     .index("by_element", ["elementId"])
     .index("by_part", ["partNumber"])
     .index("by_color", ["colorId"]),
-
-  // Pre-computed filter counts for efficient catalog search/filtering
-  catalogFilterCounts: defineTable({
-    type: v.union(v.literal("color"), v.literal("category")),
-    referenceId: v.number(), // colorId or categoryId
-    count: v.number(),
-    lastUpdated: v.number(),
-  })
-    .index("by_type", ["type"])
-    .index("by_type_and_id", ["type", "referenceId"]),
 });

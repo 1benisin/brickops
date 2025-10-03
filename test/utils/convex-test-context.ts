@@ -24,9 +24,17 @@ type ChainableQuery<T> = {
 type QueryBuilder<T> = {
   filter: (predicate: (doc: T) => boolean) => QueryBuilder<T>;
   withIndex: (_indexName: string, handler?: (query: ChainableQuery<T>) => void) => QueryBuilder<T>;
+  withSearchIndex: (
+    _indexName: string,
+    handler: (query: { search: (field: keyof T & string, value: string) => void }) => void,
+  ) => QueryBuilder<T>;
   collect: () => Promise<T[]>;
   first: () => Promise<T | null>;
   unique: () => Promise<T | null>;
+  paginate: (options: {
+    cursor?: string | null;
+    numItems: number;
+  }) => Promise<{ page: T[]; continueCursor: string | null; isDone: boolean }>;
 };
 
 type Patch<T> = Partial<Omit<T, "_id" | "_creationTime">>;
@@ -144,6 +152,24 @@ export class MockDb {
         }
         return builder;
       },
+      withSearchIndex: (_indexName, handler) => {
+        handler({
+          search: (field, value) => {
+            const searchTerm = value.toLowerCase();
+            records = records.filter((doc) => {
+              const fieldValue = (doc as any)[field];
+              if (typeof fieldValue === "string") {
+                return fieldValue.toLowerCase().includes(searchTerm);
+              }
+              if (Array.isArray(fieldValue)) {
+                return fieldValue.some((item) => String(item).toLowerCase().includes(searchTerm));
+              }
+              return false;
+            });
+          },
+        });
+        return builder;
+      },
       collect: async () => records as T[],
       first: async () => (records.length > 0 ? (records[0] as T) : null),
       unique: async () => {
@@ -156,6 +182,14 @@ export class MockDb {
         }
 
         return records[0] as T;
+      },
+      paginate: async ({ cursor, numItems }) => {
+        const startIndex = cursor ? parseInt(cursor, 10) : 0;
+        const page = records.slice(startIndex, startIndex + numItems);
+        const continueCursor =
+          startIndex + numItems < records.length ? (startIndex + numItems).toString() : null;
+        const isDone = startIndex + numItems >= records.length;
+        return { page: page as T[], continueCursor, isDone };
       },
     };
 
@@ -199,7 +233,7 @@ export const createConvexTestContext = (
   };
 };
 
-type BusinessAccountSeed = {
+export type BusinessAccountSeed = {
   _id?: string;
   _creationTime?: number;
   name: string;
@@ -208,7 +242,7 @@ type BusinessAccountSeed = {
   createdAt?: number;
 };
 
-type UserSeed = {
+export type UserSeed = {
   _id?: string;
   _creationTime?: number;
   businessAccountId: string;
@@ -234,15 +268,40 @@ type InventorySeed = {
   createdAt?: number;
 };
 
-type LegoPartCatalogSeed = {
+type CatalogPartOverlaySeed = {
+  _id?: string;
+  _creationTime?: number;
   businessAccountId: string;
+  partNumber: string;
+  tags?: string[];
+  notes?: string;
+  sortGrid?: string;
+  sortBin?: string;
+  createdBy: string;
+  createdAt: number;
+  updatedAt?: number;
+};
+
+type LegoPartCatalogSeed = {
+  _id?: string;
+  _creationTime?: number;
   partNumber: string;
   name: string;
   description?: string;
   category?: string;
+  categoryPath?: number[];
+  categoryPathKey?: string;
   imageUrl?: string;
   bricklinkPartId?: string;
   bricklinkCategoryId?: number;
+  searchKeywords: string;
+  primaryColorId?: number;
+  availableColorIds?: number[];
+  sortGrid?: string;
+  sortBin?: string;
+  marketPrice?: number;
+  marketPriceCurrency?: string;
+  marketPriceLastSyncedAt?: number;
   dataSource: "brickops" | "bricklink" | "manual";
   lastUpdated: number;
   lastFetchedFromBricklink?: number;
@@ -250,6 +309,7 @@ type LegoPartCatalogSeed = {
   createdBy: string;
   createdAt: number;
   updatedAt?: number;
+  aliases?: string[];
 };
 
 export const buildSeedData = (seed: {
@@ -257,6 +317,11 @@ export const buildSeedData = (seed: {
   users?: UserSeed[];
   inventoryItems?: InventorySeed[];
   legoPartCatalog?: LegoPartCatalogSeed[];
+  catalogPartOverlay?: CatalogPartOverlaySeed[];
+  bricklinkColorReference?: TableSeed[];
+  bricklinkCategoryReference?: TableSeed[];
+  bricklinkPartColorAvailability?: TableSeed[];
+  bricklinkElementReference?: TableSeed[];
 }) => seed as SeedData;
 
 export const createTestIdentity = (overrides: Partial<Identity> = {}): Identity => ({
