@@ -1,33 +1,36 @@
 /// <reference types="@testing-library/jest-dom" />
 import React from "react";
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import CatalogPage from "@/app/(authenticated)/catalog/page";
 import { renderWithProviders } from "@/test-utils/render-with-providers";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { CatalogSearchResult, CatalogPartDetails } from "@/lib/services/catalog-service";
+import type { CatalogSearchResult, CatalogPartDetails } from "@/types/catalog";
+
+// Type to avoid using 'any' for mock checks
+type MockedConvexFunction = {
+  name: string;
+};
 
 jest.mock("@/hooks/useSearchStore", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   type StoreState = {
-    query: string;
-    selectedColors: number[];
-    selectedCategories: number[];
+    gridBin: string;
+    partTitle: string;
+    partId: string;
     page: number;
     pageSize: number;
     sort: { field: "name" | "marketPrice" | "lastUpdated"; direction: "asc" | "desc" } | null;
-    freshness: "all" | "fresh" | "stale" | "expired";
   };
 
   let state: StoreState = {
-    query: "",
-    selectedColors: [],
-    selectedCategories: [],
+    gridBin: "",
+    partTitle: "",
+    partId: "",
     page: 1,
     pageSize: 25,
     sort: null,
-    freshness: "all",
   };
 
   const listeners = new Set<() => void>();
@@ -37,8 +40,6 @@ jest.mock("@/hooks/useSearchStore", () => {
     const updated: StoreState = {
       ...state,
       ...next,
-      selectedColors: [...(next.selectedColors ?? state.selectedColors)],
-      selectedCategories: [...(next.selectedCategories ?? state.selectedCategories)],
       sort: next.sort ?? state.sort,
     };
     updated.sort = updated.sort ? { ...updated.sort } : null;
@@ -47,21 +48,9 @@ jest.mock("@/hooks/useSearchStore", () => {
   };
 
   const actions = {
-    setQuery: (query: string) => setState({ query, page: 1 }),
-    toggleColor: (colorId: number) =>
-      setState((prev) => {
-        const selected = prev.selectedColors.includes(colorId)
-          ? prev.selectedColors.filter((id) => id !== colorId)
-          : [...prev.selectedColors, colorId];
-        return { selectedColors: selected, page: 1 };
-      }),
-    toggleCategory: (categoryId: number) =>
-      setState((prev) => {
-        const selected = prev.selectedCategories.includes(categoryId)
-          ? prev.selectedCategories.filter((id) => id !== categoryId)
-          : [...prev.selectedCategories, categoryId];
-        return { selectedCategories: selected, page: 1 };
-      }),
+    setGridBin: (value: string) => setState({ gridBin: value, page: 1 }),
+    setPartTitle: (value: string) => setState({ partTitle: value, page: 1 }),
+    setPartId: (value: string) => setState({ partId: value, page: 1 }),
     setPage: (page: number) => setState({ page }),
     setPageSize: (pageSize: number) =>
       setState((prev) => ({
@@ -71,33 +60,25 @@ jest.mock("@/hooks/useSearchStore", () => {
     setSort: (
       sort: { field: "name" | "marketPrice" | "lastUpdated"; direction: "asc" | "desc" } | null,
     ) => setState({ sort, page: 1 }),
-    setFreshness: (freshness: StoreState["freshness"]) => setState({ freshness, page: 1 }),
     setFilters: (
-      filters: Partial<
-        Pick<
-          StoreState,
-          "query" | "selectedColors" | "selectedCategories" | "sort" | "pageSize" | "freshness"
-        >
-      >,
+      filters: Partial<Pick<StoreState, "gridBin" | "partTitle" | "partId" | "sort" | "pageSize">>,
     ) =>
       setState((prev) => ({
-        query: filters.query ?? prev.query,
-        selectedColors: filters.selectedColors ?? prev.selectedColors,
-        selectedCategories: filters.selectedCategories ?? prev.selectedCategories,
+        gridBin: filters.gridBin ?? prev.gridBin,
+        partTitle: filters.partTitle ?? prev.partTitle,
+        partId: filters.partId ?? prev.partId,
         sort: filters.sort ?? prev.sort,
         pageSize: filters.pageSize ?? prev.pageSize,
-        freshness: filters.freshness ?? prev.freshness,
         page: 1,
       })),
     resetFilters: () =>
       setState({
-        query: "",
-        selectedColors: [],
-        selectedCategories: [],
+        gridBin: "",
+        partTitle: "",
+        partId: "",
         page: 1,
         pageSize: 25,
         sort: null,
-        freshness: "all",
       }),
   };
 
@@ -112,7 +93,9 @@ jest.mock("@/hooks/useSearchStore", () => {
     ReactActual.useEffect(() => {
       const listener = () => setSlice(selector(getSnapshot()));
       listeners.add(listener);
-      return () => listeners.delete(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     }, [selector]);
 
     return slice;
@@ -122,13 +105,12 @@ jest.mock("@/hooks/useSearchStore", () => {
 
   const reset = () => {
     state = {
-      query: "",
-      selectedColors: [],
-      selectedCategories: [],
+      gridBin: "",
+      partTitle: "",
+      partId: "",
       page: 1,
       pageSize: 25,
       sort: null,
-      freshness: "all",
     };
     listeners.forEach((listener) => listener());
   };
@@ -149,43 +131,7 @@ jest.mock("@/hooks/useSearchStore", () => {
   };
 });
 
-const sharedMetadata: CatalogSearchResult["metadata"] = {
-  colors: [
-    {
-      id: 1,
-      name: "White",
-      rgb: "FFFFFF",
-      colorType: "Solid",
-      isTransparent: false,
-      count: 1,
-      active: false,
-    },
-    {
-      id: 21,
-      name: "Bright Red",
-      rgb: "CC0000",
-      colorType: "Solid",
-      isTransparent: false,
-      count: 1,
-      active: false,
-    },
-  ],
-  categories: [
-    {
-      id: 100,
-      name: "Bricks",
-      parentCategoryId: undefined,
-      path: [100],
-      count: 1,
-      active: false,
-    },
-  ],
-  summary: {
-    totalParts: 1,
-    totalColors: 2,
-    totalCategories: 1,
-  },
-};
+// metadata removed from API: no-op placeholder removed
 
 const searchResults: Record<string, CatalogSearchResult> = {
   first: {
@@ -198,19 +144,21 @@ const searchResults: Record<string, CatalogSearchResult> = {
         category: "Bricks",
         categoryPath: [100],
         categoryPathKey: "100",
-        imageUrl: null,
+        imageUrl: "",
+        thumbnailUrl: undefined,
         dataSource: "brickops",
         lastUpdated: Date.now(),
-        dataFreshness: "fresh",
         bricklinkPartId: "3001",
         bricklinkCategoryId: 100,
         primaryColorId: 1,
         availableColorIds: [1, 21],
-        sortGrid: "A",
-        sortBin: "10",
-        marketPrice: 1.23,
-        marketPriceCurrency: "USD",
-        marketPriceLastSyncedAt: Date.now(),
+        weightGrams: undefined,
+        dimensionXMm: undefined,
+        dimensionYMm: undefined,
+        dimensionZMm: undefined,
+        printed: undefined,
+        isObsolete: undefined,
+        // omit pricing in this mock to match type
       },
     ],
     source: "local",
@@ -222,7 +170,7 @@ const searchResults: Record<string, CatalogSearchResult> = {
       fetched: 1,
       isDone: false,
     },
-    metadata: sharedMetadata,
+    // metadata removed
   },
   "cursor-2": {
     parts: [
@@ -234,31 +182,33 @@ const searchResults: Record<string, CatalogSearchResult> = {
         category: "Bricks",
         categoryPath: [100],
         categoryPathKey: "100",
-        imageUrl: null,
+        imageUrl: "",
+        thumbnailUrl: undefined,
         dataSource: "brickops",
         lastUpdated: Date.now(),
-        dataFreshness: "fresh",
         bricklinkPartId: "3002",
         bricklinkCategoryId: 100,
         primaryColorId: 21,
         availableColorIds: [21],
-        sortGrid: "B",
-        sortBin: "5",
-        marketPrice: 0.95,
-        marketPriceCurrency: "USD",
-        marketPriceLastSyncedAt: Date.now(),
+        weightGrams: undefined,
+        dimensionXMm: undefined,
+        dimensionYMm: undefined,
+        dimensionZMm: undefined,
+        printed: undefined,
+        isObsolete: undefined,
+        // omit pricing in this mock to match type
       },
     ],
     source: "local",
     searchDurationMs: 8,
     pagination: {
-      cursor: null,
+      cursor: "",
       hasNextPage: false,
       pageSize: 25,
       fetched: 1,
       isDone: true,
     },
-    metadata: sharedMetadata,
+    // metadata removed
   },
 };
 
@@ -288,6 +238,7 @@ const detailResult: CatalogPartDetails = {
     },
   ],
   marketPricing: null,
+  bricklinkSnapshot: undefined,
 };
 
 const mockUseQuery = jest.fn((_queryFn: unknown, args: unknown) => {
@@ -321,7 +272,17 @@ jest.mock("convex/react", () => {
     __esModule: true,
     ...actual,
     useQuery: (...args: Parameters<typeof mockUseQuery>) => mockUseQuery(...args),
-    useMutation: jest.fn(() => mockMutation),
+    useMutation: jest.fn((mutationFn: unknown) => {
+      // Allow specific mocks based on the function path
+      // This makes tests more robust to module changes
+      if (
+        typeof mutationFn === "function" &&
+        (mutationFn as MockedConvexFunction).name === "refreshCatalogEntries"
+      ) {
+        return mockMutation;
+      }
+      return mockMutation; // Default for others
+    }),
   };
 });
 
@@ -358,28 +319,9 @@ describe("CatalogPage", () => {
     renderWithProviders(<CatalogPage />);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Catalog");
-    expect(screen.getByTestId("catalog-search-input")).toBeInTheDocument();
+    expect(screen.getByTestId("catalog-search-title")).toBeInTheDocument();
     expect(await screen.findByTestId("catalog-results-grid")).toBeInTheDocument();
     expect(await screen.findByTestId("catalog-result-card-3001")).toBeInTheDocument();
-  });
-
-  it("applies color filters and passes them to search query", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<CatalogPage />);
-
-    const colorFilter = await screen.findByTestId("catalog-filter-color-21");
-    await user.click(colorFilter);
-
-    const searchCalls = mockUseQuery.mock.calls.filter(
-      (call) =>
-        Array.isArray(call) &&
-        call.length > 1 &&
-        typeof call[1] === "object" &&
-        call[1] !== null &&
-        "query" in (call[1] as Record<string, unknown>),
-    );
-    const latestArgs = searchCalls[searchCalls.length - 1]?.[1] as { colors?: number[] };
-    expect(latestArgs.colors).toEqual([21]);
   });
 
   it("supports pagination controls", async () => {
@@ -388,7 +330,9 @@ describe("CatalogPage", () => {
 
     await screen.findByTestId("catalog-results-grid");
 
-    await user.click(screen.getByTestId("catalog-next-page"));
+    await act(async () => {
+      await user.click(screen.getByTestId("catalog-next-page"));
+    });
 
     await waitFor(() => {
       expect(
@@ -407,18 +351,22 @@ describe("CatalogPage", () => {
     expect(await screen.findByText(/Page\s*2/)).toBeInTheDocument();
   });
 
-  it("preserves the selected page when navigating and resets after filter changes", async () => {
+  it("preserves the selected page when navigating and resets after search changes", async () => {
     const user = userEvent.setup();
     renderWithProviders(<CatalogPage />);
 
     await screen.findByTestId("catalog-results-grid");
 
-    await user.click(screen.getByTestId("catalog-next-page"));
+    await act(async () => {
+      await user.click(screen.getByTestId("catalog-next-page"));
+    });
 
     expect(await screen.findByText(/Page\s*2/)).toBeInTheDocument();
 
-    const colorFilter = await screen.findByTestId("catalog-filter-color-21");
-    await user.click(colorFilter);
+    const titleInput = await screen.findByTestId("catalog-search-title");
+    await act(async () => {
+      await user.type(titleInput, " brick");
+    });
 
     expect(await screen.findByText(/Page\s*1/)).toBeInTheDocument();
 
@@ -438,7 +386,9 @@ describe("CatalogPage", () => {
     const user = userEvent.setup();
     renderWithProviders(<CatalogPage />);
 
-    await user.click(await screen.findByTestId("catalog-result-card-3001"));
+    await act(async () => {
+      await user.click(await screen.findByTestId("catalog-result-card-3001"));
+    });
 
     const drawer = await screen.findByTestId("catalog-detail-content");
     const headings = await screen.findAllByText(/Brick 2 x 4/);

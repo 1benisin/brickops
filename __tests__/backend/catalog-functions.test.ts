@@ -4,21 +4,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   searchParts,
   getPartDetails,
-  savePartToLocalCatalog,
-  batchImportParts,
   getPartOverlay,
   upsertPartOverlay,
+} from "../../convex/functions/catalog";
+import {
+  savePartToLocalCatalog,
+  batchImportParts,
   seedBricklinkColors,
   seedBricklinkCategories,
   seedPartColorAvailability,
   seedElementReferences,
   refreshCatalogEntries,
-} from "../../convex/functions/catalog";
+} from "../../convex/functions/scriptOps";
 import {
   buildSeedData,
   createConvexTestContext,
   createTestIdentity,
 } from "../../test/utils/convex-test-context";
+import type { BusinessAccountSeed, UserSeed } from "../../test/utils/convex-test-context";
 
 vi.mock("@/convex/lib/external/bricklink", () => ({
   BricklinkClient: vi.fn().mockImplementation(() => ({
@@ -43,9 +46,13 @@ describe("Catalog Functions", () => {
 
   const now = Date.now();
 
-  const baseSeed = buildSeedData({
+  const baseSeed: {
+    businessAccounts: BusinessAccountSeed[];
+    users: UserSeed[];
+  } = {
     businessAccounts: [
       {
+        _id: businessAccountId,
         name: "Test Business",
         ownerUserId,
         inviteCode: "TEST123",
@@ -54,6 +61,7 @@ describe("Catalog Functions", () => {
     ],
     users: [
       {
+        _id: ownerUserId,
         businessAccountId,
         email: "owner@example.com",
         role: "owner",
@@ -65,6 +73,7 @@ describe("Catalog Functions", () => {
         updatedAt: 1,
       },
       {
+        _id: managerUserId,
         businessAccountId,
         email: "manager@example.com",
         role: "manager",
@@ -76,7 +85,7 @@ describe("Catalog Functions", () => {
         updatedAt: 1,
       },
     ],
-  });
+  };
 
   beforeEach(() => {
     process.env.BRICKOPS_SYSTEM_ADMIN_EMAILS = "owner@example.com";
@@ -89,9 +98,10 @@ describe("Catalog Functions", () => {
   });
 
   describe("searchParts", () => {
-    it("returns paginated results with metadata", async () => {
+    it("returns paginated results", async () => {
       const seedWithParts = buildSeedData({
-        ...baseSeed,
+        businessAccounts: baseSeed.businessAccounts,
+        users: baseSeed.users,
         legoPartCatalog: [
           {
             partNumber: "3001",
@@ -100,7 +110,7 @@ describe("Catalog Functions", () => {
             category: "Bricks",
             categoryPath: [100],
             categoryPathKey: "100",
-            imageUrl: null,
+            imageUrl: undefined,
             bricklinkPartId: "3001",
             bricklinkCategoryId: 100,
             searchKeywords: "brick 2x4 3001",
@@ -125,7 +135,7 @@ describe("Catalog Functions", () => {
             category: "Bricks",
             categoryPath: [100],
             categoryPathKey: "100",
-            imageUrl: null,
+            imageUrl: undefined,
             bricklinkPartId: "3002",
             bricklinkCategoryId: 100,
             searchKeywords: "brick 2x3 3002",
@@ -186,69 +196,13 @@ describe("Catalog Functions", () => {
       });
 
       const result = await (searchParts as any)._handler(ctx, {
-        query: "brick",
+        partTitle: "brick",
         pageSize: 10,
-        includeMetadata: true,
       });
 
       expect(result.parts).toHaveLength(2);
       expect(result.source).toBe("local");
-      expect(result.metadata?.colors).toHaveLength(2);
-      expect(result.metadata?.categories).toHaveLength(1);
       expect(result.pagination?.pageSize).toBe(10);
-    });
-
-    it("filters by color selection", async () => {
-      const seed = buildSeedData({
-        ...baseSeed,
-        legoPartCatalog: [
-          {
-            partNumber: "111",
-            name: "Red Brick",
-            category: "Bricks",
-            categoryPath: [100],
-            categoryPathKey: "100",
-            searchKeywords: "red brick",
-            primaryColorId: 5,
-            availableColorIds: [5],
-            dataSource: "brickops",
-            lastUpdated: now,
-            lastFetchedFromBricklink: now,
-            dataFreshness: "fresh",
-            createdBy: ownerUserId,
-            createdAt: now,
-          },
-          {
-            partNumber: "222",
-            name: "Blue Brick",
-            category: "Bricks",
-            categoryPath: [100],
-            categoryPathKey: "100",
-            searchKeywords: "blue brick",
-            primaryColorId: 23,
-            availableColorIds: [23],
-            dataSource: "brickops",
-            lastUpdated: now,
-            lastFetchedFromBricklink: now,
-            dataFreshness: "fresh",
-            createdBy: ownerUserId,
-            createdAt: now,
-          },
-        ],
-      });
-
-      const ctx = createConvexTestContext({
-        seed,
-        identity: createTestIdentity({ subject: `${ownerUserId}|session-001` }),
-      });
-
-      const result = await (searchParts as any)._handler(ctx, {
-        query: "brick",
-        colors: [23],
-      });
-
-      expect(result.parts).toHaveLength(1);
-      expect(result.parts[0].partNumber).toBe("222");
     });
   });
 
@@ -328,7 +282,8 @@ describe("Catalog Functions", () => {
   describe("part overlays", () => {
     it("returns overlay scoped to the current tenant", async () => {
       const seed = buildSeedData({
-        ...baseSeed,
+        businessAccounts: baseSeed.businessAccounts,
+        users: baseSeed.users,
         catalogPartOverlay: [
           {
             businessAccountId,
@@ -396,7 +351,8 @@ describe("Catalog Functions", () => {
 
     it("updates existing overlay fields", async () => {
       const seed = buildSeedData({
-        ...baseSeed,
+        businessAccounts: baseSeed.businessAccounts,
+        users: baseSeed.users,
         catalogPartOverlay: [
           {
             businessAccountId,
@@ -434,7 +390,7 @@ describe("Catalog Functions", () => {
 
       const seed = buildSeedData({
         businessAccounts: [
-          ...(baseSeed.businessAccounts ?? []),
+          ...baseSeed.businessAccounts,
           {
             _id: otherBusinessAccountId,
             name: "Other Business",
@@ -444,7 +400,7 @@ describe("Catalog Functions", () => {
           },
         ],
         users: [
-          ...(baseSeed.users ?? []),
+          ...baseSeed.users,
           {
             _id: otherOwnerUserId,
             businessAccountId: otherBusinessAccountId,
@@ -498,7 +454,7 @@ describe("Catalog Functions", () => {
         name: "Slope Brick",
         description: "Fancy slope",
         category: "Slopes",
-        imageUrl: null,
+        imageUrl: undefined,
         bricklinkPartId: "77777",
         bricklinkCategoryId: 200,
         dataSource: "manual",
@@ -541,7 +497,8 @@ describe("Catalog Functions", () => {
   describe("batchImportParts", () => {
     it("updates existing parts with new metadata", async () => {
       const seed = buildSeedData({
-        ...baseSeed,
+        businessAccounts: baseSeed.businessAccounts,
+        users: baseSeed.users,
         legoPartCatalog: [
           {
             partNumber: "888",
@@ -570,7 +527,7 @@ describe("Catalog Functions", () => {
             name: "Updated Part",
             description: "Updated description",
             category: "Updated",
-            imageUrl: null,
+            imageUrl: undefined,
             bricklinkPartId: "888",
             bricklinkCategoryId: 10,
             categoryPath: [10],

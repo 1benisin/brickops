@@ -3,7 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { CatalogPart, CatalogPartDetails } from "@/lib/services/catalog-service";
+import type { CatalogPart, CatalogPartDetails } from "@/types/catalog";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export type CatalogDetailDrawerProps = {
   open: boolean;
@@ -26,6 +28,10 @@ export function CatalogDetailDrawer({
   refreshLoading = false,
   error,
 }: CatalogDetailDrawerProps) {
+  const overlayArgs = open && part?.partNumber ? { partNumber: part.partNumber } : "skip";
+  const overlay = useQuery(api.functions.catalog.getPartOverlay, overlayArgs);
+  const overlayLoading = open && part?.partNumber && overlay === undefined;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-4 sm:max-w-xl" data-testid="catalog-detail">
@@ -76,12 +82,16 @@ export function CatalogDetailDrawer({
                   <dd className="capitalize">{details.dataSource}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-foreground">Freshness</dt>
-                  <dd className="capitalize">{details.dataFreshness}</dd>
-                </div>
-                <div>
                   <dt className="font-medium text-foreground">Sort location</dt>
-                  <dd>{details.sortGrid ? `${details.sortGrid}${details.sortBin ?? ""}` : "—"}</dd>
+                  <dd>
+                    {overlayLoading ? (
+                      <Skeleton className="h-4 w-16" />
+                    ) : overlay?.sortGrid ? (
+                      `${overlay.sortGrid}${overlay.sortBin ?? ""}`
+                    ) : (
+                      "—"
+                    )}
+                  </dd>
                 </div>
               </dl>
               {details.description ? (
