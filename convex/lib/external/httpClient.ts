@@ -110,7 +110,22 @@ export class ExternalHttpClient {
       retry,
       expectJson = true,
     } = options;
-    const path = options.path.startsWith("/") ? options.path : `/${options.path}`;
+    // Handle both baseUrl with/without trailing slash and path with/without leading slash
+    const baseEndsWithSlash = this.baseUrl.endsWith("/");
+    const pathStartsWithSlash = options.path.startsWith("/");
+
+    let path: string;
+    if (baseEndsWithSlash && pathStartsWithSlash) {
+      // Remove leading slash from path to avoid double slash
+      path = options.path.substring(1);
+    } else if (!baseEndsWithSlash && !pathStartsWithSlash) {
+      // Add slash between base and path
+      path = `/${options.path}`;
+    } else {
+      // One has slash, one doesn't - use as is
+      path = options.path;
+    }
+
     const url = `${this.baseUrl}${path}${toSearchParams(query)}`;
 
     this.applyRateLimit({ endpoint: path, identityKey, rateLimit });

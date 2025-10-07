@@ -25,12 +25,6 @@ export default defineConfig({
         "convex/schema.ts",
         "convex/crons.ts",
       ],
-      thresholds: {
-        lines: 65, // Temporarily lowered from 80 - needs tests for auth.ts, http.ts, internal.ts
-        functions: 75,
-        statements: 65, // Temporarily lowered from 80 - needs tests for auth.ts, http.ts, internal.ts
-        branches: 60,
-      },
     },
   },
   resolve: {

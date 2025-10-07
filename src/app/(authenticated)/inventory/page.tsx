@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -115,6 +116,9 @@ export default function InventoryPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Inventory Item</DialogTitle>
+              <DialogDescription>
+                Add a new item to your inventory with details like SKU, name, color, and quantities.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-3 py-2">
               <Input

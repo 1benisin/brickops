@@ -23,7 +23,16 @@
     "test:ci": "pnpm lint && pnpm test:coverage",
     "test:e2e": "playwright test",
     "test:e2e:dry-run": "playwright test --list",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "build:imports": "npx tsx scripts/catalog/build-catalog.ts --limit 0",
+    "import:colors": "npx convex import --table bricklinkColorReference --replace docs/external-documentation/bricklink-data/bricklinkColorReference.jsonl",
+    "import:categories": "npx convex import --table bricklinkCategoryReference --replace docs/external-documentation/bricklink-data/bricklinkCategoryReference.jsonl",
+    "import:availability": "npx convex import --table bricklinkPartColorAvailability --replace docs/external-documentation/bricklink-data/bricklinkPartColorAvailability.jsonl",
+    "import:elements": "npx convex import --table bricklinkElementReference --replace docs/external-documentation/bricklink-data/bricklinkElementReference.jsonl",
+    "import:parts": "npx convex import --table parts --replace docs/external-documentation/bricklink-data/parts.jsonl",
+    "build:parts-sample": "npx tsx scripts/catalog/build-parts-sample.ts --limit 250",
+    "import:parts-sample": "npx convex import --table parts --replace docs/external-documentation/bricklink-data/parts_sample.jsonl",
+    "import:all": "pnpm import:colors && pnpm import:categories && pnpm import:availability && pnpm import:elements && pnpm import:parts"
   },
   "dependencies": {
     "@auth/core": "0.37.0",

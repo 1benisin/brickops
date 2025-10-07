@@ -136,7 +136,7 @@ export default defineSchema({
   }).index("by_key_kind", ["key", "kind"]),
 
   // Global LEGO parts catalog (shared across all tenants)
-  legoPartCatalog: defineTable({
+  parts: defineTable({
     partNumber: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
@@ -153,12 +153,20 @@ export default defineSchema({
     bricklinkCategoryId: v.optional(v.number()),
 
     // Physical attributes
-    printed: v.optional(v.boolean()), // Has printed decoration/pattern
-    weightGrams: v.optional(v.number()),
-    dimensionXMm: v.optional(v.number()), // Length in millimeters
-    dimensionYMm: v.optional(v.number()), // Width in millimeters
-    dimensionZMm: v.optional(v.number()), // Height in millimeters
-    isObsolete: v.optional(v.boolean()), // Part is no longer in production
+    isPrinted: v.optional(v.boolean()),
+    isObsolete: v.optional(v.boolean()),
+    weight: v.optional(
+      v.object({
+        grams: v.optional(v.number()),
+      }),
+    ),
+    dimensions: v.optional(
+      v.object({
+        lengthMm: v.optional(v.number()),
+        widthMm: v.optional(v.number()),
+        heightMm: v.optional(v.number()),
+      }),
+    ),
 
     // Catalog enrichment (required: used for full text search)
     searchKeywords: v.string(),
@@ -169,7 +177,13 @@ export default defineSchema({
     dataSource: v.union(v.literal("brickops"), v.literal("bricklink"), v.literal("manual")),
     lastUpdated: v.number(),
     lastFetchedFromBricklink: v.optional(v.number()),
-    dataFreshness: v.union(v.literal("fresh"), v.literal("stale"), v.literal("expired")),
+    dataFreshness: v.union(
+      v.literal("fresh"),
+      v.literal("background"),
+      v.literal("stale"),
+      v.literal("expired"),
+    ),
+    freshnessUpdatedAt: v.optional(v.number()),
 
     // Metadata
     createdBy: v.optional(v.id("users")),
@@ -180,9 +194,10 @@ export default defineSchema({
     .index("by_category", ["category"])
     .index("by_categoryPathKey", ["categoryPathKey"])
     .index("by_primaryColor", ["primaryColorId"])
-    .index("by_printed", ["printed"])
+    .index("by_isPrinted", ["isPrinted"])
     .index("by_dataFreshness", ["dataFreshness"])
     .index("by_lastUpdated", ["lastUpdated"])
+    .index("by_lastFetchedFromBricklink", ["lastFetchedFromBricklink"])
     // Sorting/browsing indexes
     .index("by_name", ["name"])
     .index("by_category_and_name", ["bricklinkCategoryId", "name"])
@@ -192,9 +207,10 @@ export default defineSchema({
         "category",
         "primaryColorId",
         "categoryPathKey",
-        "printed",
+        "isPrinted",
         "bricklinkCategoryId",
         "availableColorIds",
+        "dataFreshness",
       ],
     }),
 
@@ -220,7 +236,7 @@ export default defineSchema({
 
   // Global LEGO part pricing data from Bricklink (cached with refresh capability)
   // Each part+color can have 4 price records: new/used × sold/stock
-  legoPartPricing: defineTable({
+  partPrices: defineTable({
     partNumber: v.string(),
     colorId: v.number(),
     condition: v.union(v.literal("new"), v.literal("used")),

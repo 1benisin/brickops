@@ -12,5 +12,6 @@ export const logHeartbeat = internalAction({
 });
 
 crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbeat);
+// crons.interval("catalog-refresh", { minutes: 15 }, internal.catalog.scheduleStaleRefresh);
 
 export default crons;

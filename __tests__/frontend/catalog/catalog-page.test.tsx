@@ -21,7 +21,7 @@ jest.mock("@/hooks/useSearchStore", () => {
     partId: string;
     page: number;
     pageSize: number;
-    sort: { field: "name" | "marketPrice" | "lastUpdated"; direction: "asc" | "desc" } | null;
+    sort: { field: "name" | "lastUpdated"; direction: "asc" | "desc" } | null;
   };
 
   let state: StoreState = {
@@ -57,9 +57,8 @@ jest.mock("@/hooks/useSearchStore", () => {
         pageSize,
         page: prev.pageSize === pageSize ? prev.page : 1,
       })),
-    setSort: (
-      sort: { field: "name" | "marketPrice" | "lastUpdated"; direction: "asc" | "desc" } | null,
-    ) => setState({ sort, page: 1 }),
+    setSort: (sort: { field: "name" | "lastUpdated"; direction: "asc" | "desc" } | null) =>
+      setState({ sort, page: 1 }),
     setFilters: (
       filters: Partial<Pick<StoreState, "gridBin" | "partTitle" | "partId" | "sort" | "pageSize">>,
     ) =>
@@ -133,11 +132,13 @@ jest.mock("@/hooks/useSearchStore", () => {
 
 // metadata removed from API: no-op placeholder removed
 
+const mockTimestamp = Date.now();
+
 const searchResults: Record<string, CatalogSearchResult> = {
   first: {
     parts: [
       {
-        _id: "legoPartCatalog:1" as Id<"legoPartCatalog">,
+        _id: "parts:1" as Id<"parts">,
         partNumber: "3001",
         name: "Brick 2 x 4",
         description: "Standard brick",
@@ -148,17 +149,17 @@ const searchResults: Record<string, CatalogSearchResult> = {
         thumbnailUrl: undefined,
         dataSource: "brickops",
         lastUpdated: Date.now(),
+        lastFetchedFromBricklink: null,
+        dataFreshness: "fresh",
+        freshnessUpdatedAt: mockTimestamp,
         bricklinkPartId: "3001",
         bricklinkCategoryId: 100,
         primaryColorId: 1,
         availableColorIds: [1, 21],
-        weightGrams: undefined,
-        dimensionXMm: undefined,
-        dimensionYMm: undefined,
-        dimensionZMm: undefined,
-        printed: undefined,
+        weight: null,
+        dimensions: null,
+        isPrinted: undefined,
         isObsolete: undefined,
-        // omit pricing in this mock to match type
       },
     ],
     source: "local",
@@ -175,7 +176,7 @@ const searchResults: Record<string, CatalogSearchResult> = {
   "cursor-2": {
     parts: [
       {
-        _id: "legoPartCatalog:2" as Id<"legoPartCatalog">,
+        _id: "parts:2" as Id<"parts">,
         partNumber: "3002",
         name: "Brick 2 x 3",
         description: "Another brick",
@@ -186,17 +187,17 @@ const searchResults: Record<string, CatalogSearchResult> = {
         thumbnailUrl: undefined,
         dataSource: "brickops",
         lastUpdated: Date.now(),
+        lastFetchedFromBricklink: null,
+        dataFreshness: "fresh",
+        freshnessUpdatedAt: mockTimestamp,
         bricklinkPartId: "3002",
         bricklinkCategoryId: 100,
         primaryColorId: 21,
         availableColorIds: [21],
-        weightGrams: undefined,
-        dimensionXMm: undefined,
-        dimensionYMm: undefined,
-        dimensionZMm: undefined,
-        printed: undefined,
+        weight: null,
+        dimensions: null,
+        isPrinted: undefined,
         isObsolete: undefined,
-        // omit pricing in this mock to match type
       },
     ],
     source: "local",
@@ -216,6 +217,12 @@ const detailResult: CatalogPartDetails = {
   ...searchResults.first.parts[0],
   source: "local",
   bricklinkStatus: "skipped",
+  refresh: {
+    nextRefreshAt: mockTimestamp + 1000,
+    windowMs: 1000,
+    reason: "fresh-window",
+    shouldRefresh: false,
+  },
   colorAvailability: [
     {
       colorId: 1,
@@ -238,7 +245,6 @@ const detailResult: CatalogPartDetails = {
     },
   ],
   marketPricing: null,
-  bricklinkSnapshot: undefined,
 };
 
 const mockUseQuery = jest.fn((_queryFn: unknown, args: unknown) => {

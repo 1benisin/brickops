@@ -3,11 +3,10 @@ import { hmacSha1Base64, randomHex } from "../webcrypto";
 import { getBricklinkCredentials } from "./env";
 import { ExternalHttpClient, RequestOptions, RequestResult } from "./httpClient";
 import { RateLimitConfig } from "./httpClient";
-import { sharedRateLimiter } from "./inMemoryRateLimiter";
 import { recordMetric } from "./metrics";
 import { ValidationResult, normalizeApiError } from "./types";
 
-const BASE_URL = "https://api.bricklink.com/api/store/v1";
+const BASE_URL = "https://api.bricklink.com/api/store/v1/";
 const HEALTH_ENDPOINT = "/orders";
 
 const PROVIDER_RATE_LIMIT: RateLimitConfig = {
@@ -22,8 +21,6 @@ const INTERNAL_RATE_LIMIT: RateLimitConfig = {
 
 const ALERT_THRESHOLD = 0.8;
 
-type NormalizedParams = Record<string, string | number | boolean | undefined>;
-
 const percentEncode = (input: string) =>
   encodeURIComponent(input)
     .replace(/!/g, "%21")
@@ -31,49 +28,6 @@ const percentEncode = (input: string) =>
     .replace(/'/g, "%27")
     .replace(/\(/g, "%28")
     .replace(/\)/g, "%29");
-
-const toParamEntries = (params: NormalizedParams) =>
-  Object.entries(params).filter(([, value]) => value !== undefined && value !== null);
-
-const buildBaseString = (method: string, url: URL, params: [string, string][]) => {
-  const normalizedParams = params
-    .map(([key, value]) => ({ key: percentEncode(key), value: percentEncode(value) }))
-    .sort((a, b) => {
-      if (a.key === b.key) {
-        return a.value.localeCompare(b.value);
-      }
-      return a.key.localeCompare(b.key);
-    })
-    .map(({ key, value }) => `${key}=${value}`)
-    .join("&");
-
-  const baseUrl = `${url.origin}${url.pathname}`;
-  return [method.toUpperCase(), percentEncode(baseUrl), percentEncode(normalizedParams)].join("&");
-};
-
-const buildSignature = async (
-  method: string,
-  url: URL,
-  params: [string, string][],
-  consumerSecret: string,
-  tokenSecret: string,
-) => {
-  const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(tokenSecret)}`;
-  const baseString = buildBaseString(method, url, params);
-  return hmacSha1Base64(signingKey, baseString);
-};
-
-const toAuthHeader = (params: [string, string][]) =>
-  `OAuth ${params
-    .map(([key, value]) => `${percentEncode(key)}="${percentEncode(value)}"`)
-    .join(", ")}`;
-
-type BricklinkClientOptions = {
-  credentials?: ReturnType<typeof getBricklinkCredentials>;
-  nonce?: () => string;
-  timestamp?: () => number;
-  fetchImpl?: typeof fetch;
-};
 
 export class BricklinkClient {
   private readonly http: ExternalHttpClient;
@@ -87,11 +41,30 @@ export class BricklinkClient {
     alertEmitted: false,
   };
 
-  constructor(options: BricklinkClientOptions = {}) {
-    this.credentials = options.credentials ?? getBricklinkCredentials();
-    this.nonce = options.nonce ?? (() => randomHex(16));
-    this.timestamp = options.timestamp ?? (() => Math.floor(Date.now() / 1000));
-    this.http = new ExternalHttpClient(
+  constructor() {
+    this.credentials = getBricklinkCredentials();
+    this.nonce = () => randomHex(16);
+    this.timestamp = () => Math.floor(Date.now() / 1000);
+    this.http = new ExternalHttpClient("bricklink", BASE_URL, {
+      Accept: "application/json",
+      "User-Agent": "BrickOps/1.0",
+    });
+  }
+
+  /** @internal Test only - creates client with custom options */
+  static createForTesting(
+    options: {
+      credentials?: ReturnType<typeof getBricklinkCredentials>;
+      nonce?: () => string;
+      timestamp?: () => number;
+      fetchImpl?: typeof fetch;
+    } = {},
+  ) {
+    const client = Object.create(BricklinkClient.prototype);
+    client.credentials = options.credentials ?? getBricklinkCredentials();
+    client.nonce = options.nonce ?? (() => randomHex(16));
+    client.timestamp = options.timestamp ?? (() => Math.floor(Date.now() / 1000));
+    client.http = new ExternalHttpClient(
       "bricklink",
       BASE_URL,
       {
@@ -100,8 +73,10 @@ export class BricklinkClient {
       },
       { fetchImpl: options.fetchImpl },
     );
+    return client;
   }
 
+  /** @internal Test only - resets quota tracking state */
   static resetQuotaForTests() {
     BricklinkClient.quotaState = {
       count: 0,
@@ -154,8 +129,12 @@ export class BricklinkClient {
 
   async request<T>(options: RequestOptions & { identityKey?: string }): Promise<RequestResult<T>> {
     const method = (options.method ?? "GET").toUpperCase();
-    const queryEntries = toParamEntries(options.query ?? {});
-    const url = new URL(options.path.startsWith("/") ? options.path : `/${options.path}`, BASE_URL);
+    const queryEntries = Object.entries(options.query ?? {}).filter(
+      ([, value]) => value !== undefined && value !== null,
+    );
+    // Remove leading slash to make path relative to BASE_URL (not absolute from origin)
+    const relativePath = options.path.startsWith("/") ? options.path.substring(1) : options.path;
+    const url = new URL(relativePath, BASE_URL);
 
     const oauthParams: [string, string][] = [
       ["oauth_consumer_key", this.credentials.consumerKey],
@@ -171,27 +150,47 @@ export class BricklinkClient {
       ...oauthParams,
     ];
 
-    const signature = await buildSignature(
-      method,
-      url,
-      allParams,
-      this.credentials.consumerSecret,
-      this.credentials.tokenSecret,
-    );
+    const signature = await (() => {
+      const signingKey = `${percentEncode(this.credentials.consumerSecret)}&${percentEncode(this.credentials.tokenSecret)}`;
+      const normalizedParams = allParams
+        .map(([key, value]) => ({ key: percentEncode(key), value: percentEncode(value) }))
+        .sort((a, b) => {
+          if (a.key === b.key) {
+            return a.value.localeCompare(b.value);
+          }
+          return a.key.localeCompare(b.key);
+        })
+        .map(({ key, value }) => `${key}=${value}`)
+        .join("&");
 
-    const authorization = toAuthHeader([...oauthParams, ["oauth_signature", signature]]);
+      // OAuth signature must use the full URL including base path
+      const baseUrl = url.href.split("?")[0]; // Full URL without query string
+      const baseString = [
+        method.toUpperCase(),
+        percentEncode(baseUrl),
+        percentEncode(normalizedParams),
+      ].join("&");
+
+      console.log("[OAUTH-DEBUG] Signature calculation:");
+      console.log("  Full URL:", baseUrl);
+      console.log("  Method:", method.toUpperCase());
+      console.log("  Params count:", allParams.length);
+      console.log("  Base string length:", baseString.length);
+      console.log("  Signing key (masked):", signingKey.substring(0, 10) + "...");
+
+      return hmacSha1Base64(signingKey, baseString);
+    })();
+
+    const authorization = `OAuth ${[...oauthParams, ["oauth_signature", signature]]
+      .map(([key, value]) => `${percentEncode(key)}="${percentEncode(value)}"`)
+      .join(", ")}`;
 
     BricklinkClient.recordQuotaUsage();
 
     // Provider quota (5,000 calls/day)
-    sharedRateLimiter.consume({
-      key: "bricklink:provider",
-      capacity: PROVIDER_RATE_LIMIT.capacity,
-      intervalMs: PROVIDER_RATE_LIMIT.intervalMs,
-    });
-
     return this.http.request<T>({
       ...options,
+      path: relativePath, // Use the relative path (without leading slash)
       method,
       query: Object.fromEntries(queryEntries),
       headers: {

@@ -1,8 +1,11 @@
-import type { FunctionReturnType } from "convex/server";
-import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import type {
+  SearchPartsResult,
+  Part as ValidatorPart,
+  PartDetailsResult,
+} from "@/convex/validators/catalog";
 
-export type CatalogSortField = "name" | "marketPrice" | "lastUpdated";
+export type CatalogSortField = "name" | "lastUpdated";
 export type CatalogSortDirection = "asc" | "desc";
 
 export type CatalogSortState = {
@@ -10,14 +13,11 @@ export type CatalogSortState = {
   direction: CatalogSortDirection;
 };
 
-export type CatalogSearchResult = FunctionReturnType<typeof api.functions.catalog.searchParts>;
+// Prefer inferred types from shared validators
+export type CatalogSearchResult = SearchPartsResult;
+export type CatalogPart = ValidatorPart;
+export type CatalogPartDetails = PartDetailsResult;
 
-export type CatalogPart = CatalogSearchResult["parts"][number];
-
-export type CatalogPartDetails = FunctionReturnType<typeof api.functions.catalog.getPartDetails>;
-
-export type RefreshResult = FunctionReturnType<
-  typeof api.functions.scriptOps.refreshCatalogEntries
->;
+export type RefreshResult = unknown;
 
 export type BusinessAccountId = Id<"businessAccounts">;

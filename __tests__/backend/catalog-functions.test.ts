@@ -6,6 +6,9 @@ import {
   getPartDetails,
   getPartOverlay,
   upsertPartOverlay,
+  refreshPartSnapshot,
+  validateDataFreshness,
+  scheduleStaleRefresh,
 } from "../../convex/functions/catalog";
 import {
   savePartToLocalCatalog,
@@ -22,21 +25,15 @@ import {
   createTestIdentity,
 } from "../../test/utils/convex-test-context";
 import type { BusinessAccountSeed, UserSeed } from "../../test/utils/convex-test-context";
-
-vi.mock("@/convex/lib/external/bricklink", () => ({
-  BricklinkClient: vi.fn().mockImplementation(() => ({
-    request: vi.fn(),
-  })),
-}));
-
-vi.mock("@/convex/lib/external/inMemoryRateLimiter", () => ({
-  sharedRateLimiter: {
-    consume: vi.fn(),
-  },
-}));
+import { fetchBricklinkPartSnapshot } from "@/convex/lib/catalog/bricklinkAggregator";
+import { BricklinkQuotaExceededError } from "@/convex/lib/catalog/rateLimiter";
 
 vi.mock("@/convex/lib/external/metrics", () => ({
   recordMetric: vi.fn(),
+}));
+
+vi.mock("@/convex/lib/catalog/bricklinkAggregator", () => ({
+  fetchBricklinkPartSnapshot: vi.fn(),
 }));
 
 describe("Catalog Functions", () => {
@@ -45,6 +42,11 @@ describe("Catalog Functions", () => {
   const managerUserId = "users:2";
 
   const now = Date.now();
+  const fetchSnapshot = vi.mocked(fetchBricklinkPartSnapshot);
+
+  beforeEach(() => {
+    fetchSnapshot.mockReset();
+  });
 
   const baseSeed: {
     businessAccounts: BusinessAccountSeed[];
@@ -102,7 +104,7 @@ describe("Catalog Functions", () => {
       const seedWithParts = buildSeedData({
         businessAccounts: baseSeed.businessAccounts,
         users: baseSeed.users,
-        legoPartCatalog: [
+        parts: [
           {
             partNumber: "3001",
             name: "Brick 2 x 4",
@@ -118,9 +120,6 @@ describe("Catalog Functions", () => {
             availableColorIds: [1, 21],
             sortGrid: "A",
             sortBin: "12",
-            marketPrice: 1.23,
-            marketPriceCurrency: "USD",
-            marketPriceLastSyncedAt: now,
             dataSource: "brickops",
             lastUpdated: now,
             lastFetchedFromBricklink: now,
@@ -143,9 +142,6 @@ describe("Catalog Functions", () => {
             availableColorIds: [2],
             sortGrid: "B",
             sortBin: "10",
-            marketPrice: 0.95,
-            marketPriceCurrency: "USD",
-            marketPriceLastSyncedAt: now,
             dataSource: "brickops",
             lastUpdated: now,
             lastFetchedFromBricklink: now,
@@ -210,7 +206,7 @@ describe("Catalog Functions", () => {
     it("returns enriched local data with availability", async () => {
       const seed = buildSeedData({
         ...baseSeed,
-        legoPartCatalog: [
+        parts: [
           {
             partNumber: "3001",
             name: "Brick 2 x 4",
@@ -276,6 +272,178 @@ describe("Catalog Functions", () => {
       expect(result.colorAvailability).toHaveLength(1);
       expect(result.elementReferences).toHaveLength(1);
       expect(result.marketPricing).toBeNull();
+      expect(result.bricklinkStatus).toBe("skipped");
+      expect(result.refresh.shouldRefresh).toBe(false);
+    });
+  });
+
+  describe("refreshPartSnapshot", () => {
+    it("applies Bricklink snapshot to existing records", async () => {
+      fetchSnapshot.mockResolvedValue({
+        partNumber: "3001",
+        canonicalName: "Brick 2 x 4",
+        description: "Bricklink canonical description",
+        categoryId: 100,
+        imageUrl: "https://example.com/brick.png",
+        thumbnailUrl: "https://example.com/brick-thumb.png",
+        weightGrams: 2.4,
+        dimensionsMm: { lengthMm: 16, widthMm: 8, heightMm: 9.6 },
+        availableColorIds: [1, 5],
+      });
+
+      const seed = buildSeedData({
+        ...baseSeed,
+        parts: [
+          {
+            _id: "parts:1",
+            partNumber: "3001",
+            name: "Legacy Brick",
+            searchKeywords: "legacy brick",
+            dataSource: "brickops",
+            lastUpdated: now - 90 * 24 * 60 * 60 * 1000,
+            lastFetchedFromBricklink: now - 90 * 24 * 60 * 60 * 1000,
+            dataFreshness: "expired",
+            createdBy: ownerUserId,
+            createdAt: now - 1000,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-020` }),
+      });
+
+      const result = await (refreshPartSnapshot as any)._handler(ctx, {
+        partNumber: "3001",
+      });
+
+      expect(fetchSnapshot).toHaveBeenCalledWith(
+        expect.any(Object),
+        "3001",
+        expect.objectContaining({ reserveOnLimit: true }),
+      );
+      expect(result.marketPricing?.amount).toBeCloseTo(1.57);
+
+      const updated = await ctx.db.get("parts:1");
+      expect(updated?.name).toBe("Brick 2 x 4");
+      expect(updated?.availableColorIds).toEqual([1, 5]);
+      expect(updated?.dataFreshness).toBe("fresh");
+    });
+
+    it("schedules retry when Bricklink quota is exceeded", async () => {
+      fetchSnapshot.mockRejectedValue(new BricklinkQuotaExceededError("test", 5000));
+
+      const seed = buildSeedData({
+        ...baseSeed,
+        parts: [
+          {
+            _id: "parts:1",
+            partNumber: "3001",
+            name: "Legacy Brick",
+            searchKeywords: "legacy brick",
+            dataSource: "brickops",
+            lastUpdated: now - 90 * 24 * 60 * 60 * 1000,
+            lastFetchedFromBricklink: now - 90 * 24 * 60 * 60 * 1000,
+            dataFreshness: "expired",
+            createdBy: ownerUserId,
+            createdAt: now - 1000,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-021` }),
+      });
+
+      await expect(
+        (refreshPartSnapshot as any)._handler(ctx, {
+          partNumber: "3001",
+        }),
+      ).rejects.toThrow("Bricklink quota");
+
+      expect(ctx.scheduler.runAfter).toHaveBeenCalled();
+      const updated = await ctx.db.get("parts:1");
+      expect(updated?.dataFreshness).toBe("background");
+    });
+  });
+
+  describe("validateDataFreshness", () => {
+    it("returns freshness info and queued state when requested", async () => {
+      const staleTimestamp = now - 70 * 24 * 60 * 60 * 1000;
+
+      const seed = buildSeedData({
+        ...baseSeed,
+        parts: [
+          {
+            _id: "parts:1",
+            partNumber: "3001",
+            name: "Brick 2 x 4",
+            searchKeywords: "brick",
+            dataSource: "brickops",
+            lastUpdated: staleTimestamp,
+            lastFetchedFromBricklink: staleTimestamp,
+            dataFreshness: "stale",
+            createdBy: ownerUserId,
+            createdAt: now - 1000,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({
+        seed,
+        identity: createTestIdentity({ subject: `${ownerUserId}|session-030` }),
+      });
+
+      const result = await (validateDataFreshness as any)._handler(ctx, {
+        partNumbers: ["3001"],
+        enqueueRefresh: true,
+      });
+
+      expect(result.results[0].shouldRefresh).toBe(true);
+      expect(result.results[0].scheduled).toBe(true);
+      expect(ctx.scheduler.runAfter).toHaveBeenCalled();
+
+      const scheduledArgs = ctx.scheduler.runAfter.mock.calls[0]?.[2];
+      expect(scheduledArgs).toMatchObject({ partNumber: "3001", reserve: true });
+
+      const updated = await ctx.db.get("parts:1");
+      expect(updated?.dataFreshness).toBe("background");
+    });
+  });
+
+  describe("scheduleStaleRefresh", () => {
+    it("schedules refresh tasks for stale records", async () => {
+      const staleTimestamp = now - 45 * 24 * 60 * 60 * 1000;
+
+      const seed = buildSeedData({
+        ...baseSeed,
+        parts: [
+          {
+            _id: "parts:1",
+            partNumber: "3001",
+            name: "Brick 2 x 4",
+            searchKeywords: "brick",
+            dataSource: "brickops",
+            lastUpdated: staleTimestamp,
+            lastFetchedFromBricklink: staleTimestamp,
+            dataFreshness: "stale",
+            createdBy: ownerUserId,
+            createdAt: now - 1000,
+          },
+        ],
+      });
+
+      const ctx = createConvexTestContext({ seed });
+
+      const outcome = await (scheduleStaleRefresh as any)._handler(ctx, { limit: 10 });
+
+      expect(outcome.partNumbers).toContain("3001");
+      expect(ctx.scheduler.runAfter).toHaveBeenCalled();
+
+      const updated = await ctx.db.get("parts:1");
+      expect(updated?.dataFreshness).toBe("background");
     });
   });
 
@@ -463,9 +631,6 @@ describe("Catalog Functions", () => {
         availableColorIds: [1, 21],
         sortGrid: "C",
         sortBin: "7",
-        marketPrice: 2.5,
-        marketPriceCurrency: "USD",
-        marketPriceLastSyncedAt: now,
         aliases: ["slope"],
       });
 
@@ -499,7 +664,7 @@ describe("Catalog Functions", () => {
       const seed = buildSeedData({
         businessAccounts: baseSeed.businessAccounts,
         users: baseSeed.users,
-        legoPartCatalog: [
+        parts: [
           {
             partNumber: "888",
             name: "Old Part",
@@ -540,7 +705,7 @@ describe("Catalog Functions", () => {
       });
 
       expect(result.updated).toBe(1);
-      const stored = await ctx.db.get("legoPartCatalog:1" as any);
+      const stored = await ctx.db.get("parts:1" as any);
       expect(stored?.name).toBe("Updated Part");
       expect(stored?.primaryColorId).toBe(2);
       expect(stored?.dataFreshness).toBe("fresh");

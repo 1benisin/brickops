@@ -17,7 +17,7 @@ BrickOps uses Convex serverless functions instead of a traditional REST API. The
 ### Brickognize API Key
 
 - Request access through the Brickognize developer portal at https://brickognize.com/api/docs (contact: piotr.rybak@brickognize.com).
-- Provider issues an API key per account; store it as `BRICKOGNIZE_API_KEY` in the Convex environment.
+- Provider does not require an API key; service is accessible without authentication.
 - Grant application services read-only access. Health checks use the `/health/` endpoint to verify connectivity.
 
 ### Bricklink OAuth 1.0a Credentials

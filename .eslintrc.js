@@ -48,6 +48,17 @@ module.exports = {
   },
   overrides: [
     {
+      files: ["**/*.mjs"],
+      parser: "espree",
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+      },
+      rules: {
+        "@typescript-eslint/no-var-requires": "off",
+      },
+    },
+    {
       files: ["**/__tests__/frontend/**/*.test.tsx"],
       env: {
         jest: true,

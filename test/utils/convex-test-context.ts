@@ -316,7 +316,7 @@ export const buildSeedData = (seed: {
   businessAccounts?: BusinessAccountSeed[];
   users?: UserSeed[];
   inventoryItems?: InventorySeed[];
-  legoPartCatalog?: LegoPartCatalogSeed[];
+  parts?: LegoPartCatalogSeed[];
   catalogPartOverlay?: CatalogPartOverlaySeed[];
   bricklinkColorReference?: TableSeed[];
   bricklinkCategoryReference?: TableSeed[];

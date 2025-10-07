@@ -19,10 +19,14 @@ import type * as functions_identify from "../functions/identify.js";
 import type * as functions_identifyActions from "../functions/identifyActions.js";
 import type * as functions_internal from "../functions/internal.js";
 import type * as functions_inventory from "../functions/inventory.js";
-import type * as functions_scriptOps from "../functions/scriptOps.js";
 import type * as functions_users from "../functions/users.js";
 import type * as http from "../http.js";
 import type * as internal_identify from "../internal/identify.js";
+import type * as lib_catalog_bricklinkAggregator from "../lib/catalog/bricklinkAggregator.js";
+import type * as lib_catalog_freshness from "../lib/catalog/freshness.js";
+import type * as lib_catalog_persistence from "../lib/catalog/persistence.js";
+import type * as lib_catalog_rateLimiter from "../lib/catalog/rateLimiter.js";
+import type * as lib_catalog_search from "../lib/catalog/search.js";
 import type * as lib_dbRateLimiter from "../lib/dbRateLimiter.js";
 import type * as lib_external_bricklink from "../lib/external/bricklink.js";
 import type * as lib_external_brickognize from "../lib/external/brickognize.js";
@@ -39,6 +43,7 @@ import type * as lib_external_types from "../lib/external/types.js";
 import type * as lib_external_validate from "../lib/external/validate.js";
 import type * as lib_rateLimiterAdapter from "../lib/rateLimiterAdapter.js";
 import type * as lib_webcrypto from "../lib/webcrypto.js";
+import type * as validators_catalog from "../validators/catalog.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -59,10 +64,14 @@ declare const fullApi: ApiFromModules<{
   "functions/identifyActions": typeof functions_identifyActions;
   "functions/internal": typeof functions_internal;
   "functions/inventory": typeof functions_inventory;
-  "functions/scriptOps": typeof functions_scriptOps;
   "functions/users": typeof functions_users;
   http: typeof http;
   "internal/identify": typeof internal_identify;
+  "lib/catalog/bricklinkAggregator": typeof lib_catalog_bricklinkAggregator;
+  "lib/catalog/freshness": typeof lib_catalog_freshness;
+  "lib/catalog/persistence": typeof lib_catalog_persistence;
+  "lib/catalog/rateLimiter": typeof lib_catalog_rateLimiter;
+  "lib/catalog/search": typeof lib_catalog_search;
   "lib/dbRateLimiter": typeof lib_dbRateLimiter;
   "lib/external/bricklink": typeof lib_external_bricklink;
   "lib/external/brickognize": typeof lib_external_brickognize;
@@ -79,6 +88,7 @@ declare const fullApi: ApiFromModules<{
   "lib/external/validate": typeof lib_external_validate;
   "lib/rateLimiterAdapter": typeof lib_rateLimiterAdapter;
   "lib/webcrypto": typeof lib_webcrypto;
+  "validators/catalog": typeof validators_catalog;
 }>;
 export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
 export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;

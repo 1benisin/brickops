@@ -55,7 +55,7 @@ describe("BricklinkClient", () => {
     const timestamp = 1_600_000_000;
     const nonce = "abc123";
 
-    const client = new BricklinkClient({
+    const client = BricklinkClient.createForTesting({
       credentials: TEST_CREDENTIALS,
       timestamp: () => timestamp,
       nonce: () => nonce,
@@ -113,13 +113,14 @@ describe("BricklinkClient", () => {
       json: async () => ({ data: [] }),
     });
 
-    const client = new BricklinkClient({
+    const client = BricklinkClient.createForTesting({
       credentials: TEST_CREDENTIALS,
       timestamp: () => 1_600_000_000,
       nonce: () => "alert-test",
       fetchImpl: fetchMock,
     });
 
+    BricklinkClient.resetQuotaForTests();
     const quotaState = (
       BricklinkClient as unknown as {
         quotaState: { count: number; windowStart: number; alertEmitted: boolean };
@@ -127,7 +128,6 @@ describe("BricklinkClient", () => {
     ).quotaState;
     quotaState.count = 3_999;
     quotaState.windowStart = Date.now();
-    quotaState.alertEmitted = false;
 
     await client.request({
       path: "/orders",
@@ -146,13 +146,14 @@ describe("BricklinkClient", () => {
 
     const fetchMock = vi.fn();
 
-    const client = new BricklinkClient({
+    const client = BricklinkClient.createForTesting({
       credentials: TEST_CREDENTIALS,
       timestamp: () => 1_600_000_000,
       nonce: () => "quota-fail",
       fetchImpl: fetchMock,
     });
 
+    BricklinkClient.resetQuotaForTests();
     const quotaState = (
       BricklinkClient as unknown as {
         quotaState: { count: number; windowStart: number; alertEmitted: boolean };
@@ -160,7 +161,6 @@ describe("BricklinkClient", () => {
     ).quotaState;
     quotaState.count = 5_000;
     quotaState.windowStart = Date.now();
-    quotaState.alertEmitted = true;
 
     const result = await client.healthCheck();
 
@@ -179,13 +179,14 @@ describe("BricklinkClient", () => {
 
     const fetchMock = vi.fn();
 
-    const client = new BricklinkClient({
+    const client = BricklinkClient.createForTesting({
       credentials: TEST_CREDENTIALS,
       timestamp: () => 1_600_000_000,
       nonce: () => "blocked-test",
       fetchImpl: fetchMock,
     });
 
+    BricklinkClient.resetQuotaForTests();
     const quotaState = (
       BricklinkClient as unknown as {
         quotaState: { count: number; windowStart: number; alertEmitted: boolean };
@@ -193,7 +194,6 @@ describe("BricklinkClient", () => {
     ).quotaState;
     quotaState.count = 5_000;
     quotaState.windowStart = Date.now();
-    quotaState.alertEmitted = true;
 
     await expect(
       client.request({

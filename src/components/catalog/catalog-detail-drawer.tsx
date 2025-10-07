@@ -82,6 +82,18 @@ export function CatalogDetailDrawer({
                   <dd className="capitalize">{details.dataSource}</dd>
                 </div>
                 <div>
+                  <dt className="font-medium text-foreground">Freshness</dt>
+                  <dd className="capitalize">{details.dataFreshness}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-foreground">Next refresh</dt>
+                  <dd>
+                    {details.refresh
+                      ? new Date(details.refresh.nextRefreshAt).toLocaleString()
+                      : "—"}
+                  </dd>
+                </div>
+                <div>
                   <dt className="font-medium text-foreground">Sort location</dt>
                   <dd>
                     {overlayLoading ? (
@@ -114,10 +126,18 @@ export function CatalogDetailDrawer({
                   </Button>
                 ) : null}
               </header>
+              {details.refresh ? (
+                <p className="text-xs text-muted-foreground">
+                  {details.refresh.shouldRefresh
+                    ? "Refresh recommended based on freshness window."
+                    : "Data is within the freshness window."}
+                </p>
+              ) : null}
               {details.marketPricing ? (
                 <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
                   <div className="font-semibold text-foreground">
-                    {details.marketPricing.currency} {details.marketPricing.amount.toFixed(2)}
+                    {details.marketPricing.currency}{" "}
+                    {details.marketPricing.amount?.toFixed(2) ?? "N/A"}
                   </div>
                   <div>
                     Updated{" "}

@@ -1,4 +1,3 @@
-import { getBrickognizeApiKey } from "./env";
 import { ExternalHttpClient, RequestOptions, RequestResult } from "./httpClient";
 import { RateLimitConfig } from "./httpClient";
 import { recordMetric } from "./metrics";
@@ -12,11 +11,9 @@ const DEFAULT_RATE_LIMIT: RateLimitConfig = {
 };
 
 export class BrickognizeClient {
-  private readonly apiKey: string | null;
   private readonly http: ExternalHttpClient;
 
-  constructor(options: { apiKey?: string } = {}) {
-    this.apiKey = options.apiKey ?? getBrickognizeApiKey();
+  constructor() {
     this.http = new ExternalHttpClient("brickognize", BASE_URL, {
       Accept: "application/json",
       "User-Agent": "BrickOps/1.0",
@@ -26,17 +23,8 @@ export class BrickognizeClient {
   async request<T>(
     options: Omit<RequestOptions, "rateLimit"> & { rateLimit?: RateLimitConfig },
   ): Promise<RequestResult<T>> {
-    const headers = {
-      ...(options.headers ?? {}),
-    } as Record<string, string>;
-
-    if (this.apiKey) {
-      headers.Authorization = `Bearer ${this.apiKey}`;
-    }
-
     return this.http.request<T>({
       ...options,
-      headers,
       rateLimit: options.rateLimit ?? DEFAULT_RATE_LIMIT,
     });
   }
