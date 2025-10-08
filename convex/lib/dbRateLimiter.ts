@@ -9,7 +9,11 @@ export type RateLimitArgs = {
   windowMs: number;
 };
 
-export type RateLimitResult = { allowed: boolean; remaining: number };
+export type RateLimitResult = {
+  allowed: boolean;
+  remaining: number;
+  retryAfterMs: number | null;
+};
 
 /**
  * Direct rate limit helper usable within any Convex mutation context.
@@ -30,7 +34,12 @@ export async function checkAndConsumeRateLimitDirect(
 
   const inWindow = events.filter((e) => e.createdAt >= since);
   if (inWindow.length >= args.limit) {
-    return { allowed: false, remaining: 0 } as const;
+    const oldest = inWindow.reduce(
+      (min, event) => (event.createdAt < min ? event.createdAt : min),
+      inWindow[0].createdAt,
+    );
+    const retryAfterMs = Math.max(0, args.windowMs - (now - oldest));
+    return { allowed: false, remaining: 0, retryAfterMs } as const;
   }
 
   await ctx.db.insert("rateLimitEvents", {
@@ -52,5 +61,9 @@ export async function checkAndConsumeRateLimitDirect(
     }),
   );
 
-  return { allowed: true, remaining: Math.max(0, args.limit - (inWindow.length + 1)) } as const;
+  return {
+    allowed: true,
+    remaining: Math.max(0, args.limit - (inWindow.length + 1)),
+    retryAfterMs: null,
+  } as const;
 }

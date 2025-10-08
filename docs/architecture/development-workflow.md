@@ -47,7 +47,7 @@ Run Playwright locally or via workflow when changes affect:
 import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 
-export type SearchResult = FunctionReturnType<typeof api.functions.catalog.searchParts>;
+export type SearchResult = FunctionReturnType<typeof api.catalog.searchParts>;
 export type CatalogPart = SearchResult["parts"][number];
 ```
 

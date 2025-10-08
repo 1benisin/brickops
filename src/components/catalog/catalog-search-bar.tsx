@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export type CatalogSearchBarProps = {
-  gridBin: string;
+  sortLocation: string;
   partTitle: string;
   partId: string;
-  onGridBinChange: (value: string) => void;
+  onSortLocationChange: (value: string) => void;
   onPartTitleChange: (value: string) => void;
   onPartIdChange: (value: string) => void;
   onSubmit?: () => void;
@@ -18,21 +18,21 @@ export type CatalogSearchBarProps = {
 };
 
 export function CatalogSearchBar({
-  gridBin,
+  sortLocation,
   partTitle,
   partId,
-  onGridBinChange,
+  onSortLocationChange,
   onPartTitleChange,
   onPartIdChange,
   onSubmit,
   onClear,
   isLoading: _isLoading = false,
 }: CatalogSearchBarProps) {
-  const [localGridBin, setLocalGridBin] = useState(gridBin);
+  const [localSortLocation, setLocalSortLocation] = useState(sortLocation);
   const [localPartTitle, setLocalPartTitle] = useState(partTitle);
   const [localPartId, setLocalPartId] = useState(partId);
-  const activeField: "bin" | "title" | "id" | null = localGridBin
-    ? "bin"
+  const activeField: "location" | "title" | "id" | null = localSortLocation
+    ? "location"
     : localPartTitle
       ? "title"
       : localPartId
@@ -41,8 +41,8 @@ export function CatalogSearchBar({
 
   // Keep local state in sync if parent props change externally (e.g., Clear action)
   useEffect(() => {
-    setLocalGridBin(gridBin);
-  }, [gridBin]);
+    setLocalSortLocation(sortLocation);
+  }, [sortLocation]);
 
   useEffect(() => {
     setLocalPartTitle(partTitle);
@@ -54,10 +54,10 @@ export function CatalogSearchBar({
 
   // Debounce notifying parent of changes for each input (300ms)
   useEffect(() => {
-    if (localGridBin === gridBin) return;
-    const id = window.setTimeout(() => onGridBinChange(localGridBin), 300);
+    if (localSortLocation === sortLocation) return;
+    const id = window.setTimeout(() => onSortLocationChange(localSortLocation), 300);
     return () => window.clearTimeout(id);
-  }, [localGridBin, gridBin, onGridBinChange]);
+  }, [localSortLocation, sortLocation, onSortLocationChange]);
 
   useEffect(() => {
     if (localPartTitle === partTitle) return;
@@ -77,7 +77,7 @@ export function CatalogSearchBar({
   };
 
   const handleClear = () => {
-    setLocalGridBin("");
+    setLocalSortLocation("");
     setLocalPartTitle("");
     setLocalPartId("");
     onClear?.();
@@ -124,17 +124,20 @@ export function CatalogSearchBar({
         </div>
 
         <div className="flex flex-col gap-1 sm:col-span-2">
-          <label htmlFor="catalog-search-bin" className="text-xs font-medium text-muted-foreground">
-            By Part Bin
+          <label
+            htmlFor="catalog-search-location"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            By Location
           </label>
           <Input
-            id="catalog-search-bin"
-            data-testid="catalog-search-bin"
+            id="catalog-search-location"
+            data-testid="catalog-search-location"
             placeholder="e.g. A-99 or 2456"
-            className={`w-full ${activeField && activeField !== "bin" ? "opacity-50" : ""}`}
-            disabled={activeField !== null && activeField !== "bin"}
-            value={localGridBin}
-            onChange={(event) => setLocalGridBin(event.target.value)}
+            className={`w-full ${activeField && activeField !== "location" ? "opacity-50" : ""}`}
+            disabled={activeField !== null && activeField !== "location"}
+            value={localSortLocation}
+            onChange={(event) => setLocalSortLocation(event.target.value)}
           />
         </div>
 

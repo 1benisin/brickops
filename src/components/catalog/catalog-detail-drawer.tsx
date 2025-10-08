@@ -29,7 +29,7 @@ export function CatalogDetailDrawer({
   error,
 }: CatalogDetailDrawerProps) {
   const overlayArgs = open && part?.partNumber ? { partNumber: part.partNumber } : "skip";
-  const overlay = useQuery(api.functions.catalog.getPartOverlay, overlayArgs);
+  const overlay = useQuery(api.catalog.getPartOverlay, overlayArgs);
   const overlayLoading = open && part?.partNumber && overlay === undefined;
 
   return (
@@ -78,16 +78,28 @@ export function CatalogDetailDrawer({
                   <dd>{details.category ?? "Unknown"}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-foreground">Data source</dt>
-                  <dd className="capitalize">{details.dataSource}</dd>
+                  <dt className="font-medium text-foreground">Type</dt>
+                  <dd className="capitalize">{details.type?.toLowerCase() ?? "Unknown"}</dd>
                 </div>
+                {details.weight && (
+                  <div>
+                    <dt className="font-medium text-foreground">Weight</dt>
+                    <dd>{details.weight}g</dd>
+                  </div>
+                )}
+                {details.yearReleased && (
+                  <div>
+                    <dt className="font-medium text-foreground">Released</dt>
+                    <dd>{details.yearReleased}</dd>
+                  </div>
+                )}
                 <div>
                   <dt className="font-medium text-foreground">Sort location</dt>
                   <dd>
                     {overlayLoading ? (
                       <Skeleton className="h-4 w-16" />
-                    ) : overlay?.sortGrid ? (
-                      `${overlay.sortGrid}${overlay.sortBin ?? ""}`
+                    ) : overlay?.sortLocation ? (
+                      overlay.sortLocation
                     ) : (
                       "—"
                     )}
@@ -99,10 +111,10 @@ export function CatalogDetailDrawer({
               ) : null}
             </section>
 
-            <section className="space-y-2 text-sm">
-              <header className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-foreground">Market pricing</h3>
-                {onRefresh ? (
+            {onRefresh && (
+              <section className="space-y-2 text-sm">
+                <header className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-foreground">Data status</h3>
                   <Button
                     variant="outline"
                     size="sm"
@@ -112,29 +124,16 @@ export function CatalogDetailDrawer({
                   >
                     {refreshLoading ? "Refreshing…" : "Refresh data"}
                   </Button>
-                ) : null}
-              </header>
-              {details.marketPricing ? (
-                <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <div className="font-semibold text-foreground">
-                    {details.marketPricing.currency} {details.marketPricing.amount.toFixed(2)}
-                  </div>
-                  <div>
-                    Updated{" "}
-                    {details.marketPricing.lastSyncedAt
-                      ? new Date(details.marketPricing.lastSyncedAt).toLocaleString()
-                      : "—"}
-                  </div>
-                  <div>Status: {details.bricklinkStatus}</div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No pricing data available.</p>
-              )}
-            </section>
+                </header>
+                <p className="text-xs text-muted-foreground">
+                  Last updated: {new Date(details.lastFetched).toLocaleString()}
+                </p>
+              </section>
+            )}
 
             <section className="space-y-2 text-sm">
               <h3 className="text-sm font-semibold text-foreground">Available colors</h3>
-              {details.colorAvailability.length === 0 ? (
+              {!details.colorAvailability || details.colorAvailability.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   No color availability found for this part.
                 </p>
@@ -145,7 +144,7 @@ export function CatalogDetailDrawer({
                 >
                   {details.colorAvailability.map((entry) => (
                     <li
-                      key={`${entry.colorId}-${entry.elementIds.join("-")}`}
+                      key={entry.colorId}
                       className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2"
                     >
                       <div className="flex items-center gap-2">
@@ -158,39 +157,13 @@ export function CatalogDetailDrawer({
                               : "var(--muted)",
                           }}
                         />
-                        <div>
-                          <div className="font-medium text-foreground">
-                            {entry.color?.name ?? `Color ${entry.colorId}`}
-                          </div>
-                          <div>{entry.elementIds.length} element IDs</div>
+                        <div className="font-medium text-foreground">
+                          {entry.color?.name ?? `Color ${entry.colorId}`}
                         </div>
                       </div>
-                      <div>{entry.isLegacy ? "Legacy" : "Active"}</div>
                     </li>
                   ))}
                 </ul>
-              )}
-            </section>
-
-            <section className="space-y-2 text-sm">
-              <h3 className="text-sm font-semibold text-foreground">Element references</h3>
-              {details.elementReferences.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No element references recorded.</p>
-              ) : (
-                <div
-                  className="space-y-1 overflow-hidden rounded-md border border-border bg-background"
-                  data-testid="catalog-detail-elements"
-                >
-                  {details.elementReferences.map((reference) => (
-                    <div
-                      key={reference.elementId}
-                      className="flex items-center justify-between border-b border-border px-3 py-2 text-xs last:border-b-0"
-                    >
-                      <span className="font-medium text-foreground">{reference.elementId}</span>
-                      <span className="text-muted-foreground">Color {reference.colorId}</span>
-                    </div>
-                  ))}
-                </div>
               )}
             </section>
           </div>

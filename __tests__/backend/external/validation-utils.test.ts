@@ -7,7 +7,6 @@ import {
   validateExternalApis,
 } from "@/convex/lib/external/validate";
 import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
-import { sharedRateLimiter } from "@/convex/lib/external/inMemoryRateLimiter";
 
 const successResponse = (data: unknown, status = 200) => ({
   ok: status >= 200 && status < 300,
@@ -20,12 +19,12 @@ const successResponse = (data: unknown, status = 200) => ({
 
 describe("External API validation", () => {
   const originalEnv = { ...process.env };
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.restoreAllMocks();
     clearMetricListeners();
     Object.assign(process.env, {
-      BRICKOGNIZE_API_KEY: "brickognize-test",
       BRICKOWL_API_KEY: "brickowl-test",
       BRICKLINK_CONSUMER_KEY: "ck",
       BRICKLINK_CONSUMER_SECRET: "cs",
@@ -33,7 +32,7 @@ describe("External API validation", () => {
       BRICKLINK_TOKEN_SECRET: "ts",
     });
 
-    const fetchMock = vi.fn((input: RequestInfo) => {
+    fetchMock = vi.fn((input: RequestInfo) => {
       const url = typeof input === "string" ? input : input.url;
 
       if (url.includes("brickognize.com")) {
@@ -125,22 +124,32 @@ describe("External API validation", () => {
     expect(owl.ok).toBe(true);
   });
 
-  it("returns structured failures when the shared rate limiter blocks requests", async () => {
-    const consumeSpy = vi.spyOn(sharedRateLimiter, "consume").mockImplementation(() => {
-      throw new Error("Rate limit exceeded for key test");
+  it("returns structured failures when the Brickognize endpoint rate limits requests", async () => {
+    fetchMock.mockImplementation((input: RequestInfo) => {
+      const url = typeof input === "string" ? input : input.url;
+
+      if (url.includes("brickognize.com")) {
+        return Promise.reject(new Error("Rate limit exceeded for key test"));
+      }
+
+      if (url.includes("bricklink.com")) {
+        return Promise.resolve(successResponse({ data: [] }));
+      }
+
+      if (url.includes("brickowl.com")) {
+        return Promise.resolve(successResponse({ user: { username: "tester" } }));
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
     });
 
     const events: string[] = [];
     addMetricListener((event) => events.push(event.name));
 
-    try {
-      const result = await validateBrickognize();
-      expect(result.ok).toBe(false);
-      expect(result.error?.error.code).toBe("UNEXPECTED_ERROR");
-      expect(result.error?.error.message).toMatch(/rate limit exceeded/i);
-      expect(events).toContain("external.brickognize.health");
-    } finally {
-      consumeSpy.mockRestore();
-    }
+    const result = await validateBrickognize();
+    expect(result.ok).toBe(false);
+    expect(result.error?.error.code).toBe("UNEXPECTED_ERROR");
+    expect(result.error?.error.message).toMatch(/rate limit exceeded/i);
+    expect(events).toContain("external.brickognize.health");
   });
 });

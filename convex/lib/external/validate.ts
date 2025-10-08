@@ -1,19 +1,18 @@
-import { BricklinkClient } from "./bricklink";
+import { bricklinkClient } from "../../bricklink/bricklinkClient";
 import { BrickognizeClient } from "./brickognize";
 import { BrickowlClient } from "./brickowl";
-import { ValidationResult } from "./types";
+import { HealthCheckResult } from "./types";
 
 export const validateBrickognize = async () => new BrickognizeClient().healthCheck();
 
-export const validateBricklink = async (identityKey?: string) =>
-  new BricklinkClient().healthCheck(identityKey);
+export const validateBricklink = async () => bricklinkClient.healthCheck();
 
 export const validateBrickowl = async () => new BrickowlClient().healthCheck();
 
-export const validateExternalApis = async (options: { identityKey?: string } = {}) => {
-  const [brickognize, bricklink, brickowl] = await Promise.all<ValidationResult>([
+export const validateExternalApis = async () => {
+  const [brickognize, bricklink, brickowl] = await Promise.all<HealthCheckResult>([
     validateBrickognize(),
-    validateBricklink(options.identityKey),
+    validateBricklink(),
     validateBrickowl(),
   ]);
 

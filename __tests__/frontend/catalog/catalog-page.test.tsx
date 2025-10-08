@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event";
 
 import CatalogPage from "@/app/(authenticated)/catalog/page";
 import { renderWithProviders } from "@/test-utils/render-with-providers";
-import type { Id } from "@/convex/_generated/dataModel";
 import type { CatalogSearchResult, CatalogPartDetails } from "@/types/catalog";
 
 // Type to avoid using 'any' for mock checks
@@ -16,16 +15,16 @@ type MockedConvexFunction = {
 jest.mock("@/hooks/useSearchStore", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   type StoreState = {
-    gridBin: string;
+    sortLocation: string;
     partTitle: string;
     partId: string;
     page: number;
     pageSize: number;
-    sort: { field: "name" | "marketPrice" | "lastUpdated"; direction: "asc" | "desc" } | null;
+    sort: { field: "name" | "lastUpdated"; direction: "asc" | "desc" } | null;
   };
 
   let state: StoreState = {
-    gridBin: "",
+    sortLocation: "",
     partTitle: "",
     partId: "",
     page: 1,
@@ -48,7 +47,7 @@ jest.mock("@/hooks/useSearchStore", () => {
   };
 
   const actions = {
-    setGridBin: (value: string) => setState({ gridBin: value, page: 1 }),
+    setSortLocation: (value: string) => setState({ sortLocation: value, page: 1 }),
     setPartTitle: (value: string) => setState({ partTitle: value, page: 1 }),
     setPartId: (value: string) => setState({ partId: value, page: 1 }),
     setPage: (page: number) => setState({ page }),
@@ -57,14 +56,15 @@ jest.mock("@/hooks/useSearchStore", () => {
         pageSize,
         page: prev.pageSize === pageSize ? prev.page : 1,
       })),
-    setSort: (
-      sort: { field: "name" | "marketPrice" | "lastUpdated"; direction: "asc" | "desc" } | null,
-    ) => setState({ sort, page: 1 }),
+    setSort: (sort: { field: "name" | "lastUpdated"; direction: "asc" | "desc" } | null) =>
+      setState({ sort, page: 1 }),
     setFilters: (
-      filters: Partial<Pick<StoreState, "gridBin" | "partTitle" | "partId" | "sort" | "pageSize">>,
+      filters: Partial<
+        Pick<StoreState, "sortLocation" | "partTitle" | "partId" | "sort" | "pageSize">
+      >,
     ) =>
       setState((prev) => ({
-        gridBin: filters.gridBin ?? prev.gridBin,
+        sortLocation: filters.sortLocation ?? prev.sortLocation,
         partTitle: filters.partTitle ?? prev.partTitle,
         partId: filters.partId ?? prev.partId,
         sort: filters.sort ?? prev.sort,
@@ -73,7 +73,7 @@ jest.mock("@/hooks/useSearchStore", () => {
       })),
     resetFilters: () =>
       setState({
-        gridBin: "",
+        sortLocation: "",
         partTitle: "",
         partId: "",
         page: 1,
@@ -105,7 +105,7 @@ jest.mock("@/hooks/useSearchStore", () => {
 
   const reset = () => {
     state = {
-      gridBin: "",
+      sortLocation: "",
       partTitle: "",
       partId: "",
       page: 1,
@@ -133,113 +133,84 @@ jest.mock("@/hooks/useSearchStore", () => {
 
 // metadata removed from API: no-op placeholder removed
 
+const mockTimestamp = Date.now();
+
 const searchResults: Record<string, CatalogSearchResult> = {
   first: {
-    parts: [
+    page: [
       {
-        _id: "legoPartCatalog:1" as Id<"legoPartCatalog">,
         partNumber: "3001",
         name: "Brick 2 x 4",
-        description: "Standard brick",
-        category: "Bricks",
-        categoryPath: [100],
-        categoryPathKey: "100",
+        type: "PART" as const,
+        categoryId: 100,
+        alternateNo: undefined,
         imageUrl: "",
         thumbnailUrl: undefined,
-        dataSource: "brickops",
-        lastUpdated: Date.now(),
-        bricklinkPartId: "3001",
-        bricklinkCategoryId: 100,
-        primaryColorId: 1,
-        availableColorIds: [1, 21],
-        weightGrams: undefined,
-        dimensionXMm: undefined,
-        dimensionYMm: undefined,
-        dimensionZMm: undefined,
-        printed: undefined,
-        isObsolete: undefined,
-        // omit pricing in this mock to match type
+        weight: undefined,
+        dimX: undefined,
+        dimY: undefined,
+        dimZ: undefined,
+        yearReleased: undefined,
+        description: "Standard brick",
+        isObsolete: false,
+        lastFetched: mockTimestamp,
       },
     ],
-    source: "local",
-    searchDurationMs: 10,
-    pagination: {
-      cursor: "cursor-2",
-      hasNextPage: true,
-      pageSize: 25,
-      fetched: 1,
-      isDone: false,
-    },
-    // metadata removed
+    isDone: false,
+    continueCursor: "cursor-2",
   },
   "cursor-2": {
-    parts: [
+    page: [
       {
-        _id: "legoPartCatalog:2" as Id<"legoPartCatalog">,
         partNumber: "3002",
         name: "Brick 2 x 3",
-        description: "Another brick",
-        category: "Bricks",
-        categoryPath: [100],
-        categoryPathKey: "100",
+        type: "PART" as const,
+        categoryId: 100,
+        alternateNo: undefined,
         imageUrl: "",
         thumbnailUrl: undefined,
-        dataSource: "brickops",
-        lastUpdated: Date.now(),
-        bricklinkPartId: "3002",
-        bricklinkCategoryId: 100,
-        primaryColorId: 21,
-        availableColorIds: [21],
-        weightGrams: undefined,
-        dimensionXMm: undefined,
-        dimensionYMm: undefined,
-        dimensionZMm: undefined,
-        printed: undefined,
-        isObsolete: undefined,
-        // omit pricing in this mock to match type
+        weight: undefined,
+        dimX: undefined,
+        dimY: undefined,
+        dimZ: undefined,
+        yearReleased: undefined,
+        description: "Another brick",
+        isObsolete: false,
+        lastFetched: mockTimestamp,
       },
     ],
-    source: "local",
-    searchDurationMs: 8,
-    pagination: {
-      cursor: "",
-      hasNextPage: false,
-      pageSize: 25,
-      fetched: 1,
-      isDone: true,
-    },
-    // metadata removed
+    isDone: true,
+    continueCursor: "",
   },
 };
 
-const detailResult: CatalogPartDetails = {
-  ...searchResults.first.parts[0],
-  source: "local",
-  bricklinkStatus: "skipped",
+const detailResult = {
+  partNumber: "3001",
+  name: "Brick 2 x 4",
+  type: "PART" as const,
+  categoryId: 100,
+  category: "Bricks",
+  bricklinkPartId: "3001",
+  imageUrl: "",
+  thumbnailUrl: undefined,
+  weight: undefined,
+  dimX: undefined,
+  dimY: undefined,
+  dimZ: undefined,
+  yearReleased: undefined,
+  description: "Standard brick",
+  isObsolete: false,
+  lastFetched: mockTimestamp,
   colorAvailability: [
     {
       colorId: 1,
-      elementIds: ["300101"],
-      isLegacy: false,
       color: {
         name: "White",
         rgb: "FFFFFF",
-        colorType: "Solid",
-        isTransparent: false,
       },
     },
   ],
-  elementReferences: [
-    {
-      elementId: "300101",
-      colorId: 1,
-      designId: "123",
-      bricklinkPartId: "3001",
-    },
-  ],
-  marketPricing: null,
-  bricklinkSnapshot: undefined,
-};
+} as unknown as CatalogPartDetails;
 
 const mockUseQuery = jest.fn((_queryFn: unknown, args: unknown) => {
   if (args === undefined) {
@@ -262,7 +233,31 @@ const mockUseQuery = jest.fn((_queryFn: unknown, args: unknown) => {
   return undefined;
 });
 
-const mockMutation = jest.fn(() => Promise.resolve({ refreshed: 1, errors: [] }));
+const mockMutation = jest.fn(async (args: unknown) => {
+  // If args has partNumber, it's a getPartDetails or forcePartDetailsRefresh call
+  if (typeof args === "object" && args !== null && "partNumber" in args) {
+    return detailResult;
+  }
+  return { refreshed: 1, errors: [] };
+});
+
+const mockUsePaginatedQuery = jest.fn((_queryFn: unknown, args: unknown) => {
+  if (args === "skip") {
+    return {
+      results: [],
+      status: "LoadingFirstPage",
+      loadMore: jest.fn(),
+      isLoading: true,
+    };
+  }
+
+  return {
+    results: searchResults.first.page,
+    status: "CanLoadMore" as const,
+    loadMore: jest.fn(),
+    isLoading: false,
+  };
+});
 
 const { __resetSearchStoreMock } = jest.requireMock("@/hooks/useSearchStore");
 
@@ -272,6 +267,8 @@ jest.mock("convex/react", () => {
     __esModule: true,
     ...actual,
     useQuery: (...args: Parameters<typeof mockUseQuery>) => mockUseQuery(...args),
+    usePaginatedQuery: (...args: Parameters<typeof mockUsePaginatedQuery>) =>
+      mockUsePaginatedQuery(...args),
     useMutation: jest.fn((mutationFn: unknown) => {
       // Allow specific mocks based on the function path
       // This makes tests more robust to module changes
@@ -311,6 +308,7 @@ jest.mock("@radix-ui/react-dialog", () => ({
 describe("CatalogPage", () => {
   beforeEach(() => {
     mockUseQuery.mockClear();
+    mockUsePaginatedQuery.mockClear();
     mockMutation.mockClear();
     __resetSearchStoreMock();
   });
@@ -326,59 +324,68 @@ describe("CatalogPage", () => {
 
   it("supports pagination controls", async () => {
     const user = userEvent.setup();
+    const mockLoadMore = jest.fn();
+
+    mockUsePaginatedQuery.mockReturnValueOnce({
+      results: searchResults.first.page,
+      status: "CanLoadMore" as const,
+      loadMore: mockLoadMore,
+      isLoading: false,
+    });
+
     renderWithProviders(<CatalogPage />);
 
     await screen.findByTestId("catalog-results-grid");
 
+    const loadMoreButton = screen.getByTestId("catalog-load-more");
+    expect(loadMoreButton).not.toBeDisabled();
+
     await act(async () => {
-      await user.click(screen.getByTestId("catalog-next-page"));
+      await user.click(loadMoreButton);
     });
 
     await waitFor(() => {
-      expect(
-        mockUseQuery.mock.calls.some(
-          (call) =>
-            Array.isArray(call) &&
-            call.length > 1 &&
-            typeof call[1] === "object" &&
-            call[1] !== null &&
-            (call[1] as { cursor?: string }).cursor === "cursor-2",
-        ),
-      ).toBe(true);
+      expect(mockLoadMore).toHaveBeenCalled();
     });
-
-    expect(await screen.findByTestId("catalog-results-grid")).toBeInTheDocument();
-    expect(await screen.findByText(/Page\s*2/)).toBeInTheDocument();
   });
 
-  it("preserves the selected page when navigating and resets after search changes", async () => {
+  it("resets pagination when search changes", async () => {
     const user = userEvent.setup();
+    const mockLoadMore = jest.fn();
+
+    mockUsePaginatedQuery.mockReturnValue({
+      results: searchResults.first.page,
+      status: "CanLoadMore" as const,
+      loadMore: mockLoadMore,
+      isLoading: false,
+    });
+
     renderWithProviders(<CatalogPage />);
 
     await screen.findByTestId("catalog-results-grid");
 
+    // Load more results
     await act(async () => {
-      await user.click(screen.getByTestId("catalog-next-page"));
+      await user.click(screen.getByTestId("catalog-load-more"));
     });
 
-    expect(await screen.findByText(/Page\s*2/)).toBeInTheDocument();
+    expect(mockLoadMore).toHaveBeenCalled();
+    mockLoadMore.mockClear();
+    mockUsePaginatedQuery.mockClear();
 
+    // Change search - should trigger new query
     const titleInput = await screen.findByTestId("catalog-search-title");
     await act(async () => {
-      await user.type(titleInput, " brick");
+      await user.type(titleInput, "brick");
     });
 
-    expect(await screen.findByText(/Page\s*1/)).toBeInTheDocument();
-
+    // usePaginatedQuery should be called again with updated search args
     await waitFor(() => {
-      const searchCalls = mockUseQuery.mock.calls.filter(
-        (call) =>
-          Array.isArray(call) && call.length > 1 && typeof call[1] === "object" && call[1] !== null,
-      );
-      const latestArgs = searchCalls[searchCalls.length - 1]?.[1] as
-        | { cursor?: string }
-        | undefined;
-      expect(latestArgs?.cursor).toBeUndefined();
+      expect(mockUsePaginatedQuery).toHaveBeenCalled();
+      const lastCall =
+        mockUsePaginatedQuery.mock.calls[mockUsePaginatedQuery.mock.calls.length - 1];
+      const args = lastCall[1] as { partTitle?: string };
+      expect(args.partTitle).toBe("brick");
     });
   });
 
@@ -394,6 +401,5 @@ describe("CatalogPage", () => {
     const headings = await screen.findAllByText(/Brick 2 x 4/);
     expect(headings.length).toBeGreaterThan(0);
     expect(within(drawer).getByTestId("catalog-detail-colors")).toBeInTheDocument();
-    expect(within(drawer).getByTestId("catalog-detail-elements")).toBeInTheDocument();
   });
 });

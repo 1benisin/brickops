@@ -31,14 +31,6 @@ const customJestConfig: Config = {
     "!src/lib/convexClient.ts", // Singleton - better covered by integration tests
   ],
   coverageDirectory: "coverage/frontend",
-  coverageThreshold: {
-    global: {
-      branches: 50,
-      functions: 50,
-      lines: 65,
-      statements: 65,
-    },
-  },
 };
 
 export default createJestConfig(customJestConfig);

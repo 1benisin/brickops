@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -13,24 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSearchStore } from "@/hooks/useSearchStore";
 import type { CatalogPart, CatalogPartDetails } from "@/types/catalog";
 
-const initialPaginationState = () => ({
-  page: 1,
-  currentCursor: null as string | null,
-  cursorMap: new Map<number, string | null>([[1, null]]),
-});
-
-// removed: sortNumericValues (no longer needed with simplified search fields)
-
-type PaginationState = ReturnType<typeof initialPaginationState>;
-
-type SearchArgs = {
-  query: string;
-  gridBin?: string;
-  partId?: string;
-  partTitle?: string;
-  pageSize?: number;
-  cursor?: string;
-};
+// Removed manual pagination state - now using usePaginatedQuery hook
+// Removed sortNumericValues (no longer needed with simplified search fields)
 
 export default function CatalogPage() {
   const currentUser = useQuery(api.functions.users.getCurrentUser);
@@ -42,14 +26,14 @@ export default function CatalogPage() {
     type UrlUpdates = Partial<
       Pick<
         ReturnType<typeof useSearchStore.getState>,
-        "gridBin" | "partTitle" | "partId" | "pageSize" | "sort"
+        "sortLocation" | "partTitle" | "partId" | "pageSize" | "sort"
       >
     >;
     const updates: UrlUpdates = {};
 
-    const binParam = params.get("bin");
-    if (binParam !== null) {
-      updates.gridBin = binParam;
+    const locationParam = params.get("location");
+    if (locationParam !== null) {
+      updates.sortLocation = locationParam;
     }
 
     const nameParam = params.get("name");
@@ -74,13 +58,14 @@ export default function CatalogPage() {
     if (sortParam) {
       const [field, direction] = sortParam.split(":");
       if (field && direction && (direction === "asc" || direction === "desc")) {
-        if (field === "name" || field === "marketPrice" || field === "lastUpdated") {
+        if (field === "name" || field === "lastUpdated") {
           updates.sort = { field, direction } as typeof updates.sort;
         }
       }
     }
 
     // Freshness is no longer a user-facing filter; ignore any URL param
+    // Page parameter is no longer used with Convex pagination
 
     if (Object.keys(updates).length > 0) {
       useSearchStore.getState().setFilters(updates);
@@ -88,85 +73,84 @@ export default function CatalogPage() {
   }, []);
 
   const {
-    gridBin,
+    sortLocation,
     partTitle,
     partId,
     pageSize,
-    setGridBin,
+    setSortLocation,
     setPartTitle,
     setPartId,
     setPageSize,
     resetFilters,
   } = useSearchStore((state) => ({
-    gridBin: state.gridBin,
+    sortLocation: state.sortLocation,
     partTitle: state.partTitle,
     partId: state.partId,
     pageSize: state.pageSize,
-    setGridBin: state.setGridBin,
+    setSortLocation: state.setSortLocation,
     setPartTitle: state.setPartTitle,
     setPartId: state.setPartId,
     setPageSize: state.setPageSize,
     resetFilters: state.resetFilters,
   }));
-  const [pagination, setPagination] = useState<PaginationState>(initialPaginationState);
 
-  const filterSignature = useMemo(
-    () =>
-      JSON.stringify({
-        gridBin,
-        partTitle,
-        partId,
-        pageSize,
-      }),
-    [gridBin, partTitle, partId, pageSize],
-  );
-
-  const previousFilterSignature = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (previousFilterSignature.current === filterSignature) {
-      return;
-    }
-
-    previousFilterSignature.current = filterSignature;
-    setPagination(initialPaginationState());
-  }, [filterSignature]);
-
-  const searchArgs: SearchArgs | "skip" = useMemo(() => {
+  const searchArgs = useMemo(() => {
     if (!businessAccountId) return "skip";
     return {
-      query: "",
-      gridBin: gridBin?.trim() || undefined,
+      sortLocation: sortLocation?.trim() || undefined,
       partId: partId?.trim() || undefined,
       partTitle: partTitle?.trim() || undefined,
-      pageSize,
-      cursor: pagination.currentCursor ?? undefined,
     };
-  }, [businessAccountId, gridBin, partId, partTitle, pageSize, pagination.currentCursor]);
+  }, [businessAccountId, sortLocation, partId, partTitle]);
 
-  const searchResult = useQuery(api.functions.catalog.searchParts, searchArgs);
-  const searchLoading = Boolean(businessAccountId) && searchResult === undefined;
+  const {
+    results,
+    status: paginationStatus,
+    loadMore,
+    isLoading: searchLoading,
+  } = usePaginatedQuery(api.catalog.searchParts, searchArgs, {
+    initialNumItems: pageSize,
+  });
 
-  const parts = searchResult?.parts ?? [];
+  const parts = results ?? [];
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedPart, setSelectedPart] = useState<CatalogPart | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [refreshingDetail, setRefreshingDetail] = useState(false);
 
-  const detailArgs = useMemo(() => {
-    if (!selectedPart || !drawerOpen) return "skip";
-    return {
-      partNumber: selectedPart.partNumber,
-      fetchFromBricklink: false,
+  const [detailData, setDetailData] = useState<CatalogPartDetails | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const getPartDetailsMutation = useMutation(api.catalog.getPartDetails);
+
+  // Fetch part details when drawer opens or part changes
+  useEffect(() => {
+    if (!drawerOpen || !selectedPart) {
+      setDetailData(null);
+      return;
+    }
+
+    const fetchDetails = async () => {
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        const result = await getPartDetailsMutation({
+          partNumber: selectedPart.partNumber,
+          fetchFromBricklink: false,
+        });
+        setDetailData(result as CatalogPartDetails);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load part details";
+        setDetailError(message);
+      } finally {
+        setDetailLoading(false);
+      }
     };
-  }, [selectedPart, drawerOpen]);
 
-  const detailResult = useQuery(api.functions.catalog.getPartDetails, detailArgs);
-  const detailLoading = drawerOpen && selectedPart !== null && detailResult === undefined;
-  const detailData = (detailResult as CatalogPartDetails | undefined) ?? null;
+    void fetchDetails();
+  }, [drawerOpen, selectedPart, getPartDetailsMutation]);
 
-  const refreshCatalog = useMutation(api.functions.scriptOps.refreshCatalogEntries);
+  const refreshPart = useMutation(api.catalog.forcePartDetailsRefresh);
 
   const handleSelectPart = (part: CatalogPart) => {
     setSelectedPart(part);
@@ -174,42 +158,28 @@ export default function CatalogPage() {
     setDetailError(null);
   };
 
-  const handleNextPage = () => {
-    if (!searchResult?.pagination?.hasNextPage) return;
-    const nextCursor = searchResult.pagination.cursor;
-    if (!nextCursor) return;
-
-    setPagination((prev) => {
-      const nextPage = prev.page + 1;
-      const nextMap = new Map(prev.cursorMap);
-      nextMap.set(nextPage, nextCursor);
-
-      return {
-        page: nextPage,
-        currentCursor: nextCursor,
-        cursorMap: nextMap,
-      };
-    });
+  const handleLoadMore = () => {
+    if (paginationStatus === "CanLoadMore") {
+      loadMore(pageSize);
+    }
   };
 
-  const handlePreviousPage = () => {
-    if (pagination.page <= 1) return;
-    setPagination((prev) => {
-      const nextPage = Math.max(1, prev.page - 1);
-      const nextCursor = prev.cursorMap.get(nextPage) ?? null;
-      return {
-        page: nextPage,
-        currentCursor: nextCursor,
-        cursorMap: prev.cursorMap,
-      };
-    });
-  };
+  const hasMoreResults = paginationStatus === "CanLoadMore";
+  const isLoading = paginationStatus === "LoadingFirstPage" || paginationStatus === "LoadingMore";
+  const isExhausted = paginationStatus === "Exhausted";
 
   const handleRefreshDetail = async () => {
     if (!selectedPart) return;
     try {
       setRefreshingDetail(true);
-      await refreshCatalog({ partNumber: selectedPart.partNumber, limit: 1 });
+      await refreshPart({ partNumber: selectedPart.partNumber });
+
+      // Refetch details after queuing refresh
+      const result = await getPartDetailsMutation({
+        partNumber: selectedPart.partNumber,
+        fetchFromBricklink: false,
+      });
+      setDetailData(result as CatalogPartDetails);
       setDetailError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to refresh part details";
@@ -222,11 +192,10 @@ export default function CatalogPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams();
-    if (gridBin) params.set("bin", gridBin);
+    if (sortLocation) params.set("location", sortLocation);
     if (partTitle) params.set("name", partTitle);
     if (partId) params.set("partId", partId);
     if (pageSize !== 25) params.set("pageSize", String(pageSize));
-    if (pagination.page > 1) params.set("page", String(pagination.page));
 
     const search = params.toString();
     const desiredSearch = search ? `?${search}` : "";
@@ -237,7 +206,7 @@ export default function CatalogPage() {
         : window.location.pathname;
       window.history.replaceState(window.history.state, "", nextUrl);
     }
-  }, [gridBin, partTitle, partId, pageSize, pagination.page]);
+  }, [sortLocation, partTitle, partId, pageSize]);
 
   return (
     <div className="flex flex-col gap-6" data-testid="catalog-page">
@@ -250,16 +219,16 @@ export default function CatalogPage() {
         </div>
 
         <CatalogSearchBar
-          gridBin={gridBin}
+          sortLocation={sortLocation}
           partTitle={partTitle}
           partId={partId}
-          onGridBinChange={setGridBin}
+          onSortLocationChange={setSortLocation}
           onPartTitleChange={setPartTitle}
           onPartIdChange={setPartId}
           onSubmit={() => undefined}
           onClear={() => {
             resetFilters();
-            setPagination(initialPaginationState());
+            // Pagination state is now managed by usePaginatedQuery and resets automatically when searchArgs change
           }}
           isLoading={searchLoading}
         />
@@ -288,7 +257,7 @@ export default function CatalogPage() {
               </div>
             </header>
 
-            {searchLoading && parts.length === 0 ? (
+            {isLoading && parts.length === 0 ? (
               <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <Skeleton key={index} className="h-40 w-full rounded-lg" />
@@ -307,33 +276,29 @@ export default function CatalogPage() {
                 data-testid="catalog-results-grid"
               >
                 {parts.map((part) => (
-                  <CatalogResultCard key={part._id} part={part} onSelect={handleSelectPart} />
+                  <CatalogResultCard
+                    key={part.partNumber}
+                    part={part}
+                    onSelect={handleSelectPart}
+                  />
                 ))}
               </div>
             )}
 
             <footer className="flex items-center justify-between border-t border-border pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePreviousPage}
-                disabled={pagination.page <= 1 || searchLoading}
-                data-testid="catalog-prev-page"
-              >
-                Previous
-              </Button>
               <div className="text-xs text-muted-foreground">
-                Page {pagination.page}
-                {searchResult?.pagination?.isDone ? " · End of results" : null}
+                {isLoading && "Loading..."}
+                {hasMoreResults && "Load more results available"}
+                {isExhausted && "End of results"}
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleNextPage}
-                disabled={!searchResult?.pagination?.hasNextPage || searchLoading}
-                data-testid="catalog-next-page"
+                onClick={handleLoadMore}
+                disabled={!hasMoreResults || isLoading}
+                data-testid="catalog-load-more"
               >
-                Next
+                Load More
               </Button>
             </footer>
           </section>
