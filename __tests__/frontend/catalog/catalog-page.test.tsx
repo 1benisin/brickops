@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event";
 
 import CatalogPage from "@/app/(authenticated)/catalog/page";
 import { renderWithProviders } from "@/test-utils/render-with-providers";
-import type { Id } from "@/convex/_generated/dataModel";
 import type { CatalogSearchResult, CatalogPartDetails } from "@/types/catalog";
 
 // Type to avoid using 'any' for mock checks
@@ -16,7 +15,7 @@ type MockedConvexFunction = {
 jest.mock("@/hooks/useSearchStore", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   type StoreState = {
-    gridBin: string;
+    sortLocation: string;
     partTitle: string;
     partId: string;
     page: number;
@@ -25,7 +24,7 @@ jest.mock("@/hooks/useSearchStore", () => {
   };
 
   let state: StoreState = {
-    gridBin: "",
+    sortLocation: "",
     partTitle: "",
     partId: "",
     page: 1,
@@ -48,7 +47,7 @@ jest.mock("@/hooks/useSearchStore", () => {
   };
 
   const actions = {
-    setGridBin: (value: string) => setState({ gridBin: value, page: 1 }),
+    setSortLocation: (value: string) => setState({ sortLocation: value, page: 1 }),
     setPartTitle: (value: string) => setState({ partTitle: value, page: 1 }),
     setPartId: (value: string) => setState({ partId: value, page: 1 }),
     setPage: (page: number) => setState({ page }),
@@ -60,10 +59,12 @@ jest.mock("@/hooks/useSearchStore", () => {
     setSort: (sort: { field: "name" | "lastUpdated"; direction: "asc" | "desc" } | null) =>
       setState({ sort, page: 1 }),
     setFilters: (
-      filters: Partial<Pick<StoreState, "gridBin" | "partTitle" | "partId" | "sort" | "pageSize">>,
+      filters: Partial<
+        Pick<StoreState, "sortLocation" | "partTitle" | "partId" | "sort" | "pageSize">
+      >,
     ) =>
       setState((prev) => ({
-        gridBin: filters.gridBin ?? prev.gridBin,
+        sortLocation: filters.sortLocation ?? prev.sortLocation,
         partTitle: filters.partTitle ?? prev.partTitle,
         partId: filters.partId ?? prev.partId,
         sort: filters.sort ?? prev.sort,
@@ -72,7 +73,7 @@ jest.mock("@/hooks/useSearchStore", () => {
       })),
     resetFilters: () =>
       setState({
-        gridBin: "",
+        sortLocation: "",
         partTitle: "",
         partId: "",
         page: 1,
@@ -104,7 +105,7 @@ jest.mock("@/hooks/useSearchStore", () => {
 
   const reset = () => {
     state = {
-      gridBin: "",
+      sortLocation: "",
       partTitle: "",
       partId: "",
       page: 1,
@@ -136,116 +137,80 @@ const mockTimestamp = Date.now();
 
 const searchResults: Record<string, CatalogSearchResult> = {
   first: {
-    parts: [
+    page: [
       {
-        _id: "parts:1" as Id<"parts">,
         partNumber: "3001",
         name: "Brick 2 x 4",
-        description: "Standard brick",
-        category: "Bricks",
-        categoryPath: [100],
-        categoryPathKey: "100",
+        type: "PART" as const,
+        categoryId: 100,
+        alternateNo: undefined,
         imageUrl: "",
         thumbnailUrl: undefined,
-        dataSource: "brickops",
-        lastUpdated: Date.now(),
-        lastFetchedFromBricklink: null,
-        dataFreshness: "fresh",
-        freshnessUpdatedAt: mockTimestamp,
-        bricklinkPartId: "3001",
-        bricklinkCategoryId: 100,
-        primaryColorId: 1,
-        availableColorIds: [1, 21],
-        weight: null,
-        dimensions: null,
-        isPrinted: undefined,
-        isObsolete: undefined,
+        weight: undefined,
+        dimX: undefined,
+        dimY: undefined,
+        dimZ: undefined,
+        yearReleased: undefined,
+        description: "Standard brick",
+        isObsolete: false,
+        lastFetched: mockTimestamp,
       },
     ],
-    source: "local",
-    searchDurationMs: 10,
-    pagination: {
-      cursor: "cursor-2",
-      hasNextPage: true,
-      pageSize: 25,
-      fetched: 1,
-      isDone: false,
-    },
-    // metadata removed
+    isDone: false,
+    continueCursor: "cursor-2",
   },
   "cursor-2": {
-    parts: [
+    page: [
       {
-        _id: "parts:2" as Id<"parts">,
         partNumber: "3002",
         name: "Brick 2 x 3",
-        description: "Another brick",
-        category: "Bricks",
-        categoryPath: [100],
-        categoryPathKey: "100",
+        type: "PART" as const,
+        categoryId: 100,
+        alternateNo: undefined,
         imageUrl: "",
         thumbnailUrl: undefined,
-        dataSource: "brickops",
-        lastUpdated: Date.now(),
-        lastFetchedFromBricklink: null,
-        dataFreshness: "fresh",
-        freshnessUpdatedAt: mockTimestamp,
-        bricklinkPartId: "3002",
-        bricklinkCategoryId: 100,
-        primaryColorId: 21,
-        availableColorIds: [21],
-        weight: null,
-        dimensions: null,
-        isPrinted: undefined,
-        isObsolete: undefined,
+        weight: undefined,
+        dimX: undefined,
+        dimY: undefined,
+        dimZ: undefined,
+        yearReleased: undefined,
+        description: "Another brick",
+        isObsolete: false,
+        lastFetched: mockTimestamp,
       },
     ],
-    source: "local",
-    searchDurationMs: 8,
-    pagination: {
-      cursor: "",
-      hasNextPage: false,
-      pageSize: 25,
-      fetched: 1,
-      isDone: true,
-    },
-    // metadata removed
+    isDone: true,
+    continueCursor: "",
   },
 };
 
-const detailResult: CatalogPartDetails = {
-  ...searchResults.first.parts[0],
-  source: "local",
-  bricklinkStatus: "skipped",
-  refresh: {
-    nextRefreshAt: mockTimestamp + 1000,
-    windowMs: 1000,
-    reason: "fresh-window",
-    shouldRefresh: false,
-  },
+const detailResult = {
+  partNumber: "3001",
+  name: "Brick 2 x 4",
+  type: "PART" as const,
+  categoryId: 100,
+  category: "Bricks",
+  bricklinkPartId: "3001",
+  imageUrl: "",
+  thumbnailUrl: undefined,
+  weight: undefined,
+  dimX: undefined,
+  dimY: undefined,
+  dimZ: undefined,
+  yearReleased: undefined,
+  description: "Standard brick",
+  isObsolete: false,
+  lastFetched: mockTimestamp,
   colorAvailability: [
     {
       colorId: 1,
-      elementIds: ["300101"],
-      isLegacy: false,
       color: {
         name: "White",
         rgb: "FFFFFF",
-        colorType: "Solid",
-        isTransparent: false,
       },
     },
   ],
-  elementReferences: [
-    {
-      elementId: "300101",
-      colorId: 1,
-      designId: "123",
-      bricklinkPartId: "3001",
-    },
-  ],
-  marketPricing: null,
-};
+} as unknown as CatalogPartDetails;
 
 const mockUseQuery = jest.fn((_queryFn: unknown, args: unknown) => {
   if (args === undefined) {

@@ -13,17 +13,91 @@ https://api.bricklink.com/api/store/v1
 
 ## Resources
 
-- [Orders](./orders.md) - Order management and operations
-- [Store Inventory](./inventory.md) - Inventory management
-- [Catalog](./catalog.md) - Catalog item information
-- [Feedback](./feedback.md) - Feedback management
-- [Colors](./colors.md) - Color information
-- [Categories](./categories.md) - Category information
-- [Push Notifications](./notifications.md) - Push notification system
-- [Coupons](./coupons.md) - Coupon management
-- [Settings](./settings.md) - Store settings
-- [Members](./members.md) - Member information
-- [Item Mapping](./item-mapping.md) - Item number and Element ID mapping
+### Order Management
+
+- **[Orders](./orders.md)** - Complete order lifecycle management
+  - `GET /orders` - Retrieve orders list
+  - `GET /orders/{order_id}` - Get specific order details
+  - `GET /orders/{order_id}/items` - Get order items
+  - `GET /orders/{order_id}/messages` - Get order messages
+  - `GET /orders/{order_id}/feedback` - Get order feedback
+  - `PUT /orders/{order_id}` - Update order
+  - `PUT /orders/{order_id}/status` - Update order status
+  - `PUT /orders/{order_id}/payment_status` - Update payment status
+  - `POST /orders/{order_id}/drive_thru` - Send drive thru email
+
+### Inventory Management
+
+- **[Store Inventory](./inventory.md)** - Store inventory operations
+  - `GET /inventories` - Get store inventories list
+  - `GET /inventories/{inventory_id}` - Get specific inventory
+  - `POST /inventories` - Create new inventory
+  - `PUT /inventories/{inventory_id}` - Update inventory
+  - `DELETE /inventories/{inventory_id}` - Delete inventory
+
+### Catalog Operations
+
+- **[Catalog](./catalog.md)** - Catalog item information and relationships
+  - `GET /items/{type}/{no}` - Get item details
+  - `GET /items/{type}/{no}/images/{color_id}` - Get item images
+  - `GET /items/{type}/{no}/supersets` - Get items that include this item
+  - `GET /items/{type}/{no}/subsets` - Get items included in this item
+  - `GET /items/{type}/{no}/price` - Get price guide
+  - `GET /items/{type}/{no}/colors` - Get known colors for item
+
+### Customer Interaction
+
+- **[Feedback](./feedback.md)** - Feedback management system
+  - `GET /feedback` - Get feedback list
+  - `GET /feedback/{feedback_id}` - Get specific feedback
+  - `POST /feedback` - Create new feedback
+  - `POST /feedback/{feedback_id}/reply` - Reply to feedback
+
+### Reference Data
+
+- **[Colors](./colors.md)** - Color information
+
+  - `GET /colors` - Get all colors
+  - `GET /colors/{color_id}` - Get specific color
+
+- **[Categories](./categories.md)** - Category information
+  - `GET /categories` - Get all categories
+  - `GET /categories/{category_id}` - Get specific category
+
+### Communication
+
+- **[Push Notifications](./notifications.md)** - Push notification system
+  - `GET /notifications` - Get unread notifications
+
+### Marketing
+
+- **[Coupons](./coupons.md)** - Coupon management
+  - `GET /coupons` - Get coupons list
+  - `GET /coupons/{coupon_id}` - Get specific coupon
+  - `POST /coupons` - Create new coupon
+  - `PUT /coupons/{coupon_id}` - Update coupon
+  - `DELETE /coupons/{coupon_id}` - Delete coupon
+
+### Store Configuration
+
+- **[Settings](./settings.md)** - Store settings and configuration
+  - `GET /settings/shipping_methods` - Get shipping methods
+  - `GET /settings/shipping_methods/{method_id}` - Get specific shipping method
+
+### Member Management
+
+- **[Members](./members.md)** - Member information and notes
+  - `GET /members/{username}/ratings` - Get member ratings
+  - `GET /members/{username}/my_notes` - Get your notes on member
+  - `POST /members/{username}/my_notes` - Create member note
+  - `PUT /members/{username}/my_notes` - Update member note
+  - `DELETE /members/{username}/my_notes` - Delete member note
+
+### Item Identification
+
+- **[Item Mapping](./item-mapping.md)** - Item number and Element ID mapping
+  - `GET /item_mapping/{type}/{no}` - Get Element ID from item number
+  - `GET /item_mapping/{element_id}` - Get item number from Element ID
 
 ## Credential Management
 

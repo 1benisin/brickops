@@ -26,14 +26,14 @@ export default function CatalogPage() {
     type UrlUpdates = Partial<
       Pick<
         ReturnType<typeof useSearchStore.getState>,
-        "gridBin" | "partTitle" | "partId" | "pageSize" | "sort"
+        "sortLocation" | "partTitle" | "partId" | "pageSize" | "sort"
       >
     >;
     const updates: UrlUpdates = {};
 
-    const binParam = params.get("bin");
-    if (binParam !== null) {
-      updates.gridBin = binParam;
+    const locationParam = params.get("location");
+    if (locationParam !== null) {
+      updates.sortLocation = locationParam;
     }
 
     const nameParam = params.get("name");
@@ -73,21 +73,21 @@ export default function CatalogPage() {
   }, []);
 
   const {
-    gridBin,
+    sortLocation,
     partTitle,
     partId,
     pageSize,
-    setGridBin,
+    setSortLocation,
     setPartTitle,
     setPartId,
     setPageSize,
     resetFilters,
   } = useSearchStore((state) => ({
-    gridBin: state.gridBin,
+    sortLocation: state.sortLocation,
     partTitle: state.partTitle,
     partId: state.partId,
     pageSize: state.pageSize,
-    setGridBin: state.setGridBin,
+    setSortLocation: state.setSortLocation,
     setPartTitle: state.setPartTitle,
     setPartId: state.setPartId,
     setPageSize: state.setPageSize,
@@ -97,19 +97,18 @@ export default function CatalogPage() {
   const searchArgs = useMemo(() => {
     if (!businessAccountId) return "skip";
     return {
-      query: "",
-      gridBin: gridBin?.trim() || undefined,
+      sortLocation: sortLocation?.trim() || undefined,
       partId: partId?.trim() || undefined,
       partTitle: partTitle?.trim() || undefined,
     };
-  }, [businessAccountId, gridBin, partId, partTitle]);
+  }, [businessAccountId, sortLocation, partId, partTitle]);
 
   const {
     results,
     status: paginationStatus,
     loadMore,
     isLoading: searchLoading,
-  } = usePaginatedQuery(api.functions.catalog.searchParts, searchArgs, {
+  } = usePaginatedQuery(api.catalog.searchParts, searchArgs, {
     initialNumItems: pageSize,
   });
 
@@ -120,19 +119,38 @@ export default function CatalogPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [refreshingDetail, setRefreshingDetail] = useState(false);
 
-  const detailArgs = useMemo(() => {
-    if (!selectedPart || !drawerOpen) return "skip";
-    return {
-      partNumber: selectedPart.partNumber,
-      fetchFromBricklink: false,
+  const [detailData, setDetailData] = useState<CatalogPartDetails | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const getPartDetailsMutation = useMutation(api.catalog.getPartDetails);
+
+  // Fetch part details when drawer opens or part changes
+  useEffect(() => {
+    if (!drawerOpen || !selectedPart) {
+      setDetailData(null);
+      return;
+    }
+
+    const fetchDetails = async () => {
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        const result = await getPartDetailsMutation({
+          partNumber: selectedPart.partNumber,
+          fetchFromBricklink: false,
+        });
+        setDetailData(result as CatalogPartDetails);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load part details";
+        setDetailError(message);
+      } finally {
+        setDetailLoading(false);
+      }
     };
-  }, [selectedPart, drawerOpen]);
 
-  const detailResult = useQuery(api.functions.catalog.getPartDetails, detailArgs);
-  const detailLoading = drawerOpen && selectedPart !== null && detailResult === undefined;
-  const detailData = (detailResult as CatalogPartDetails | undefined) ?? null;
+    void fetchDetails();
+  }, [drawerOpen, selectedPart, getPartDetailsMutation]);
 
-  const refreshPart = useMutation(api.functions.catalog.refreshPartSnapshot);
+  const refreshPart = useMutation(api.catalog.forcePartDetailsRefresh);
 
   const handleSelectPart = (part: CatalogPart) => {
     setSelectedPart(part);
@@ -155,6 +173,13 @@ export default function CatalogPage() {
     try {
       setRefreshingDetail(true);
       await refreshPart({ partNumber: selectedPart.partNumber });
+
+      // Refetch details after queuing refresh
+      const result = await getPartDetailsMutation({
+        partNumber: selectedPart.partNumber,
+        fetchFromBricklink: false,
+      });
+      setDetailData(result as CatalogPartDetails);
       setDetailError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to refresh part details";
@@ -167,7 +192,7 @@ export default function CatalogPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams();
-    if (gridBin) params.set("bin", gridBin);
+    if (sortLocation) params.set("location", sortLocation);
     if (partTitle) params.set("name", partTitle);
     if (partId) params.set("partId", partId);
     if (pageSize !== 25) params.set("pageSize", String(pageSize));
@@ -181,7 +206,7 @@ export default function CatalogPage() {
         : window.location.pathname;
       window.history.replaceState(window.history.state, "", nextUrl);
     }
-  }, [gridBin, partTitle, partId, pageSize]);
+  }, [sortLocation, partTitle, partId, pageSize]);
 
   return (
     <div className="flex flex-col gap-6" data-testid="catalog-page">
@@ -194,10 +219,10 @@ export default function CatalogPage() {
         </div>
 
         <CatalogSearchBar
-          gridBin={gridBin}
+          sortLocation={sortLocation}
           partTitle={partTitle}
           partId={partId}
-          onGridBinChange={setGridBin}
+          onSortLocationChange={setSortLocation}
           onPartTitleChange={setPartTitle}
           onPartIdChange={setPartId}
           onSubmit={() => undefined}
@@ -251,7 +276,11 @@ export default function CatalogPage() {
                 data-testid="catalog-results-grid"
               >
                 {parts.map((part) => (
-                  <CatalogResultCard key={part._id} part={part} onSelect={handleSelectPart} />
+                  <CatalogResultCard
+                    key={part.partNumber}
+                    part={part}
+                    onSelect={handleSelectPart}
+                  />
                 ))}
               </div>
             )}

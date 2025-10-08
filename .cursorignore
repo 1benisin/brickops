@@ -1,4 +1,4 @@
 
-_notes
+
 # Allow .env files to be visible in Cursor
 !.env.local.example

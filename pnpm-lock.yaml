@@ -13,7 +13,7 @@ importers:
         version: 0.37.0
       '@convex-dev/auth':
         specifier: ^0.0.89
-        version: 0.0.89(@auth/core@0.37.0)(convex@1.27.1)(react@18.2.0)
+        version: 0.0.89(@auth/core@0.37.0)(convex@1.27.4)(react@18.2.0)
       '@radix-ui/react-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@18.2.18)(@types/react@18.2.46)(react-dom@18.2.0)(react@18.2.0)
@@ -30,8 +30,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       convex:
-        specifier: ^1.11.0
-        version: 1.27.1(react@18.2.0)
+        specifier: 1.27.4
+        version: 1.27.4(react@18.2.0)
       lucide-react:
         specifier: ^0.544.0
         version: 0.544.0(react@18.2.0)
@@ -657,7 +657,7 @@ packages:
       statuses: 2.0.2
     dev: true
 
-  /@convex-dev/auth@0.0.89(@auth/core@0.37.0)(convex@1.27.1)(react@18.2.0):
+  /@convex-dev/auth@0.0.89(@auth/core@0.37.0)(convex@1.27.4)(react@18.2.0):
     resolution: {integrity: sha512-s6E4Q295cxvh2pWvkKQ8PhUKq8OXzK8eENJ/ZOuNRY1K0AEl7RSnldsDEl0PTbCbo3jNVtiV/ol0YeRfoCNrKg==}
     hasBin: true
     peerDependencies:
@@ -671,7 +671,7 @@ packages:
       '@auth/core': 0.37.0
       '@oslojs/crypto': 1.0.1
       '@oslojs/encoding': 1.1.0
-      convex: 1.27.1(react@18.2.0)
+      convex: 1.27.4(react@18.2.0)
       cookie: 1.0.2
       is-network-error: 1.3.0
       jose: 5.10.0
@@ -3767,8 +3767,8 @@ packages:
   /convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
 
-  /convex@1.27.1(react@18.2.0):
-    resolution: {integrity: sha512-kep7JFn5Bil9/OUZUsL1bgoo0G9DmEf7stkBW67+NqP2FrzBt2TX8yz4V6oKLygzepGy90Ura2FtqXawYKXYIg==}
+  /convex@1.27.4(react@18.2.0):
+    resolution: {integrity: sha512-aPP3uxOF5v+K4uftXxRh8GAYepsjsFgU+S9IpAyLVNaFU3Z72WB1rIhaSzPAo4Q0TJWsOKANFGU903IU92QDTA==}
     engines: {node: '>=18.0.0', npm: '>=7.0.0'}
     hasBin: true
     peerDependencies:
@@ -3784,7 +3784,6 @@ packages:
         optional: true
     dependencies:
       esbuild: 0.25.4
-      jwt-decode: 4.0.0
       prettier: 3.2.5
       react: 18.2.0
     dev: false

@@ -1,7 +1,7 @@
 import { ExternalHttpClient, RequestOptions, RequestResult } from "./httpClient";
 import { RateLimitConfig } from "./httpClient";
 import { recordMetric } from "./metrics";
-import { ValidationResult, normalizeApiError } from "./types";
+import { HealthCheckResult, normalizeApiError } from "./types";
 
 const BASE_URL = "https://api.brickognize.com";
 const HEALTH_ENDPOINT = "/health";
@@ -29,7 +29,7 @@ export class BrickognizeClient {
     });
   }
 
-  async healthCheck(): Promise<ValidationResult> {
+  async healthCheck(): Promise<HealthCheckResult> {
     const started = Date.now();
     try {
       const result = await this.request<{ status: string }>({
@@ -48,7 +48,7 @@ export class BrickognizeClient {
         ok: true,
         status: result.status,
         durationMs: duration,
-      } satisfies ValidationResult;
+      } satisfies HealthCheckResult;
     } catch (error) {
       const duration = Date.now() - started;
       const apiError = normalizeApiError("brickognize", error, { endpoint: HEALTH_ENDPOINT });
@@ -66,7 +66,7 @@ export class BrickognizeClient {
         status: details?.status,
         error: apiError,
         durationMs: duration,
-      } satisfies ValidationResult;
+      } satisfies HealthCheckResult;
     }
   }
 }

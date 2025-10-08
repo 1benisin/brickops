@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "crypto";
 
-import { BricklinkClient } from "@/convex/lib/external/bricklink";
+import { BricklinkClient } from "@/convex/bricklink/bricklinkClient";
 import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
 
 const TEST_CREDENTIALS = {
@@ -52,6 +52,8 @@ describe("BricklinkClient", () => {
       json: async () => ({ data: [] }),
     });
 
+    vi.stubGlobal("fetch", fetchMock);
+
     const timestamp = 1_600_000_000;
     const nonce = "abc123";
 
@@ -59,7 +61,6 @@ describe("BricklinkClient", () => {
       credentials: TEST_CREDENTIALS,
       timestamp: () => timestamp,
       nonce: () => nonce,
-      fetchImpl: fetchMock,
     });
 
     await client.request({
@@ -113,11 +114,12 @@ describe("BricklinkClient", () => {
       json: async () => ({ data: [] }),
     });
 
+    vi.stubGlobal("fetch", fetchMock);
+
     const client = BricklinkClient.createForTesting({
       credentials: TEST_CREDENTIALS,
       timestamp: () => 1_600_000_000,
       nonce: () => "alert-test",
-      fetchImpl: fetchMock,
     });
 
     BricklinkClient.resetQuotaForTests();
@@ -145,12 +147,12 @@ describe("BricklinkClient", () => {
     });
 
     const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
 
     const client = BricklinkClient.createForTesting({
       credentials: TEST_CREDENTIALS,
       timestamp: () => 1_600_000_000,
       nonce: () => "quota-fail",
-      fetchImpl: fetchMock,
     });
 
     BricklinkClient.resetQuotaForTests();
@@ -178,12 +180,12 @@ describe("BricklinkClient", () => {
     });
 
     const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
 
     const client = BricklinkClient.createForTesting({
       credentials: TEST_CREDENTIALS,
       timestamp: () => 1_600_000_000,
       nonce: () => "blocked-test",
-      fetchImpl: fetchMock,
     });
 
     BricklinkClient.resetQuotaForTests();

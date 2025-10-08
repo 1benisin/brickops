@@ -48,7 +48,7 @@ export interface ApiError {
   };
 }
 
-export type ValidationResult = {
+export type HealthCheckResult = {
   provider: ExternalProvider;
   ok: boolean;
   status?: number;

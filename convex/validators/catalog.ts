@@ -1,196 +1,185 @@
-import { v, type Infer } from "convex/values";
+/**
+ * Catalog Function Validators
+ *
+ * IMPORTANT FOR FUTURE DEVELOPERS:
+ * ================================
+ * These validators serve as the SINGLE SOURCE OF TRUTH for catalog API contracts.
+ *
+ * - Backend functions use these validators to validate return values at runtime
+ * - Frontend uses FunctionReturnType<> to derive TypeScript types from these validators
+ * - This prevents type drift between frontend and backend
+ *
+ * When adding/modifying catalog functions:
+ * 1. Define the return validator here
+ * 2. Use it in the function definition (returns: catalogPartValidator)
+ * 3. Frontend types automatically stay in sync via src/types/catalog.ts
+ *
+ * DO NOT duplicate these type definitions manually on the frontend!
+ */
 
-// Core part shape as returned by formatPartForResponse
-export const PartResponse = v.object({
-  _id: v.id("parts"),
+import { v } from "convex/values";
+
+// ============================================================================
+// SHARED COMPONENT VALIDATORS
+// ============================================================================
+
+/**
+ * Part type literal (PART, MINIFIG, or SET)
+ */
+export const partTypeValidator = v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET"));
+
+/**
+ * Individual catalog part (used in search results)
+ */
+export const catalogPartValidator = v.object({
   partNumber: v.string(),
   name: v.string(),
-  description: v.optional(v.union(v.string(), v.null())),
-  category: v.optional(v.union(v.string(), v.null())),
-  categoryPath: v.array(v.number()),
-  categoryPathKey: v.optional(v.string()),
-  imageUrl: v.optional(v.union(v.string(), v.null())),
-  thumbnailUrl: v.optional(v.union(v.string(), v.null())),
-  dataSource: v.union(v.literal("brickops"), v.literal("bricklink"), v.literal("manual")),
-  lastUpdated: v.number(),
-  lastFetchedFromBricklink: v.union(v.number(), v.null()),
-  dataFreshness: v.optional(
-    v.union(v.literal("fresh"), v.literal("background"), v.literal("stale"), v.literal("expired")),
-  ),
-  freshnessUpdatedAt: v.number(),
-  bricklinkPartId: v.optional(v.string()),
-  bricklinkCategoryId: v.optional(v.number()),
-  primaryColorId: v.optional(v.number()),
-  availableColorIds: v.array(v.number()),
-  weight: v.union(v.object({ grams: v.optional(v.number()) }), v.null()),
-  dimensions: v.union(
+  type: partTypeValidator,
+  categoryId: v.optional(v.number()),
+  alternateNo: v.optional(v.string()),
+  imageUrl: v.optional(v.string()),
+  thumbnailUrl: v.optional(v.string()),
+  weight: v.optional(v.number()),
+  dimX: v.optional(v.string()),
+  dimY: v.optional(v.string()),
+  dimZ: v.optional(v.string()),
+  yearReleased: v.optional(v.number()),
+  description: v.optional(v.string()),
+  isObsolete: v.optional(v.boolean()),
+  lastFetched: v.number(),
+});
+
+/**
+ * Color information (enriched with name and RGB)
+ */
+export const catalogColorInfoValidator = v.object({
+  colorId: v.number(),
+  color: v.union(
     v.object({
-      lengthMm: v.optional(v.number()),
-      widthMm: v.optional(v.number()),
-      heightMm: v.optional(v.number()),
+      name: v.string(),
+      rgb: v.optional(v.string()),
     }),
     v.null(),
   ),
-  isPrinted: v.optional(v.boolean()),
-  isObsolete: v.optional(v.boolean()),
 });
 
-export const SearchPartsReturn = v.object({
-  page: v.array(PartResponse),
+// ============================================================================
+// FUNCTION RETURN VALIDATORS
+// ============================================================================
+
+/**
+ * Return validator for searchParts query
+ * Returns paginated list of parts
+ */
+export const searchPartsReturnValidator = v.object({
+  page: v.array(catalogPartValidator),
   isDone: v.boolean(),
   continueCursor: v.string(),
 });
 
-export const OverlayResponse = v.object({
-  _id: v.id("catalogPartOverlay"),
-  businessAccountId: v.id("businessAccounts"),
-  partNumber: v.string(),
-  tags: v.array(v.string()),
-  notes: v.union(v.string(), v.null()),
-  sortGrid: v.union(v.string(), v.null()),
-  sortBin: v.union(v.string(), v.null()),
-  createdBy: v.id("users"),
-  createdAt: v.number(),
-  updatedAt: v.number(),
-});
-
-export const RefreshPartReturn = v.object({
-  _id: v.id("parts"),
+/**
+ * Return validator for getPartDetails mutation
+ * Returns detailed part information with colors and pricing
+ */
+export const partDetailsReturnValidator = v.object({
   partNumber: v.string(),
   name: v.string(),
-  description: v.optional(v.union(v.string(), v.null())),
-  category: v.optional(v.union(v.string(), v.null())),
-  categoryPath: v.array(v.number()),
-  categoryPathKey: v.optional(v.string()),
-  imageUrl: v.optional(v.union(v.string(), v.null())),
-  thumbnailUrl: v.optional(v.union(v.string(), v.null())),
-  dataSource: v.union(v.literal("brickops"), v.literal("bricklink"), v.literal("manual")),
-  lastUpdated: v.number(),
-  lastFetchedFromBricklink: v.union(v.number(), v.null()),
-  dataFreshness: v.optional(
-    v.union(v.literal("fresh"), v.literal("background"), v.literal("stale"), v.literal("expired")),
-  ),
-  freshnessUpdatedAt: v.number(),
+  type: partTypeValidator,
+  categoryId: v.optional(v.number()),
+  category: v.union(v.string(), v.null()),
   bricklinkPartId: v.optional(v.string()),
-  bricklinkCategoryId: v.optional(v.number()),
-  primaryColorId: v.optional(v.number()),
-  availableColorIds: v.array(v.number()),
-  weight: v.union(v.object({ grams: v.optional(v.number()) }), v.null()),
-  dimensions: v.union(
-    v.object({
-      lengthMm: v.optional(v.number()),
-      widthMm: v.optional(v.number()),
-      heightMm: v.optional(v.number()),
-    }),
-    v.null(),
-  ),
-  isPrinted: v.optional(v.boolean()),
+  imageUrl: v.optional(v.string()),
+  thumbnailUrl: v.optional(v.string()),
+  weight: v.optional(v.number()),
+  dimX: v.optional(v.string()),
+  dimY: v.optional(v.string()),
+  dimZ: v.optional(v.string()),
+  yearReleased: v.optional(v.number()),
+  description: v.optional(v.string()),
   isObsolete: v.optional(v.boolean()),
-  bricklinkStatus: v.union(v.literal("refreshed"), v.literal("scheduled")),
-  marketPricing: v.null(),
+  lastFetched: v.number(),
+  colorAvailability: v.array(catalogColorInfoValidator),
 });
 
-// Details response extensions
-const ColorInfo = v.object({
-  name: v.string(),
-  rgb: v.optional(v.string()),
-  colorType: v.optional(v.string()),
-  isTransparent: v.boolean(),
-});
-
-const ColorAvailabilityEntry = v.object({
-  colorId: v.number(),
-  elementIds: v.array(v.string()),
-  isLegacy: v.boolean(),
-  color: v.union(ColorInfo, v.null()),
-});
-
-const ElementReferenceEntry = v.object({
-  elementId: v.string(),
-  colorId: v.number(),
-  designId: v.optional(v.string()),
-  bricklinkPartId: v.optional(v.string()),
-});
-
-const MarketPricing = v.object({
-  amount: v.optional(v.number()),
-  currency: v.string(),
-  lastSyncedAt: v.number(),
-});
-
-export const PartDetailsReturn = v.object({
-  _id: v.id("parts"),
-  partNumber: v.string(),
-  name: v.string(),
-  description: v.optional(v.union(v.string(), v.null())),
-  category: v.optional(v.union(v.string(), v.null())),
-  categoryPath: v.array(v.number()),
-  categoryPathKey: v.optional(v.string()),
-  imageUrl: v.optional(v.union(v.string(), v.null())),
-  thumbnailUrl: v.optional(v.union(v.string(), v.null())),
-  dataSource: v.union(v.literal("brickops"), v.literal("bricklink"), v.literal("manual")),
-  lastUpdated: v.number(),
-  lastFetchedFromBricklink: v.union(v.number(), v.null()),
-  dataFreshness: v.optional(
-    v.union(v.literal("fresh"), v.literal("background"), v.literal("stale"), v.literal("expired")),
-  ),
-  freshnessUpdatedAt: v.number(),
-  bricklinkPartId: v.optional(v.string()),
-  bricklinkCategoryId: v.optional(v.number()),
-  primaryColorId: v.optional(v.number()),
-  availableColorIds: v.array(v.number()),
-  weight: v.union(v.object({ grams: v.optional(v.number()) }), v.null()),
-  dimensions: v.union(
-    v.object({
-      lengthMm: v.optional(v.number()),
-      widthMm: v.optional(v.number()),
-      heightMm: v.optional(v.number()),
-    }),
-    v.null(),
-  ),
-  isPrinted: v.optional(v.boolean()),
-  isObsolete: v.optional(v.boolean()),
-  colorAvailability: v.array(ColorAvailabilityEntry),
-  elementReferences: v.array(ElementReferenceEntry),
-  marketPricing: v.union(MarketPricing, v.null()),
-  source: v.literal("local"),
-  bricklinkStatus: v.literal("skipped"),
-  refresh: v.any(),
-});
-
-// validateDataFreshness
-const FreshnessState = v.union(
-  v.literal("fresh"),
-  v.literal("background"),
-  v.literal("stale"),
-  v.literal("expired"),
+/**
+ * Return validator for getPartOverlay query
+ * Returns overlay data (tags, notes, sort location) or null
+ */
+export const partOverlayReturnValidator = v.union(
+  v.object({
+    tags: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    sortLocation: v.optional(v.string()),
+  }),
+  v.null(),
 );
 
-const ValidateEntryOk = v.object({
+/**
+ * Return validator for getColors query
+ * Returns array of all available colors
+ */
+export const colorsReturnValidator = v.array(
+  v.object({
+    colorId: v.number(),
+    colorName: v.string(),
+    colorCode: v.optional(v.string()),
+    colorType: v.optional(v.string()),
+    lastFetched: v.number(),
+  }),
+);
+
+/**
+ * Return validator for getCategories query
+ * Returns array of all available categories
+ */
+export const categoriesReturnValidator = v.array(
+  v.object({
+    categoryId: v.number(),
+    categoryName: v.string(),
+    parentId: v.optional(v.number()),
+    lastFetched: v.number(),
+  }),
+);
+
+/**
+ * Return validator for forcePartDetailsRefresh mutation
+ * Returns refresh queue status for both part and partColors
+ */
+export const forcePartDetailsRefreshReturnValidator = v.object({
   partNumber: v.string(),
-  status: v.literal("ok"),
-  dataFreshness: v.union(FreshnessState, v.null()),
-  pricingFreshness: v.union(FreshnessState, v.null()),
-  shouldRefresh: v.union(v.boolean(), v.null()),
-  scheduled: v.union(v.boolean(), v.null()),
-  refreshWindow: v.union(v.any(), v.null()),
-  lastFetchedFromBricklink: v.union(v.number(), v.null(), v.null()),
-  marketPriceLastSyncedAt: v.union(v.number(), v.null(), v.null()),
+  status: v.string(),
 });
 
-const ValidateEntryMissing = v.object({
+/**
+ * Individual price record structure for price guide
+ */
+const priceRecordValidator = v.union(
+  v.object({
+    minPrice: v.optional(v.number()),
+    maxPrice: v.optional(v.number()),
+    avgPrice: v.optional(v.number()),
+    qtyAvgPrice: v.optional(v.number()),
+    unitQuantity: v.optional(v.number()),
+    totalQuantity: v.optional(v.number()),
+    currencyCode: v.string(),
+    lastFetched: v.number(),
+  }),
+  v.null(),
+);
+
+/**
+ * Return validator for getPriceGuide mutation
+ * Returns complete price guide with all 4 price types
+ */
+export const priceGuideReturnValidator = v.object({
   partNumber: v.string(),
-  status: v.literal("missing"),
+  colorId: v.number(),
+  colorName: v.optional(v.string()),
+  colorCode: v.optional(v.string()),
+  prices: v.object({
+    newStock: priceRecordValidator,
+    newSold: priceRecordValidator,
+    usedStock: priceRecordValidator,
+    usedSold: priceRecordValidator,
+  }),
 });
-
-export const ValidateFreshnessReturn = v.object({
-  evaluated: v.number(),
-  results: v.array(v.union(ValidateEntryOk, ValidateEntryMissing)),
-});
-
-export type Part = Infer<typeof PartResponse>;
-export type SearchPartsResult = Infer<typeof SearchPartsReturn>;
-export type Overlay = Infer<typeof OverlayResponse>;
-export type RefreshPartResult = Infer<typeof RefreshPartReturn>;
-export type PartDetailsResult = Infer<typeof PartDetailsReturn>;
-export type ValidateFreshnessResult = Infer<typeof ValidateFreshnessReturn>;

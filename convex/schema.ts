@@ -135,181 +135,156 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_key_kind", ["key", "kind"]),
 
-  // Global LEGO parts catalog (shared across all tenants)
+  // Global LEGO parts catalog (shared across all tenants) - Bricklink-aligned
   parts: defineTable({
-    partNumber: v.string(),
-    name: v.string(),
-    description: v.optional(v.string()),
-    category: v.optional(v.string()),
-    categoryPath: v.optional(v.array(v.number())),
-    categoryPathKey: v.optional(v.string()),
-
-    // Imagery
-    imageUrl: v.optional(v.string()),
-    thumbnailUrl: v.optional(v.string()),
-
-    // Bricklink integration
-    bricklinkPartId: v.optional(v.string()),
-    bricklinkCategoryId: v.optional(v.number()),
-
-    // Physical attributes
-    isPrinted: v.optional(v.boolean()),
-    isObsolete: v.optional(v.boolean()),
-    weight: v.optional(
-      v.object({
-        grams: v.optional(v.number()),
-      }),
-    ),
-    dimensions: v.optional(
-      v.object({
-        lengthMm: v.optional(v.number()),
-        widthMm: v.optional(v.number()),
-        heightMm: v.optional(v.number()),
-      }),
-    ),
-
-    // Catalog enrichment (required: used for full text search)
-    searchKeywords: v.string(),
-    primaryColorId: v.optional(v.number()),
-    availableColorIds: v.optional(v.array(v.number())),
-
-    // Data freshness and source tracking
-    dataSource: v.union(v.literal("brickops"), v.literal("bricklink"), v.literal("manual")),
-    lastUpdated: v.number(),
-    lastFetchedFromBricklink: v.optional(v.number()),
-    dataFreshness: v.union(
-      v.literal("fresh"),
-      v.literal("background"),
-      v.literal("stale"),
-      v.literal("expired"),
-    ),
-    freshnessUpdatedAt: v.optional(v.number()),
-
-    // Metadata
-    createdBy: v.optional(v.id("users")),
+    no: v.string(), // Bricklink's no (part number)
+    name: v.string(), // Bricklink's name
+    type: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")), // Bricklink's type
+    categoryId: v.optional(v.number()), // Bricklink's category_id
+    alternateNo: v.optional(v.string()), // Bricklink's alternate_no
+    imageUrl: v.optional(v.string()), // Bricklink's image_url
+    thumbnailUrl: v.optional(v.string()), // Bricklink's thumbnail_url
+    weight: v.optional(v.number()), // Bricklink's weight (grams, 2 decimal places)
+    dimX: v.optional(v.string()), // Bricklink's dim_x (string with 2 decimal places)
+    dimY: v.optional(v.string()), // Bricklink's dim_y (string with 2 decimal places)
+    dimZ: v.optional(v.string()), // Bricklink's dim_z (string with 2 decimal places)
+    yearReleased: v.optional(v.number()), // Bricklink's year_released
+    description: v.optional(v.string()), // Bricklink's description
+    isObsolete: v.optional(v.boolean()), // Bricklink's is_obsolete
+    lastFetched: v.number(), // Universal freshness timestamp
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
-    .index("by_partNumber", ["partNumber"])
-    .index("by_category", ["category"])
-    .index("by_categoryPathKey", ["categoryPathKey"])
-    .index("by_primaryColor", ["primaryColorId"])
-    .index("by_isPrinted", ["isPrinted"])
-    .index("by_dataFreshness", ["dataFreshness"])
-    .index("by_lastUpdated", ["lastUpdated"])
-    .index("by_lastFetchedFromBricklink", ["lastFetchedFromBricklink"])
-    // Sorting/browsing indexes
+    .index("by_no", ["no"])
+    .index("by_categoryId", ["categoryId"])
+    .index("by_type", ["type"])
     .index("by_name", ["name"])
-    .index("by_category_and_name", ["bricklinkCategoryId", "name"])
+    .index("by_lastFetched", ["lastFetched"])
     .searchIndex("search_parts_by_name", {
       searchField: "name",
-      filterFields: [
-        "category",
-        "primaryColorId",
-        "categoryPathKey",
-        "isPrinted",
-        "bricklinkCategoryId",
-        "availableColorIds",
-        "dataFreshness",
-      ],
+      filterFields: ["type", "categoryId", "isObsolete"],
+    })
+    .searchIndex("search_parts_by_no", {
+      searchField: "no",
+      filterFields: ["type", "categoryId", "isObsolete"],
     }),
 
   // Tenant-specific catalog overlays (tags, notes, sort locations per business)
   catalogPartOverlay: defineTable({
     businessAccountId: v.id("businessAccounts"),
-    partNumber: v.string(),
+    partNo: v.string(), // Updated to match new schema
     tags: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
-    sortGrid: v.optional(v.string()),
-    sortBin: v.optional(v.string()),
+    sortLocation: v.optional(v.string()),
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
-    .index("by_business_part", ["businessAccountId", "partNumber"])
+    .index("by_business_part", ["businessAccountId", "partNo"])
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_business_sortLocation", ["businessAccountId", "sortGrid", "sortBin"])
+    .index("by_business_sortLocation", ["businessAccountId", "sortLocation"])
     .searchIndex("search_overlay", {
       searchField: "notes",
-      filterFields: ["businessAccountId", "sortGrid", "sortBin"],
+      filterFields: ["businessAccountId", "sortLocation"],
     }),
+
+  // Refresh queue for background data updates from Bricklink
+  refreshQueue: defineTable({
+    tableName: v.union(
+      v.literal("parts"),
+      v.literal("partColors"),
+      v.literal("partPrices"),
+      v.literal("colors"),
+      v.literal("categories"),
+    ),
+    primaryKey: v.string(), // Always present: partNo, colorId, categoryId
+    secondaryKey: v.optional(v.string()), // For composite keys: colorId (for partColors, partPrices)
+    recordId: v.string(), // Display string for logging (e.g., "3001:1" or "3001")
+    priority: v.number(), // 1 (high) to 3 (low)
+    lastFetched: v.optional(v.number()), // When data was last refreshed (if known)
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    errorMessage: v.optional(v.string()),
+    processedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_status_priority", ["status", "priority"])
+    .index("by_table_primary", ["tableName", "primaryKey"])
+    .index("by_table_primary_secondary", ["tableName", "primaryKey", "secondaryKey"])
+    .index("by_status", ["status"]),
 
   // Global LEGO part pricing data from Bricklink (cached with refresh capability)
   // Each part+color can have 4 price records: new/used × sold/stock
   partPrices: defineTable({
-    partNumber: v.string(),
-    colorId: v.number(),
-    condition: v.union(v.literal("new"), v.literal("used")),
-    priceType: v.union(
-      v.literal("sold"), // Average sold prices (last 6 months)
-      v.literal("stock"), // Current for-sale/stock prices
-    ),
-
-    // Price statistics from Bricklink price guide API
-    currency: v.string(), // Usually "USD"
-    minPrice: v.optional(v.number()),
-    maxPrice: v.optional(v.number()),
-    avgPrice: v.optional(v.number()),
-    qtyAvgPrice: v.optional(v.number()), // Quantity-weighted average
-    unitQuantity: v.optional(v.number()), // Number of individual units
-    totalQuantity: v.optional(v.number()), // Total quantity across all lots
-
-    // Data freshness tracking for passthrough refresh
-    lastSyncedAt: v.number(),
-    dataFreshness: v.union(v.literal("fresh"), v.literal("stale"), v.literal("expired")),
-
+    partNo: v.string(), // Bricklink's item.no
+    partType: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")), // Bricklink's item.type
+    colorId: v.number(), // Bricklink's color_id (required - every price is for a specific color)
+    newOrUsed: v.union(v.literal("N"), v.literal("U")), // Bricklink's new_or_used (N=new, U=used)
+    currencyCode: v.string(), // Bricklink's currency_code
+    minPrice: v.optional(v.number()), // Bricklink's min_price
+    maxPrice: v.optional(v.number()), // Bricklink's max_price
+    avgPrice: v.optional(v.number()), // Bricklink's avg_price
+    qtyAvgPrice: v.optional(v.number()), // Bricklink's qty_avg_price
+    unitQuantity: v.optional(v.number()), // Bricklink's unit_quantity
+    totalQuantity: v.optional(v.number()), // Bricklink's total_quantity
+    guideType: v.union(v.literal("sold"), v.literal("stock")), // Bricklink's guide_type (sold/stock)
+    lastFetched: v.number(), // Universal freshness timestamp
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
-    .index("by_part_color", ["partNumber", "colorId"])
-    .index("by_part_color_condition_type", ["partNumber", "colorId", "condition", "priceType"])
-    .index("by_freshness", ["dataFreshness"])
-    .index("by_lastSynced", ["lastSyncedAt"]),
+    .index("by_partNo", ["partNo"])
+    .index("by_partNo_colorId", ["partNo", "colorId"])
+    .index("by_partNo_colorId_newOrUsed", ["partNo", "colorId", "newOrUsed"])
+    .index("by_lastFetched", ["lastFetched"]),
 
-  bricklinkColorReference: defineTable({
-    bricklinkColorId: v.number(),
-    name: v.string(),
-    rgb: v.optional(v.string()),
-    colorType: v.optional(v.string()),
-    isTransparent: v.optional(v.boolean()),
-    syncedAt: v.number(),
+  // Bricklink-aligned color reference table
+  colors: defineTable({
+    colorId: v.number(), // Bricklink's color_id
+    colorName: v.string(), // Bricklink's color_name
+    colorCode: v.optional(v.string()), // Bricklink's color_code (hex)
+    colorType: v.optional(v.string()), // Bricklink's color_type
+    lastFetched: v.number(), // Universal freshness timestamp
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
-    .index("by_colorId", ["bricklinkColorId"])
+    .index("by_colorId", ["colorId"])
     .searchIndex("search_color_name", {
-      searchField: "name",
+      searchField: "colorName",
       filterFields: ["colorType"],
     }),
 
-  bricklinkCategoryReference: defineTable({
-    bricklinkCategoryId: v.number(),
-    name: v.string(),
-    parentCategoryId: v.optional(v.number()),
-    path: v.optional(v.array(v.number())),
-    pathKey: v.optional(v.string()),
-    syncedAt: v.number(),
+  // Bricklink-aligned category reference table
+  categories: defineTable({
+    categoryId: v.number(), // Bricklink's category_id
+    categoryName: v.string(), // Bricklink's category_name
+    parentId: v.optional(v.number()), // Bricklink's parent_id (0 if root)
+    lastFetched: v.number(), // Universal freshness timestamp
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
-    .index("by_categoryId", ["bricklinkCategoryId"])
-    .index("by_parent", ["parentCategoryId"])
-    .index("by_pathKey", ["pathKey"])
+    .index("by_categoryId", ["categoryId"])
+    .index("by_parentId", ["parentId"])
     .searchIndex("search_category_name", {
-      searchField: "name",
-      filterFields: ["parentCategoryId"],
+      searchField: "categoryName",
+      filterFields: ["parentId"],
     }),
 
-  bricklinkPartColorAvailability: defineTable({
-    partNumber: v.string(),
-    bricklinkPartId: v.optional(v.string()),
-    colorId: v.number(),
-    elementIds: v.optional(v.array(v.string())),
-    isLegacy: v.optional(v.boolean()),
-    syncedAt: v.number(),
+  // Part-color relationships from Bricklink
+  partColors: defineTable({
+    partNo: v.string(), // Bricklink's part no
+    colorId: v.number(), // Bricklink's color_id
+    quantity: v.number(), // Bricklink's quantity
+    lastFetched: v.number(), // Universal freshness timestamp
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   })
-    .index("by_part", ["partNumber"])
-    .index("by_color", ["colorId"]),
+    .index("by_partNo", ["partNo"])
+    .index("by_colorId", ["colorId"])
+    .index("by_partNo_colorId", ["partNo", "colorId"]),
 
   bricklinkElementReference: defineTable({
     elementId: v.string(),

@@ -275,8 +275,7 @@ type CatalogPartOverlaySeed = {
   partNumber: string;
   tags?: string[];
   notes?: string;
-  sortGrid?: string;
-  sortBin?: string;
+  sortLocation?: string;
   createdBy: string;
   createdAt: number;
   updatedAt?: number;
@@ -297,8 +296,7 @@ type LegoPartCatalogSeed = {
   searchKeywords: string;
   primaryColorId?: number;
   availableColorIds?: number[];
-  sortGrid?: string;
-  sortBin?: string;
+  sortLocation?: string;
   marketPrice?: number;
   marketPriceCurrency?: string;
   marketPriceLastSyncedAt?: number;

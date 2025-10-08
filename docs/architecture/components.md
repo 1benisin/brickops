@@ -19,7 +19,7 @@
 
 ### Type Sharing
 
-- Frontend imports catalog types from `src/types/catalog.ts`, which derives from Convex function references (`FunctionReturnType<typeof api.functions.catalog.*>`).
+- Frontend imports catalog types from `src/types/catalog.ts`, which derives from Convex function references (`FunctionReturnType<typeof api.catalog.*>`).
 - Avoid hand-rolled interfaces for catalog entities; prefer types derived from Convex return values to prevent drift.
 
 ## InventoryService

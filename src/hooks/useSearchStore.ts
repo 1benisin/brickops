@@ -3,27 +3,29 @@ import { create } from "zustand";
 import type { CatalogSortState } from "@/types/catalog";
 
 type SearchState = {
-  gridBin: string;
+  sortLocation: string;
   partTitle: string;
   partId: string;
   page: number;
   pageSize: number;
   sort: CatalogSortState | null;
-  setGridBin: (value: string) => void;
+  setSortLocation: (value: string) => void;
   setPartTitle: (value: string) => void;
   setPartId: (value: string) => void;
   setPage: (page: number) => void;
   setPageSize: (pageSize: number) => void;
   setSort: (sort: CatalogSortState | null) => void;
   setFilters: (
-    filters: Partial<Pick<SearchState, "gridBin" | "partTitle" | "partId" | "sort" | "pageSize">>,
+    filters: Partial<
+      Pick<SearchState, "sortLocation" | "partTitle" | "partId" | "sort" | "pageSize">
+    >,
   ) => void;
   resetFilters: () => void;
 };
 
 const DEFAULT_STATE: Omit<
   SearchState,
-  | "setGridBin"
+  | "setSortLocation"
   | "setPartTitle"
   | "setPartId"
   | "setPage"
@@ -32,7 +34,7 @@ const DEFAULT_STATE: Omit<
   | "setFilters"
   | "resetFilters"
 > = {
-  gridBin: "",
+  sortLocation: "",
   partTitle: "",
   partId: "",
   page: 1,
@@ -42,9 +44,9 @@ const DEFAULT_STATE: Omit<
 
 export const useSearchStore = create<SearchState>()((set, _get) => ({
   ...DEFAULT_STATE,
-  setGridBin: (value) =>
+  setSortLocation: (value) =>
     set(() => ({
-      gridBin: value,
+      sortLocation: value,
       partTitle: value ? "" : _get().partTitle,
       partId: value ? "" : _get().partId,
       page: 1,
@@ -52,14 +54,14 @@ export const useSearchStore = create<SearchState>()((set, _get) => ({
   setPartTitle: (value) =>
     set(() => ({
       partTitle: value,
-      gridBin: value ? "" : _get().gridBin,
+      sortLocation: value ? "" : _get().sortLocation,
       partId: value ? "" : _get().partId,
       page: 1,
     })),
   setPartId: (value) =>
     set(() => ({
       partId: value,
-      gridBin: value ? "" : _get().gridBin,
+      sortLocation: value ? "" : _get().sortLocation,
       partTitle: value ? "" : _get().partTitle,
       page: 1,
     })),
@@ -76,7 +78,7 @@ export const useSearchStore = create<SearchState>()((set, _get) => ({
     })),
   setFilters: (filters) => {
     set((state) => ({
-      gridBin: filters.gridBin ?? state.gridBin,
+      sortLocation: filters.sortLocation ?? state.sortLocation,
       partTitle: filters.partTitle ?? state.partTitle,
       partId: filters.partId ?? state.partId,
       sort: filters.sort ?? state.sort,

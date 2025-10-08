@@ -1,7 +1,7 @@
 import { getBrickowlApiKey } from "./env";
 import { ExternalHttpClient, RequestOptions, RequestResult } from "./httpClient";
 import { RateLimitConfig } from "./httpClient";
-import { ValidationResult, normalizeApiError } from "./types";
+import { HealthCheckResult, normalizeApiError } from "./types";
 import { recordMetric } from "./metrics";
 
 const BASE_URL = "https://api.brickowl.com/v1";
@@ -46,7 +46,7 @@ export class BrickowlClient {
     });
   }
 
-  async healthCheck(): Promise<ValidationResult> {
+  async healthCheck(): Promise<HealthCheckResult> {
     const started = Date.now();
     try {
       const result = await this.request<{ user: { username: string } }>({
@@ -65,7 +65,7 @@ export class BrickowlClient {
         ok: true,
         status: result.status,
         durationMs: duration,
-      } satisfies ValidationResult;
+      } satisfies HealthCheckResult;
     } catch (error) {
       const duration = Date.now() - started;
       const apiError = normalizeApiError("brickowl", error, { endpoint: HEALTH_ENDPOINT });
@@ -83,7 +83,7 @@ export class BrickowlClient {
         status: details?.status,
         error: apiError,
         durationMs: duration,
-      } satisfies ValidationResult;
+      } satisfies HealthCheckResult;
     }
   }
 }
