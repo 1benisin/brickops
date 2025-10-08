@@ -79,7 +79,7 @@ export function CatalogDetailDrawer({
                 </div>
                 <div>
                   <dt className="font-medium text-foreground">Type</dt>
-                  <dd className="capitalize">{details.type.toLowerCase()}</dd>
+                  <dd className="capitalize">{details.type?.toLowerCase() ?? "Unknown"}</dd>
                 </div>
                 {details.weight && (
                   <div>
@@ -133,7 +133,7 @@ export function CatalogDetailDrawer({
 
             <section className="space-y-2 text-sm">
               <h3 className="text-sm font-semibold text-foreground">Available colors</h3>
-              {details.colorAvailability.length === 0 ? (
+              {!details.colorAvailability || details.colorAvailability.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   No color availability found for this part.
                 </p>

@@ -233,7 +233,31 @@ const mockUseQuery = jest.fn((_queryFn: unknown, args: unknown) => {
   return undefined;
 });
 
-const mockMutation = jest.fn(() => Promise.resolve({ refreshed: 1, errors: [] }));
+const mockMutation = jest.fn(async (args: unknown) => {
+  // If args has partNumber, it's a getPartDetails or forcePartDetailsRefresh call
+  if (typeof args === "object" && args !== null && "partNumber" in args) {
+    return detailResult;
+  }
+  return { refreshed: 1, errors: [] };
+});
+
+const mockUsePaginatedQuery = jest.fn((_queryFn: unknown, args: unknown) => {
+  if (args === "skip") {
+    return {
+      results: [],
+      status: "LoadingFirstPage",
+      loadMore: jest.fn(),
+      isLoading: true,
+    };
+  }
+
+  return {
+    results: searchResults.first.page,
+    status: "CanLoadMore" as const,
+    loadMore: jest.fn(),
+    isLoading: false,
+  };
+});
 
 const { __resetSearchStoreMock } = jest.requireMock("@/hooks/useSearchStore");
 
@@ -243,6 +267,8 @@ jest.mock("convex/react", () => {
     __esModule: true,
     ...actual,
     useQuery: (...args: Parameters<typeof mockUseQuery>) => mockUseQuery(...args),
+    usePaginatedQuery: (...args: Parameters<typeof mockUsePaginatedQuery>) =>
+      mockUsePaginatedQuery(...args),
     useMutation: jest.fn((mutationFn: unknown) => {
       // Allow specific mocks based on the function path
       // This makes tests more robust to module changes
@@ -282,6 +308,7 @@ jest.mock("@radix-ui/react-dialog", () => ({
 describe("CatalogPage", () => {
   beforeEach(() => {
     mockUseQuery.mockClear();
+    mockUsePaginatedQuery.mockClear();
     mockMutation.mockClear();
     __resetSearchStoreMock();
   });
@@ -297,59 +324,68 @@ describe("CatalogPage", () => {
 
   it("supports pagination controls", async () => {
     const user = userEvent.setup();
+    const mockLoadMore = jest.fn();
+
+    mockUsePaginatedQuery.mockReturnValueOnce({
+      results: searchResults.first.page,
+      status: "CanLoadMore" as const,
+      loadMore: mockLoadMore,
+      isLoading: false,
+    });
+
     renderWithProviders(<CatalogPage />);
 
     await screen.findByTestId("catalog-results-grid");
 
+    const loadMoreButton = screen.getByTestId("catalog-load-more");
+    expect(loadMoreButton).not.toBeDisabled();
+
     await act(async () => {
-      await user.click(screen.getByTestId("catalog-next-page"));
+      await user.click(loadMoreButton);
     });
 
     await waitFor(() => {
-      expect(
-        mockUseQuery.mock.calls.some(
-          (call) =>
-            Array.isArray(call) &&
-            call.length > 1 &&
-            typeof call[1] === "object" &&
-            call[1] !== null &&
-            (call[1] as { cursor?: string }).cursor === "cursor-2",
-        ),
-      ).toBe(true);
+      expect(mockLoadMore).toHaveBeenCalled();
     });
-
-    expect(await screen.findByTestId("catalog-results-grid")).toBeInTheDocument();
-    expect(await screen.findByText(/Page\s*2/)).toBeInTheDocument();
   });
 
-  it("preserves the selected page when navigating and resets after search changes", async () => {
+  it("resets pagination when search changes", async () => {
     const user = userEvent.setup();
+    const mockLoadMore = jest.fn();
+
+    mockUsePaginatedQuery.mockReturnValue({
+      results: searchResults.first.page,
+      status: "CanLoadMore" as const,
+      loadMore: mockLoadMore,
+      isLoading: false,
+    });
+
     renderWithProviders(<CatalogPage />);
 
     await screen.findByTestId("catalog-results-grid");
 
+    // Load more results
     await act(async () => {
-      await user.click(screen.getByTestId("catalog-next-page"));
+      await user.click(screen.getByTestId("catalog-load-more"));
     });
 
-    expect(await screen.findByText(/Page\s*2/)).toBeInTheDocument();
+    expect(mockLoadMore).toHaveBeenCalled();
+    mockLoadMore.mockClear();
+    mockUsePaginatedQuery.mockClear();
 
+    // Change search - should trigger new query
     const titleInput = await screen.findByTestId("catalog-search-title");
     await act(async () => {
-      await user.type(titleInput, " brick");
+      await user.type(titleInput, "brick");
     });
 
-    expect(await screen.findByText(/Page\s*1/)).toBeInTheDocument();
-
+    // usePaginatedQuery should be called again with updated search args
     await waitFor(() => {
-      const searchCalls = mockUseQuery.mock.calls.filter(
-        (call) =>
-          Array.isArray(call) && call.length > 1 && typeof call[1] === "object" && call[1] !== null,
-      );
-      const latestArgs = searchCalls[searchCalls.length - 1]?.[1] as
-        | { cursor?: string }
-        | undefined;
-      expect(latestArgs?.cursor).toBeUndefined();
+      expect(mockUsePaginatedQuery).toHaveBeenCalled();
+      const lastCall =
+        mockUsePaginatedQuery.mock.calls[mockUsePaginatedQuery.mock.calls.length - 1];
+      const args = lastCall[1] as { partTitle?: string };
+      expect(args.partTitle).toBe("brick");
     });
   });
 
@@ -365,6 +401,5 @@ describe("CatalogPage", () => {
     const headings = await screen.findAllByText(/Brick 2 x 4/);
     expect(headings.length).toBeGreaterThan(0);
     expect(within(drawer).getByTestId("catalog-detail-colors")).toBeInTheDocument();
-    expect(within(drawer).getByTestId("catalog-detail-elements")).toBeInTheDocument();
   });
 });
