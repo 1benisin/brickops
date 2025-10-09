@@ -297,4 +297,29 @@ export default defineSchema({
     .index("by_element", ["elementId"])
     .index("by_part", ["partNumber"])
     .index("by_color", ["colorId"]),
+
+  // User marketplace credentials (BYOK model) - encrypted at rest
+  marketplaceCredentials: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    // Encrypted OAuth 1.0a credentials for BrickLink
+    bricklinkConsumerKey: v.optional(v.string()), // encrypted
+    bricklinkConsumerSecret: v.optional(v.string()), // encrypted
+    bricklinkTokenValue: v.optional(v.string()), // encrypted
+    bricklinkTokenSecret: v.optional(v.string()), // encrypted
+    // Encrypted API key for BrickOwl
+    brickowlApiKey: v.optional(v.string()), // encrypted
+    // Metadata
+    isActive: v.boolean(),
+    lastValidatedAt: v.optional(v.number()),
+    validationStatus: v.optional(
+      v.union(v.literal("success"), v.literal("pending"), v.literal("failed")),
+    ),
+    validationMessage: v.optional(v.string()),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_business_provider", ["businessAccountId", "provider"])
+    .index("by_businessAccount", ["businessAccountId"]),
 });

@@ -54,7 +54,7 @@ http.route({
 
 const bricklinkHealth = httpAction(async (_ctx, _req) => {
   try {
-    const result = await validateBricklink("system");
+    const result = await validateBricklink();
     const status = result.ok ? 200 : 503;
     return toJsonResponse(result, status);
   } catch (error) {
