@@ -86,7 +86,35 @@ so that **the frontend can manage our canonical inventory while the system relia
 > - Consider feature flags to gate external syncing per environment.
 > - Ensure consistent mapping by delegating to the BrickLink/BrickOwl clients' data mappers.
 
-## Story 3.1: Inventory Upload and Import
+## Story 3.5: Inventory Change History and Rollback UI
+
+As a **user**,
+I want **to view my complete inventory change history and rollback changes when needed**,
+so that **I can track all inventory modifications, correct mistakes, and maintain full accountability over my inventory operations**.
+
+### Acceptance Criteria
+
+1. **3.5.1:** Provide a dedicated "Inventory Change History" UI accessible from the inventory management section showing all `inventoryChangeLog` entries for the user's business account with most recent changes displayed first (paginated).
+2. **3.5.2:** Display comprehensive change details per entry: timestamp, actor (user who made the change), change type (create/update/adjust/delete), item identifier, delta values, reason/notes, and sync status to marketplaces.
+3. **3.5.3:** Implement append-only audit logging: every change creates an immutable log entry, and undo operations create new compensating entries that reference the original change (never delete or modify existing logs).
+4. **3.5.4:** Support undo functionality with explicit tracking: when a user undoes a change, create a new log entry marked as `isUndo: true` with `undoesLogId` referencing the original log, and update the original log with `undoneByLogId` to mark it as undone.
+5. **3.5.5:** Allow users to undo an undo (effectively a redo): treating undo-of-undo as another compensating action with proper reference chain tracking in the audit log.
+6. **3.5.6:** Provide visual indicators in the UI: show "[UNDONE]" badge on entries that have been reversed, "[UNDO]" badge on undo operations, and display the reference chain (e.g., "Undid change #123").
+7. **3.5.7:** Implement "Undo" action buttons per change entry (where applicable) that prompt for a reason, execute the compensating operation on local inventory and enqueue marketplace syncs, then create the undo audit log entry atomically.
+8. **3.5.8:** Prevent duplicate undos: disable undo button and show status if a change has already been undone (check `undoneByLogId` field).
+9. **3.5.9:** Enforce RBAC on undo operations: only authorized users (with appropriate permissions) can perform rollbacks; audit who initiated each undo.
+10. **3.5.10:** Provide filtering and search capabilities: filter by date range, change type, actor, item, or undo status; search by item identifier or reason text.
+11. **3.5.11:** Show sync status per change: indicate if marketplace sync is pending, completed, or failed; surface any sync errors with actionable messages.
+12. **3.5.12:** Ensure complete audit trail for compliance: all undo operations are logged with who performed the undo, when, and why; no logs are ever deleted or modified.
+
+> Notes:
+>
+> - Schema should include `isUndo` (boolean), `undoesLogId` (reference to original log), `undoneByLogId` (set when this log is undone), and `reason` (user explanation) fields in `inventoryChangeLog`.
+> - When processing an undo: (1) check if already undone, (2) execute compensating operation on inventory table, (3) enqueue marketplace sync, (4) create new undo log entry, (5) update original log with `undoneByLogId` — all in single transaction.
+> - UI should clearly communicate the undo chain for transparency: "Alice created item → Bob deleted (undid Alice's create) → Alice created (undid Bob's undo)".
+> - Consider displaying a timeline view or activity feed showing the evolution of specific inventory items through multiple changes and undos.
+
+## Story 3.6: Inventory Upload and Import
 
 As a **user**,
 I want **to upload my existing inventory data in bulk**,
@@ -94,15 +122,15 @@ so that **I can quickly migrate my current inventory without manual entry**.
 
 ### Acceptance Criteria
 
-1. **3.5.1:** User can upload XML files with inventory data
-2. **3.5.2:** System validates uploaded data format and provides error feedback
-3. **3.5.3:** System maps uploaded columns to inventory fields (part number, quantity, location, etc.)
-4. **3.5.4:** User can preview and confirm data before import
-5. **3.5.5:** System processes bulk import with progress indicators
-6. **3.5.6:** System handles duplicate entries and provides resolution options
-7. **3.5.7:** Import process completes within 30 seconds for 1000+ items
+1. **3.6.1:** User can upload XML files with inventory data
+2. **3.6.2:** System validates uploaded data format and provides error feedback
+3. **3.6.3:** System maps uploaded columns to inventory fields (part number, quantity, location, etc.)
+4. **3.6.4:** User can preview and confirm data before import
+5. **3.6.5:** System processes bulk import with progress indicators
+6. **3.6.6:** System handles duplicate entries and provides resolution options
+7. **3.6.7:** Import process completes within 30 seconds for 1000+ items
 
-## Story 3.6: Advanced Inventory Management
+## Story 3.7: Advanced Inventory Management
 
 As a **user**,
 I want **comprehensive inventory management features**,
@@ -110,15 +138,15 @@ so that **I can efficiently organize and maintain large inventories**.
 
 ### Acceptance Criteria
 
-1. **3.6.1:** User can organize inventory by location, category, or custom tags
-2. **3.6.2:** User can perform bulk operations (edit, delete, status changes) on multiple items
-3. **3.6.3:** System provides advanced filtering and sorting options
-4. **3.6.4:** User can export inventory data in various formats
-5. **3.6.5:** System maintains inventory history and change tracking
-6. **3.6.6:** User can set low stock alerts and notifications
-7. **3.6.7:** System provides inventory analytics and insights
+1. **3.7.1:** User can organize inventory by location, category, or custom tags
+2. **3.7.2:** User can perform bulk operations (edit, delete, status changes) on multiple items
+3. **3.7.3:** System provides advanced filtering and sorting options
+4. **3.7.4:** User can export inventory data in various formats
+5. **3.7.5:** System maintains inventory history and change tracking
+6. **3.7.6:** User can set low stock alerts and notifications
+7. **3.7.7:** System provides inventory analytics and insights
 
-## Story 3.7: Inventory Validation and Quality Control
+## Story 3.8: Inventory Validation and Quality Control
 
 As a **user**,
 I want **inventory validation and quality control features**,
@@ -126,10 +154,10 @@ so that **I can maintain data accuracy and identify issues**.
 
 ### Acceptance Criteria
 
-1. **3.7.1:** System validates part numbers against catalog database
-2. **3.7.2:** System flags potential data inconsistencies or errors
-3. **3.7.3:** User can review and correct flagged items
-4. **3.7.4:** System provides data quality metrics and reports
-5. **3.7.5:** System suggests corrections for common data entry errors
-6. **3.7.6:** User can set up automated validation rules
-7. **3.7.7:** System maintains data integrity across all operations
+1. **3.8.1:** System validates part numbers against catalog database
+2. **3.8.2:** System flags potential data inconsistencies or errors
+3. **3.8.3:** User can review and correct flagged items
+4. **3.8.4:** System provides data quality metrics and reports
+5. **3.8.5:** System suggests corrections for common data entry errors
+6. **3.8.6:** User can set up automated validation rules
+7. **3.8.7:** System maintains data integrity across all operations

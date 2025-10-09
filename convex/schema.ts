@@ -84,6 +84,7 @@ export default defineSchema({
     businessAccountId: v.id("businessAccounts"),
     sku: v.string(),
     name: v.string(),
+    partNumber: v.string(), // BrickLink part number (item.no)
     colorId: v.string(),
     location: v.string(),
     quantityAvailable: v.number(),
@@ -92,6 +93,9 @@ export default defineSchema({
     quantitySold: v.number(),
     status: v.union(v.literal("available"), v.literal("reserved"), v.literal("sold")),
     condition: v.union(v.literal("new"), v.literal("used")),
+    price: v.optional(v.number()), // Unit price for marketplace sync
+    notes: v.optional(v.string()), // Description/remarks from marketplace
+    bricklinkInventoryId: v.optional(v.number()), // BrickLink inventory_id for sync tracking
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
@@ -100,7 +104,8 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
   })
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_sku", ["businessAccountId", "sku"]),
+    .index("by_sku", ["businessAccountId", "sku"])
+    .index("by_bricklinkInventoryId", ["businessAccountId", "bricklinkInventoryId"]),
 
   // Audit log for inventory changes
   inventoryAuditLogs: defineTable({
@@ -322,4 +327,26 @@ export default defineSchema({
   })
     .index("by_business_provider", ["businessAccountId", "provider"])
     .index("by_businessAccount", ["businessAccountId"]),
+
+  // Per-business-account rate limiting for marketplace APIs
+  marketplaceRateLimits: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    // Quota tracking
+    windowStart: v.number(), // Unix timestamp when current window started
+    requestCount: v.number(), // Requests made in current window
+    capacity: v.number(), // Max requests per window (5000 for BrickLink)
+    windowDurationMs: v.number(), // Window size in ms (86400000 = 24 hours)
+    // Alerting
+    alertThreshold: v.number(), // Percentage (0-1) to trigger alert (default: 0.8)
+    alertEmitted: v.boolean(), // Whether alert has been sent for current window
+    // Circuit breaker
+    consecutiveFailures: v.number(), // Track failures for circuit breaker
+    circuitBreakerOpenUntil: v.optional(v.number()), // If set, circuit is open
+    // Metadata
+    lastRequestAt: v.number(),
+    lastResetAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_business_provider", ["businessAccountId", "provider"]),
 });

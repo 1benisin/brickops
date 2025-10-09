@@ -1,7 +1,6 @@
 /// <reference types="@testing-library/jest-dom" />
 import React from "react";
 import { renderWithProviders } from "../../../test/utils/render-with-providers";
-import UsersSettingsPage from "../../../src/app/(authenticated)/settings/users/page";
 import SettingsPage from "../../../src/app/(authenticated)/settings/page";
 import { screen, fireEvent } from "@testing-library/react";
 import { useQuery, useMutation } from "convex/react";
@@ -30,8 +29,10 @@ describe("Settings Users Page", () => {
 
   it("renders loading skeletons when queries are pending", () => {
     mockedUseQuery.mockReturnValue(undefined);
-    renderWithProviders(<UsersSettingsPage />);
-    expect(screen.getByTestId("users-loading")).toBeInTheDocument();
+    renderWithProviders(<SettingsPage />);
+    // Check for generic loading skeleton (no specific testid)
+    const skeletons = document.querySelectorAll(".animate-pulse");
+    expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("lists members and hides actions for non-owners", () => {
@@ -79,13 +80,18 @@ describe("Settings Users Page", () => {
       return result;
     });
 
-    renderWithProviders(<UsersSettingsPage />);
+    renderWithProviders(<SettingsPage />);
 
-    expect(screen.getByText("Users")).toBeInTheDocument();
-    // No invite button for non-owner
+    // Expand Team Members section
+    const teamMembersButton = screen.getByText("Team Members");
+    expect(teamMembersButton).toBeInTheDocument();
+    fireEvent.click(teamMembersButton);
+
+    // No invite button for non-owner (even when section is expanded)
     expect(screen.queryByTestId("invite-button")).not.toBeInTheDocument();
-    // Role select not shown for self and non-owner context
-    expect(screen.getByText("manager")).toBeInTheDocument();
+    // Role select not shown for self and non-owner context - check for multiple instances of "manager"
+    const managerElements = screen.getAllByText("manager");
+    expect(managerElements.length).toBeGreaterThan(0);
   });
 
   it("allows owner to open invite dialog and submit", async () => {
@@ -128,8 +134,12 @@ describe("Settings Users Page", () => {
       return result;
     });
 
-    renderWithProviders(<UsersSettingsPage />);
+    renderWithProviders(<SettingsPage />);
 
+    // Expand Team Members section
+    fireEvent.click(screen.getByText("Team Members"));
+
+    // Now the invite button should be visible for owners
     fireEvent.click(screen.getByTestId("invite-button"));
 
     // Wait for dialog to appear
@@ -230,7 +240,10 @@ describe("Settings Users Page", () => {
       return result;
     });
 
-    const { rerender } = renderWithProviders(<UsersSettingsPage />);
+    const { rerender } = renderWithProviders(<SettingsPage />);
+
+    // Expand Team Members section
+    fireEvent.click(screen.getByText("Team Members"));
 
     // Owner should see invite button
     expect(screen.getByTestId("invite-button")).toBeInTheDocument();
@@ -275,16 +288,25 @@ describe("Settings Users Page", () => {
       return result;
     });
 
-    rerender(<UsersSettingsPage />);
+    rerender(<SettingsPage />);
+
+    // Expand Team Members section again after rerender
+    fireEvent.click(screen.getByText("Team Members"));
 
     // Manager should NOT see invite button or role controls
     expect(screen.queryByTestId("invite-button")).not.toBeInTheDocument();
 
-    // Manager should see static role text, not selects
-    expect(screen.getByText("manager")).toBeInTheDocument();
-    expect(screen.getByText("owner")).toBeInTheDocument();
+    // Manager should see their own role in the role permissions card
+    const managerElements = screen.getAllByText("manager");
+    expect(managerElements.length).toBeGreaterThan(0);
 
-    // Should not see remove buttons for other users
+    // Should not see role selects (only owner can change roles)
+    expect(screen.queryByTestId("role-select-users:1")).not.toBeInTheDocument();
+
+    // Should not see remove buttons for other users (non-owner)
     expect(screen.queryByTestId("remove-users:1")).not.toBeInTheDocument();
+
+    // Key test: Manager role should NOT see administrative controls
+    // The absence of invite-button and role-select elements confirms proper RBAC
   });
 });

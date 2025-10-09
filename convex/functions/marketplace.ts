@@ -12,11 +12,13 @@ import {
   QueryCtx,
   internalMutation,
   internalQuery,
+  ActionCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { encryptCredential, decryptCredential } from "../lib/encryption";
 import { api, internal } from "../_generated/api";
+import { BricklinkStoreClient } from "../bricklink/storeClient";
 
 type RequireOwnerReturn = {
   userId: Id<"users">;
@@ -516,3 +518,243 @@ export const updateValidationStatus = internalMutation({
     });
   },
 });
+
+/**
+ * Rate Limiting Functions (Story 3.2)
+ */
+
+/**
+ * Get quota state for a business account and provider
+ */
+export const getQuotaState = internalQuery({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  },
+  handler: async (ctx, args) => {
+    const quota = await ctx.db
+      .query("marketplaceRateLimits")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", args.businessAccountId).eq("provider", args.provider),
+      )
+      .first();
+
+    // Return defaults if no quota record exists
+    if (!quota) {
+      return {
+        windowStart: Date.now(),
+        requestCount: 0,
+        capacity: 5000, // BrickLink default
+        windowDurationMs: 86400000, // 24 hours
+        alertThreshold: 0.8,
+        alertEmitted: false,
+        consecutiveFailures: 0,
+        circuitBreakerOpenUntil: undefined as number | undefined,
+      };
+    }
+
+    return {
+      windowStart: quota.windowStart,
+      requestCount: quota.requestCount,
+      capacity: quota.capacity,
+      windowDurationMs: quota.windowDurationMs,
+      alertThreshold: quota.alertThreshold,
+      alertEmitted: quota.alertEmitted,
+      consecutiveFailures: quota.consecutiveFailures,
+      circuitBreakerOpenUntil: quota.circuitBreakerOpenUntil,
+    };
+  },
+});
+
+/**
+ * Increment quota counter for a business account
+ */
+export const incrementQuota = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("marketplaceRateLimits")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", args.businessAccountId).eq("provider", args.provider),
+      )
+      .first();
+
+    // Initialize if first request
+    if (!existing) {
+      await ctx.db.insert("marketplaceRateLimits", {
+        businessAccountId: args.businessAccountId,
+        provider: args.provider,
+        windowStart: now,
+        requestCount: 1,
+        capacity: 5000, // BrickLink limit
+        windowDurationMs: 86400000, // 24 hours
+        alertThreshold: 0.8,
+        alertEmitted: false,
+        consecutiveFailures: 0,
+        lastRequestAt: now,
+        lastResetAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    // Check if window expired
+    const windowElapsed = now - existing.windowStart;
+    if (windowElapsed >= existing.windowDurationMs) {
+      // Reset window
+      await ctx.db.patch(existing._id, {
+        windowStart: now,
+        requestCount: 1,
+        alertEmitted: false,
+        consecutiveFailures: 0, // Reset failures on new window
+        circuitBreakerOpenUntil: undefined,
+        lastRequestAt: now,
+        lastResetAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    // Increment counter
+    const newCount = existing.requestCount + 1;
+    const percentage = newCount / existing.capacity;
+
+    // Check alert threshold
+    const shouldAlert = percentage >= existing.alertThreshold && !existing.alertEmitted;
+
+    await ctx.db.patch(existing._id, {
+      requestCount: newCount,
+      alertEmitted: shouldAlert ? true : existing.alertEmitted,
+      lastRequestAt: now,
+      updatedAt: now,
+    });
+
+    // Emit alert metric
+    if (shouldAlert) {
+      // Note: recordMetric is not available in mutations, so we just set the flag
+      // The alert will be logged when checked in the action
+    }
+  },
+});
+
+/**
+ * Record API failure for circuit breaker tracking
+ */
+export const recordFailure = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("marketplaceRateLimits")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", args.businessAccountId).eq("provider", args.provider),
+      )
+      .first();
+
+    if (!existing) {
+      // Initialize with failure count
+      const now = Date.now();
+      await ctx.db.insert("marketplaceRateLimits", {
+        businessAccountId: args.businessAccountId,
+        provider: args.provider,
+        windowStart: now,
+        requestCount: 0,
+        capacity: 5000,
+        windowDurationMs: 86400000,
+        alertThreshold: 0.8,
+        alertEmitted: false,
+        consecutiveFailures: 1,
+        lastRequestAt: now,
+        lastResetAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    const newFailures = existing.consecutiveFailures + 1;
+    const now = Date.now();
+
+    // Open circuit breaker after 5 consecutive failures
+    const updates: {
+      consecutiveFailures: number;
+      updatedAt: number;
+      circuitBreakerOpenUntil?: number;
+    } = {
+      consecutiveFailures: newFailures,
+      updatedAt: now,
+    };
+
+    if (newFailures >= 5) {
+      updates.circuitBreakerOpenUntil = now + 5 * 60 * 1000; // 5 minutes
+    }
+
+    await ctx.db.patch(existing._id, updates);
+  },
+});
+
+/**
+ * Reset consecutive failures counter (called on successful request)
+ */
+export const resetFailures = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("marketplaceRateLimits")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", args.businessAccountId).eq("provider", args.provider),
+      )
+      .first();
+
+    if (existing && existing.consecutiveFailures > 0) {
+      await ctx.db.patch(existing._id, {
+        consecutiveFailures: 0,
+        circuitBreakerOpenUntil: undefined,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+/**
+ * Create BrickLink Store Client with user credentials
+ * Helper function for use within actions
+ */
+export async function createBricklinkStoreClient(
+  ctx: ActionCtx,
+  businessAccountId: Id<"businessAccounts">,
+): Promise<BricklinkStoreClient> {
+  // Get encrypted credentials
+  const credentials = await ctx.runQuery(internal.functions.marketplace.getEncryptedCredentials, {
+    businessAccountId,
+    provider: "bricklink",
+  });
+
+  if (!credentials) {
+    throw new ConvexError({
+      code: "CREDENTIALS_NOT_FOUND",
+      message: "BrickLink credentials not configured. Please add your credentials in Settings.",
+    });
+  }
+
+  // Decrypt credentials
+  const decryptedCreds = {
+    consumerKey: await decryptCredential(credentials.bricklinkConsumerKey!),
+    consumerSecret: await decryptCredential(credentials.bricklinkConsumerSecret!),
+    tokenValue: await decryptCredential(credentials.bricklinkTokenValue!),
+    tokenSecret: await decryptCredential(credentials.bricklinkTokenSecret!),
+  };
+
+  // Create and return client instance with ActionCtx for DB rate limiting
+  return new BricklinkStoreClient(decryptedCreds, businessAccountId, ctx);
+}
