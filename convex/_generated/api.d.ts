@@ -14,6 +14,9 @@ import type * as auth from "../auth.js";
 import type * as bricklink_bricklinkClient from "../bricklink/bricklinkClient.js";
 import type * as bricklink_bricklinkMappers from "../bricklink/bricklinkMappers.js";
 import type * as bricklink_dataRefresher from "../bricklink/dataRefresher.js";
+import type * as bricklink_oauth from "../bricklink/oauth.js";
+import type * as bricklink_storeClient from "../bricklink/storeClient.js";
+import type * as bricklink_storeMappers from "../bricklink/storeMappers.js";
 import type * as catalog from "../catalog.js";
 import type * as crons from "../crons.js";
 import type * as functions_hello from "../functions/hello.js";
@@ -42,6 +45,7 @@ import type * as lib_external_types from "../lib/external/types.js";
 import type * as lib_external_validate from "../lib/external/validate.js";
 import type * as lib_rateLimiterAdapter from "../lib/rateLimiterAdapter.js";
 import type * as lib_webcrypto from "../lib/webcrypto.js";
+import type * as marketplaces_types from "../marketplaces/types.js";
 import type * as validators_catalog from "../validators/catalog.js";
 
 /**
@@ -58,6 +62,9 @@ declare const fullApi: ApiFromModules<{
   "bricklink/bricklinkClient": typeof bricklink_bricklinkClient;
   "bricklink/bricklinkMappers": typeof bricklink_bricklinkMappers;
   "bricklink/dataRefresher": typeof bricklink_dataRefresher;
+  "bricklink/oauth": typeof bricklink_oauth;
+  "bricklink/storeClient": typeof bricklink_storeClient;
+  "bricklink/storeMappers": typeof bricklink_storeMappers;
   catalog: typeof catalog;
   crons: typeof crons;
   "functions/hello": typeof functions_hello;
@@ -86,6 +93,7 @@ declare const fullApi: ApiFromModules<{
   "lib/external/validate": typeof lib_external_validate;
   "lib/rateLimiterAdapter": typeof lib_rateLimiterAdapter;
   "lib/webcrypto": typeof lib_webcrypto;
+  "marketplaces/types": typeof marketplaces_types;
   "validators/catalog": typeof validators_catalog;
 }>;
 export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;

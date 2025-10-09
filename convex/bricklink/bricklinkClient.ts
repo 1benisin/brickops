@@ -1,4 +1,4 @@
-import { hmacSha1Base64, randomHex } from "../lib/webcrypto";
+import { randomHex } from "../lib/webcrypto";
 import { getBricklinkCredentials } from "../lib/external/env";
 import { recordMetric } from "../lib/external/metrics";
 import { HealthCheckResult, normalizeApiError } from "../lib/external/types";
@@ -14,6 +14,12 @@ import {
   mapPartColors,
   mapPriceGuide,
 } from "./bricklinkMappers";
+import {
+  generateOAuthParams,
+  generateOAuthSignature,
+  buildAuthorizationHeader,
+  type OAuthCredentials,
+} from "./oauth";
 
 const BASE_URL = "https://api.bricklink.com/api/store/v1/";
 const HEALTH_ENDPOINT = "/orders";
@@ -21,14 +27,6 @@ const HEALTH_ENDPOINT = "/orders";
 const DAILY_QUOTA_CAPACITY = 5_000;
 const DAILY_QUOTA_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 const ALERT_THRESHOLD = 0.8;
-
-const percentEncode = (input: string) =>
-  encodeURIComponent(input)
-    .replace(/!/g, "%21")
-    .replace(/\*/g, "%2A")
-    .replace(/'/g, "%27")
-    .replace(/\(/g, "%28")
-    .replace(/\)/g, "%29");
 
 export class BricklinkClient {
   private readonly credentials: ReturnType<typeof getBricklinkCredentials>;
@@ -137,46 +135,38 @@ export class BricklinkClient {
       url.searchParams.append(key, String(value));
     });
 
-    // Build OAuth 1.0 parameters
-    const oauthParams: [string, string][] = [
-      ["oauth_consumer_key", this.credentials.consumerKey],
-      ["oauth_token", this.credentials.accessToken],
+    // Convert credentials to OAuth format
+    const oauthCredentials: OAuthCredentials = {
+      consumerKey: this.credentials.consumerKey,
+      consumerSecret: this.credentials.consumerSecret,
+      tokenValue: this.credentials.accessToken,
+      tokenSecret: this.credentials.tokenSecret,
+    };
+
+    // Generate OAuth parameters
+    const oauthParams = generateOAuthParams(this.timestamp, this.nonce);
+
+    // Build parameter list for signing
+    const oauthParamPairs: Array<[string, string]> = [
+      ["oauth_consumer_key", oauthCredentials.consumerKey],
+      ["oauth_token", oauthCredentials.tokenValue],
       ["oauth_signature_method", "HMAC-SHA1"],
-      ["oauth_timestamp", this.timestamp().toString()],
-      ["oauth_nonce", this.nonce()],
+      ["oauth_timestamp", oauthParams.timestamp],
+      ["oauth_nonce", oauthParams.nonce],
       ["oauth_version", "1.0"],
     ];
 
-    const allParams: [string, string][] = [
+    const allParams: Array<[string, string]> = [
       ...queryEntries.map(([key, value]): [string, string] => [key, String(value)]),
-      ...oauthParams,
+      ...oauthParamPairs,
     ];
 
-    // Generate OAuth signature
-    const signingKey = `${percentEncode(this.credentials.consumerSecret)}&${percentEncode(this.credentials.tokenSecret)}`;
-    const normalizedParams = allParams
-      .map(([key, value]) => ({ key: percentEncode(key), value: percentEncode(value) }))
-      .sort((a, b) => {
-        if (a.key === b.key) {
-          return a.value.localeCompare(b.value);
-        }
-        return a.key.localeCompare(b.key);
-      })
-      .map(({ key, value }) => `${key}=${value}`)
-      .join("&");
-
+    // Generate OAuth signature using shared helper
     const baseUrl = url.href.split("?")[0];
-    const baseString = [
-      method.toUpperCase(),
-      percentEncode(baseUrl),
-      percentEncode(normalizedParams),
-    ].join("&");
+    const signature = await generateOAuthSignature(oauthCredentials, method, baseUrl, allParams);
 
-    const signature = await hmacSha1Base64(signingKey, baseString);
-
-    const authorization = `OAuth ${[...oauthParams, ["oauth_signature", signature]]
-      .map(([key, value]) => `${percentEncode(key)}="${percentEncode(value)}"`)
-      .join(", ")}`;
+    // Build Authorization header using shared helper
+    const authorization = buildAuthorizationHeader(oauthCredentials, signature, oauthParams);
 
     // Check quota before making request - will throw error if quota is exceeded
     BricklinkClient.recordQuotaUsage();
