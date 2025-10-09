@@ -2,12 +2,25 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
-import { Button, Input } from "@/components/ui";
-import Link from "next/link";
+import type { Id } from "@/convex/_generated/dataModel";
+import {
+  Button,
+  Input,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui";
+import { BrickLinkCredentialsForm } from "@/components/settings/bricklink-credentials-form";
+import { BrickOwlCredentialsForm } from "@/components/settings/brickowl-credentials-form";
+
+type Role = "manager" | "picker" | "viewer";
 
 interface MemberRow {
   _id: string;
@@ -15,7 +28,7 @@ interface MemberRow {
   firstName?: string;
   lastName?: string;
   name?: string;
-  role: "owner" | "manager" | "picker";
+  role: "owner" | Role;
   status: "active" | "invited";
   isCurrentUser: boolean;
 }
@@ -27,6 +40,10 @@ export default function SettingsPage() {
   const members = useQuery(api.functions.users.listMembers);
   const updateProfile = useMutation(api.functions.users.updateProfile);
   const regenerateInviteCode = useMutation(api.functions.users.regenerateInviteCode);
+  const updateUserRole = useMutation(api.functions.users.updateUserRole);
+  const removeUser = useMutation(api.functions.users.removeUser);
+  const createUserInvite = useMutation(api.functions.users.createUserInvite);
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -34,6 +51,18 @@ export default function SettingsPage() {
   const [inviteFeedback, setInviteFeedback] = useState<string | null>(null);
   const [isUpdatingProfile, startProfileTransition] = useTransition();
   const [isRegenerating, startInviteTransition] = useTransition();
+  const [isMarketplaceExpanded, setIsMarketplaceExpanded] = useState(false);
+  const [isUsersExpanded, setIsUsersExpanded] = useState(false);
+
+  // User management state
+  const [isInviting, startUserInviteTransition] = useTransition();
+  const [isUpdatingRoleId, setIsUpdatingRoleId] = useState<string | null>(null);
+  const [isRemovingId, setIsRemovingId] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Role>("manager");
+  const [inviteResult, setInviteResult] = useState<string | null>(null);
+  const [userError, setUserError] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUser?.user) {
@@ -41,6 +70,15 @@ export default function SettingsPage() {
       setLastName(currentUser.user.lastName ?? "");
     }
   }, [currentUser?.user]);
+
+  useEffect(() => {
+    if (!inviteOpen) {
+      setInviteEmail("");
+      setInviteRole("manager");
+      setInviteResult(null);
+      setUserError(null);
+    }
+  }, [inviteOpen]);
 
   const isOwner = currentUser?.user?.role === "owner";
   const inviteCode = currentUser?.businessAccount?.inviteCode ?? "";
@@ -92,6 +130,57 @@ export default function SettingsPage() {
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to regenerate invite code";
         setInviteFeedback(message);
+      }
+    });
+  };
+
+  const handleRoleChange = async (member: MemberRow, role: Role) => {
+    if (!isOwner || member.isCurrentUser) return;
+    try {
+      setUserError(null);
+      setIsUpdatingRoleId(member._id);
+      await updateUserRole({ targetUserId: member._id as unknown as Id<"users">, role });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to update role";
+      setUserError(message);
+    } finally {
+      setIsUpdatingRoleId(null);
+    }
+  };
+
+  const handleRemove = async (member: MemberRow) => {
+    if (!isOwner || member.isCurrentUser) return;
+    try {
+      setUserError(null);
+      setIsRemovingId(member._id);
+      await removeUser({ targetUserId: member._id as unknown as Id<"users"> });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to remove user";
+      setUserError(message);
+    } finally {
+      setIsRemovingId(null);
+    }
+  };
+
+  const submitInvite = async () => {
+    if (!inviteEmail.trim()) {
+      setUserError("Email is required");
+      return;
+    }
+    startUserInviteTransition(async () => {
+      try {
+        setUserError(null);
+        const baseUrl = typeof window !== "undefined" ? `${window.location.origin}/invite` : "";
+        const result = await createUserInvite({
+          email: inviteEmail.trim().toLowerCase(),
+          role: inviteRole,
+          inviteBaseUrl: baseUrl,
+          expiresInHours: 72,
+        });
+        setInviteResult(`Invite sent. Expires at ${new Date(result.expiresAt).toLocaleString()}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to send invite";
+        setUserError(message);
       }
     });
   };
@@ -286,47 +375,249 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Team members</h2>
-          <p className="text-sm text-muted-foreground">
-            Everyone listed here shares access to inventory, orders, and catalog data for{" "}
-            <span className="font-medium text-foreground">
-              {currentUser.businessAccount?.name ?? "your business"}
-            </span>
-            .
-          </p>
-        </div>
-
-        <div>
-          <Button asChild variant="link" data-testid="nav-users-link">
-            <Link href="/settings/users">Manage users</Link>
-          </Button>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border bg-background">
-          <div className="grid grid-cols-4 gap-4 bg-muted/50 p-3 text-sm font-medium text-muted-foreground">
-            <span>Name</span>
-            <span>Role</span>
-            <span>Status</span>
-            <span>Email</span>
-          </div>
-          <div className="divide-y">
-            {sortedMembers.map((member) => (
-              <div key={member._id} className="grid grid-cols-4 gap-4 p-3 text-sm">
-                <span className="font-medium text-foreground">
-                  {member.name ??
-                    (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() || "—")}
-                  {member.isCurrentUser ? " (you)" : ""}
-                </span>
-                <span className="capitalize text-muted-foreground">{member.role}</span>
-                <span className="capitalize text-muted-foreground">{member.status}</span>
-                <span className="text-muted-foreground">{member.email ?? "—"}</span>
+      {isOwner && (
+        <section className="space-y-4">
+          <div className="rounded-lg border bg-background shadow-sm">
+            <button
+              onClick={() => setIsMarketplaceExpanded(!isMarketplaceExpanded)}
+              className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-muted/50"
+            >
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  Marketplace Credentials{" "}
+                  <span className="text-sm font-normal text-muted-foreground">(Owner only)</span>
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Connect your marketplace accounts to BrickOps. You can connect to BrickLink,
+                  BrickOwl, or both.
+                </p>
               </div>
-            ))}
+              {isMarketplaceExpanded ? (
+                <ChevronUp className="size-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-5 text-muted-foreground" />
+              )}
+            </button>
+
+            {isMarketplaceExpanded && (
+              <div className="space-y-6 border-t p-6">
+                {/* BrickLink Credentials Section */}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      BrickLink Credentials{" "}
+                      <span className="text-sm font-normal text-muted-foreground">(Optional)</span>
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Connect your BrickLink store using OAuth 1.0a credentials. Only configure this
+                      if you sell on BrickLink.
+                    </p>
+                  </div>
+                  <BrickLinkCredentialsForm />
+                </div>
+
+                {/* BrickOwl Credentials Section */}
+                <div className="space-y-4 border-t pt-6">
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      BrickOwl Credentials{" "}
+                      <span className="text-sm font-normal text-muted-foreground">(Optional)</span>
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Connect your BrickOwl store using your API key. Only configure this if you
+                      sell on BrickOwl.
+                    </p>
+                  </div>
+                  <BrickOwlCredentialsForm />
+                </div>
+              </div>
+            )}
           </div>
+        </section>
+      )}
+
+      <section className="space-y-4">
+        <div className="rounded-lg border bg-background shadow-sm">
+          <button
+            onClick={() => setIsUsersExpanded(!isUsersExpanded)}
+            className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-muted/50"
+          >
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Team Members</h2>
+              <p className="text-sm text-muted-foreground">
+                Everyone listed here shares access to inventory, orders, and catalog data for{" "}
+                <span className="font-medium text-foreground">
+                  {currentUser.businessAccount?.name ?? "your business"}
+                </span>
+                .
+              </p>
+            </div>
+            {isUsersExpanded ? (
+              <ChevronUp className="size-5 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-5 text-muted-foreground" />
+            )}
+          </button>
+
+          {isUsersExpanded && (
+            <div className="space-y-4 border-t p-6">
+              {isOwner && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    onClick={() => setInviteOpen(true)}
+                    data-testid="invite-button"
+                  >
+                    <UserPlus className="mr-2 size-4" />
+                    Invite user
+                  </Button>
+                </div>
+              )}
+
+              {userError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {userError}
+                </p>
+              )}
+
+              <div className="overflow-hidden rounded-lg border bg-background">
+                <div className="grid grid-cols-5 gap-4 bg-muted/50 p-3 text-sm font-medium text-muted-foreground">
+                  <span>Name</span>
+                  <span>Role</span>
+                  <span>Status</span>
+                  <span>Email</span>
+                  <span className="text-right">Actions</span>
+                </div>
+                <div className="divide-y">
+                  {sortedMembers.map((member) => (
+                    <div
+                      key={member._id}
+                      className="grid grid-cols-5 items-center gap-4 p-3 text-sm"
+                    >
+                      <span className="font-medium text-foreground">
+                        {member.name ??
+                          (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() || "—")}
+                        {member.isCurrentUser ? " (you)" : ""}
+                      </span>
+                      <span className="capitalize text-muted-foreground">
+                        {isOwner && !member.isCurrentUser ? (
+                          <select
+                            aria-label={`role-select-${member._id}`}
+                            className="rounded border bg-background px-2 py-1"
+                            value={member.role}
+                            onChange={(e) => handleRoleChange(member, e.target.value as Role)}
+                            disabled={isUpdatingRoleId === member._id}
+                            data-testid={`role-select-${member._id}`}
+                          >
+                            <option value="manager">manager</option>
+                            <option value="picker">picker</option>
+                            <option value="viewer">viewer</option>
+                          </select>
+                        ) : (
+                          member.role
+                        )}
+                      </span>
+                      <span className="capitalize text-muted-foreground">{member.status}</span>
+                      <span className="text-muted-foreground">{member.email ?? "—"}</span>
+                      <span className="flex justify-end">
+                        {isOwner && !member.isCurrentUser ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => {
+                              const displayName =
+                                member.name ??
+                                (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() ||
+                                  member.email ||
+                                  "this user");
+                              if (
+                                window.confirm(`Are you sure you want to remove ${displayName}?`)
+                              ) {
+                                handleRemove(member);
+                              }
+                            }}
+                            disabled={isRemovingId === member._id}
+                            data-testid={`remove-${member._id}`}
+                          >
+                            Remove
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
+
+      {/* User Invite Dialog */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite user</DialogTitle>
+            <DialogDescription>Send an email invitation to join your workspace.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="invite-email" className="text-sm font-medium text-foreground">
+                Email
+              </label>
+              <Input
+                id="invite-email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="name@example.com"
+                data-testid="invite-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="invite-role" className="text-sm font-medium text-foreground">
+                Role
+              </label>
+              <select
+                id="invite-role"
+                className="rounded border bg-background px-2 py-1"
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as Role)}
+                data-testid="invite-role"
+              >
+                <option value="manager">manager</option>
+                <option value="picker">picker</option>
+                <option value="viewer">viewer</option>
+              </select>
+            </div>
+            {inviteResult && (
+              <p className="text-sm text-green-600" data-testid="invite-result">
+                {inviteResult}
+              </p>
+            )}
+            {userError && (
+              <p className="text-sm text-destructive" data-testid="invite-error">
+                {userError}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setInviteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={submitInvite}
+              disabled={isInviting}
+              data-testid="invite-submit"
+            >
+              {isInviting ? "Sending…" : "Send invite"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
