@@ -96,6 +96,7 @@ export default defineSchema({
     price: v.optional(v.number()), // Unit price for marketplace sync
     notes: v.optional(v.string()), // Description/remarks from marketplace
     bricklinkInventoryId: v.optional(v.number()), // BrickLink inventory_id for sync tracking
+    brickowlLotId: v.optional(v.string()), // BrickOwl lot_id for sync tracking (Story 3.3)
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
@@ -105,7 +106,8 @@ export default defineSchema({
   })
     .index("by_businessAccount", ["businessAccountId"])
     .index("by_sku", ["businessAccountId", "sku"])
-    .index("by_bricklinkInventoryId", ["businessAccountId", "bricklinkInventoryId"]),
+    .index("by_bricklinkInventoryId", ["businessAccountId", "bricklinkInventoryId"])
+    .index("by_brickowlLotId", ["businessAccountId", "brickowlLotId"]),
 
   // Audit log for inventory changes
   inventoryAuditLogs: defineTable({
@@ -335,8 +337,8 @@ export default defineSchema({
     // Quota tracking
     windowStart: v.number(), // Unix timestamp when current window started
     requestCount: v.number(), // Requests made in current window
-    capacity: v.number(), // Max requests per window (5000 for BrickLink)
-    windowDurationMs: v.number(), // Window size in ms (86400000 = 24 hours)
+    capacity: v.number(), // Max requests per window (see marketplaces/rateLimitConfig.ts)
+    windowDurationMs: v.number(), // Window size in ms (see marketplaces/rateLimitConfig.ts)
     // Alerting
     alertThreshold: v.number(), // Percentage (0-1) to trigger alert (default: 0.8)
     alertEmitted: v.boolean(), // Whether alert has been sent for current window

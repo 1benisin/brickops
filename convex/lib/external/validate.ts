@@ -1,11 +1,11 @@
-import { bricklinkClient } from "../../bricklink/bricklinkClient";
+import { catalogClient } from "../../bricklink/catalogClient";
 import { BrickognizeClient } from "./brickognize";
 import { BrickowlClient } from "./brickowl";
 import { HealthCheckResult } from "./types";
 
 export const validateBrickognize = async () => new BrickognizeClient().healthCheck();
 
-export const validateBricklink = async () => bricklinkClient.healthCheck();
+export const validateBricklink = async () => catalogClient.healthCheck();
 
 export const validateBrickowl = async () => new BrickowlClient().healthCheck();
 

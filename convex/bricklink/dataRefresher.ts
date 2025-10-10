@@ -12,7 +12,7 @@ import type { Doc } from "../_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
-import { bricklinkClient } from "./bricklinkClient";
+import { catalogClient } from "./catalogClient";
 import { recordMetric } from "../lib/external/metrics";
 
 // ============================================================================
@@ -463,30 +463,28 @@ export const processQueue = internalAction({
         // Fetch from Bricklink and update database based on table type
         if (item.tableName === "parts") {
           // primaryKey = partNo
-          const partData = await bricklinkClient.getRefreshedPart(item.primaryKey);
+          const partData = await catalogClient.getRefreshedPart(item.primaryKey);
           await ctx.runMutation(internal.bricklink.dataRefresher.upsertPart, { data: partData });
         } else if (item.tableName === "partColors") {
           // primaryKey = partNo
-          const partColorsData = await bricklinkClient.getRefreshedPartColors(item.primaryKey);
+          const partColorsData = await catalogClient.getRefreshedPartColors(item.primaryKey);
           await ctx.runMutation(internal.bricklink.dataRefresher.upsertPartColors, {
             data: partColorsData,
           });
         } else if (item.tableName === "colors") {
           // primaryKey = colorId
-          const colorData = await bricklinkClient.getRefreshedColor(parseInt(item.primaryKey));
+          const colorData = await catalogClient.getRefreshedColor(parseInt(item.primaryKey));
           await ctx.runMutation(internal.bricklink.dataRefresher.upsertColor, { data: colorData });
         } else if (item.tableName === "categories") {
           // primaryKey = categoryId
-          const categoryData = await bricklinkClient.getRefreshedCategory(
-            parseInt(item.primaryKey),
-          );
+          const categoryData = await catalogClient.getRefreshedCategory(parseInt(item.primaryKey));
           await ctx.runMutation(internal.bricklink.dataRefresher.upsertCategory, {
             data: categoryData,
           });
         } else if (item.tableName === "partPrices") {
           // primaryKey = partNo, secondaryKey = colorId
           // Note: This fetches all 4 variants (N/U × sold/stock)
-          const priceGuides = await bricklinkClient.getRefreshedPriceGuide(
+          const priceGuides = await catalogClient.getRefreshedPriceGuide(
             item.primaryKey,
             parseInt(item.secondaryKey!),
           );

@@ -20,13 +20,13 @@ import {
   buildAuthorizationHeader,
   type OAuthCredentials,
 } from "./oauth";
+import { getRateLimitConfig } from "../marketplaces/rateLimitConfig";
 
 const BASE_URL = "https://api.bricklink.com/api/store/v1/";
 const HEALTH_ENDPOINT = "/orders";
 
-const DAILY_QUOTA_CAPACITY = 5_000;
-const DAILY_QUOTA_INTERVAL_MS = 24 * 60 * 60 * 1_000;
-const ALERT_THRESHOLD = 0.8;
+// Get BrickLink rate limit configuration from shared source
+const RATE_LIMIT = getRateLimitConfig("bricklink");
 
 export class BricklinkClient {
   private readonly credentials: ReturnType<typeof getBricklinkCredentials>;
@@ -72,28 +72,31 @@ export class BricklinkClient {
   private static recordQuotaUsage() {
     const now = Date.now();
     const windowElapsed = now - BricklinkClient.quotaState.windowStart;
-    if (BricklinkClient.quotaState.windowStart === 0 || windowElapsed >= DAILY_QUOTA_INTERVAL_MS) {
+    if (
+      BricklinkClient.quotaState.windowStart === 0 ||
+      windowElapsed >= RATE_LIMIT.windowDurationMs
+    ) {
       BricklinkClient.quotaState.windowStart = now;
       BricklinkClient.quotaState.count = 0;
       BricklinkClient.quotaState.alertEmitted = false;
     }
 
     const nextCount = BricklinkClient.quotaState.count + 1;
-    const percentage = nextCount / DAILY_QUOTA_CAPACITY;
+    const percentage = nextCount / RATE_LIMIT.capacity;
 
-    if (nextCount > DAILY_QUOTA_CAPACITY) {
+    if (nextCount > RATE_LIMIT.capacity) {
       const timeUntilReset =
-        DAILY_QUOTA_INTERVAL_MS - (now - BricklinkClient.quotaState.windowStart);
+        RATE_LIMIT.windowDurationMs - (now - BricklinkClient.quotaState.windowStart);
 
       recordMetric("external.bricklink.quota.blocked", {
         count: BricklinkClient.quotaState.count,
-        capacity: DAILY_QUOTA_CAPACITY,
-        percentage: BricklinkClient.quotaState.count / DAILY_QUOTA_CAPACITY,
+        capacity: RATE_LIMIT.capacity,
+        percentage: BricklinkClient.quotaState.count / RATE_LIMIT.capacity,
         retryAfterMs: timeUntilReset,
       });
 
       throw new Error(
-        `Bricklink API daily quota exceeded (${DAILY_QUOTA_CAPACITY} requests/day); retry after ${Math.ceil(timeUntilReset / 1000)} seconds`,
+        `Bricklink API hourly quota exceeded (${RATE_LIMIT.capacity} requests/hour); retry after ${Math.ceil(timeUntilReset / 1000)} seconds`,
       );
     }
 
@@ -101,15 +104,15 @@ export class BricklinkClient {
 
     recordMetric("external.bricklink.quota", {
       count: nextCount,
-      capacity: DAILY_QUOTA_CAPACITY,
+      capacity: RATE_LIMIT.capacity,
       percentage,
     });
 
-    if (percentage >= ALERT_THRESHOLD && !BricklinkClient.quotaState.alertEmitted) {
+    if (percentage >= RATE_LIMIT.alertThreshold && !BricklinkClient.quotaState.alertEmitted) {
       BricklinkClient.quotaState.alertEmitted = true;
       recordMetric("external.bricklink.quota.alert", {
         count: nextCount,
-        capacity: DAILY_QUOTA_CAPACITY,
+        capacity: RATE_LIMIT.capacity,
         percentage,
       });
     }
@@ -409,13 +412,15 @@ export class BricklinkClient {
 }
 
 /**
- * Shared BricklinkClient instance
+ * Shared BricklinkClient instance for catalog data
  *
- * This singleton instance is used across the application to ensure:
+ * This singleton instance is used for BrickOps internal catalog queries:
+ * - Parts, colors, categories, price guides (reference data)
+ * - NOT for user store operations (use storeClient for that)
  * - Quota tracking is global (all code shares the same rate limit counter)
  * - Efficient resource usage (no repeated instantiation)
- * - Consistent behavior across all Bricklink API calls
+ * - Consistent behavior across all Bricklink catalog API calls
  *
  * For testing, use BricklinkClient.createForTesting() instead.
  */
-export const bricklinkClient = new BricklinkClient();
+export const catalogClient = new BricklinkClient();

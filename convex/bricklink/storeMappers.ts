@@ -3,7 +3,7 @@
  * Handles inventory data (Story 3.2) and orders (Epic 4 future)
  */
 
-import type { Id } from "../_generated/dataModel";
+import type { Doc } from "../_generated/dataModel";
 import type {
   BricklinkInventoryResponse,
   BricklinkInventoryCreateRequest,
@@ -11,39 +11,13 @@ import type {
 } from "./storeClient";
 
 /**
- * Convex InventoryItem type (subset needed for mapping)
- */
-export interface ConvexInventoryItem {
-  _id?: Id<"inventoryItems">;
-  businessAccountId: Id<"businessAccounts">;
-  sku: string;
-  name: string;
-  partNumber: string;
-  colorId: string;
-  location: string;
-  quantityAvailable: number;
-  quantityReserved: number;
-  quantitySold: number;
-  status: "available" | "reserved" | "sold";
-  condition: "new" | "used";
-  price?: number;
-  notes?: string;
-  bricklinkInventoryId?: number;
-  createdBy: Id<"users">;
-  createdAt: number;
-  updatedAt?: number;
-  isArchived?: boolean;
-  deletedAt?: number;
-}
-
-/**
  * Map BrickLink inventory response to Convex inventory item
  * Used when importing inventory from BrickLink to Convex
  */
 export function mapBricklinkToConvexInventory(
   bricklinkInventory: BricklinkInventoryResponse,
-  businessAccountId: Id<"businessAccounts">,
-): Omit<ConvexInventoryItem, "_id" | "createdBy" | "createdAt" | "updatedAt"> {
+  businessAccountId: Doc<"inventoryItems">["businessAccountId"],
+): Omit<Doc<"inventoryItems">, "_id" | "_creationTime" | "createdBy" | "createdAt" | "updatedAt"> {
   // Map condition: "N" -> "new", "U" -> "used"
   const condition: "new" | "used" = bricklinkInventory.new_or_used === "N" ? "new" : "used";
 
@@ -91,7 +65,7 @@ export function mapBricklinkToConvexInventory(
  * Used when creating new inventory on BrickLink from Convex data
  */
 export function mapConvexToBricklinkCreate(
-  convexInventory: ConvexInventoryItem,
+  convexInventory: Doc<"inventoryItems">,
 ): BricklinkInventoryCreateRequest {
   // Map condition: "new" -> "N", "used" -> "U"
   const new_or_used: "N" | "U" = convexInventory.condition === "new" ? "N" : "U";
@@ -146,7 +120,7 @@ export function mapConvexToBricklinkCreate(
  * @param previousQuantity - Previous quantity to calculate delta (undefined for non-quantity updates)
  */
 export function mapConvexToBricklinkUpdate(
-  convexInventory: ConvexInventoryItem,
+  convexInventory: Doc<"inventoryItems">,
   previousQuantity?: number,
 ): BricklinkInventoryUpdateRequest {
   // Parse stock room from location
