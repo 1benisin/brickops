@@ -19,6 +19,8 @@ import { ConvexError, v } from "convex/values";
 import { encryptCredential, decryptCredential } from "../lib/encryption";
 import { api, internal } from "../_generated/api";
 import { BricklinkStoreClient } from "../bricklink/storeClient";
+import { BrickOwlStoreClient } from "../brickowl/storeClient";
+import { getRateLimitConfig } from "../marketplaces/rateLimitConfig";
 
 type RequireOwnerReturn = {
   userId: Id<"users">;
@@ -541,12 +543,13 @@ export const getQuotaState = internalQuery({
 
     // Return defaults if no quota record exists
     if (!quota) {
+      const config = getRateLimitConfig(args.provider);
       return {
         windowStart: Date.now(),
         requestCount: 0,
-        capacity: 5000, // BrickLink default
-        windowDurationMs: 86400000, // 24 hours
-        alertThreshold: 0.8,
+        capacity: config.capacity,
+        windowDurationMs: config.windowDurationMs,
+        alertThreshold: config.alertThreshold,
         alertEmitted: false,
         consecutiveFailures: 0,
         circuitBreakerOpenUntil: undefined as number | undefined,
@@ -585,14 +588,17 @@ export const incrementQuota = internalMutation({
 
     // Initialize if first request
     if (!existing) {
+      // Get provider-specific rate limit configuration
+      const config = getRateLimitConfig(args.provider);
+
       await ctx.db.insert("marketplaceRateLimits", {
         businessAccountId: args.businessAccountId,
         provider: args.provider,
         windowStart: now,
         requestCount: 1,
-        capacity: 5000, // BrickLink limit
-        windowDurationMs: 86400000, // 24 hours
-        alertThreshold: 0.8,
+        capacity: config.capacity,
+        windowDurationMs: config.windowDurationMs,
+        alertThreshold: config.alertThreshold,
         alertEmitted: false,
         consecutiveFailures: 0,
         lastRequestAt: now,
@@ -661,14 +667,16 @@ export const recordFailure = internalMutation({
     if (!existing) {
       // Initialize with failure count
       const now = Date.now();
+      const config = getRateLimitConfig(args.provider);
+
       await ctx.db.insert("marketplaceRateLimits", {
         businessAccountId: args.businessAccountId,
         provider: args.provider,
         windowStart: now,
         requestCount: 0,
-        capacity: 5000,
-        windowDurationMs: 86400000,
-        alertThreshold: 0.8,
+        capacity: config.capacity,
+        windowDurationMs: config.windowDurationMs,
+        alertThreshold: config.alertThreshold,
         alertEmitted: false,
         consecutiveFailures: 1,
         lastRequestAt: now,
@@ -757,4 +765,34 @@ export async function createBricklinkStoreClient(
 
   // Create and return client instance with ActionCtx for DB rate limiting
   return new BricklinkStoreClient(decryptedCreds, businessAccountId, ctx);
+}
+
+/**
+ * Create BrickOwl Store Client with user credentials
+ * Helper function for use within actions
+ */
+export async function createBrickOwlStoreClient(
+  ctx: ActionCtx,
+  businessAccountId: Id<"businessAccounts">,
+): Promise<BrickOwlStoreClient> {
+  // Get encrypted credentials
+  const credentials = await ctx.runQuery(internal.functions.marketplace.getEncryptedCredentials, {
+    businessAccountId,
+    provider: "brickowl",
+  });
+
+  if (!credentials) {
+    throw new ConvexError({
+      code: "CREDENTIALS_NOT_FOUND",
+      message: "BrickOwl credentials not configured. Please add your credentials in Settings.",
+    });
+  }
+
+  // Decrypt credentials
+  const decryptedCreds = {
+    apiKey: await decryptCredential(credentials.brickowlApiKey!),
+  };
+
+  // Create and return client instance with ActionCtx for DB rate limiting
+  return new BrickOwlStoreClient(decryptedCreds, businessAccountId, ctx);
 }

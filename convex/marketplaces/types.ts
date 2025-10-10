@@ -10,7 +10,8 @@
 export interface StoreOperationResult {
   success: boolean;
   bricklinkInventoryId?: number; // For BrickLink inventory operations
-  brickowlInventoryId?: string; // For BrickOwl inventory operations (Epic 3.3)
+  brickowlInventoryId?: string; // For BrickOwl inventory operations (lot_id)
+  brickowlLotId?: string; // Alias for brickowlInventoryId (Story 3.3)
   bricklinkOrderId?: number; // For BrickLink order operations (Epic 4)
   brickowlOrderId?: string; // For BrickOwl order operations (Epic 4)
   error?: {
