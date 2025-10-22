@@ -17,8 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui";
-import { BrickLinkCredentialsForm } from "@/components/settings/bricklink-credentials-form";
-import { BrickOwlCredentialsForm } from "@/components/settings/brickowl-credentials-form";
+import { BrickLinkCredentialsForm } from "@/components/settings/BricklinkCredentialsForm";
+import { BrickOwlCredentialsForm } from "@/components/settings/BrickowlCredentialsForm";
 
 type Role = "manager" | "picker" | "viewer";
 
@@ -35,14 +35,14 @@ interface MemberRow {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const authState = useQuery(api.functions.users.getAuthState);
-  const currentUser = useQuery(api.functions.users.getCurrentUser);
-  const members = useQuery(api.functions.users.listMembers);
-  const updateProfile = useMutation(api.functions.users.updateProfile);
-  const regenerateInviteCode = useMutation(api.functions.users.regenerateInviteCode);
-  const updateUserRole = useMutation(api.functions.users.updateUserRole);
-  const removeUser = useMutation(api.functions.users.removeUser);
-  const createUserInvite = useMutation(api.functions.users.createUserInvite);
+  const authState = useQuery(api.users.queries.getAuthState);
+  const currentUser = useQuery(api.users.queries.getCurrentUser);
+  const members = useQuery(api.users.queries.listMembers);
+  const updateProfile = useMutation(api.users.mutations.updateProfile);
+  const regenerateInviteCode = useMutation(api.users.mutations.regenerateInviteCode);
+  const updateUserRole = useMutation(api.users.mutations.updateUserRole);
+  const removeUser = useMutation(api.users.mutations.removeUser);
+  const createUserInvite = useMutation(api.users.mutations.createUserInvite);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");

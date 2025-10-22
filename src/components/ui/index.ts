@@ -5,5 +5,5 @@ export * from "./dialog";
 export * from "./sheet";
 export * from "./table";
 export * from "./tabs";
-export * from "./theme-toggle";
+export * from "./ThemeToggle";
 export * from "./skeleton";

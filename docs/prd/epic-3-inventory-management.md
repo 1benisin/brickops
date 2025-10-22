@@ -72,21 +72,62 @@ so that **the frontend can manage our canonical inventory while the system relia
 
 ### Acceptance Criteria
 
-1. **3.4.1:** Provide Convex queries/mutations for managing our canonical `inventories` data (create/update/delete/read) for authenticated users with RBAC enforcement.
-2. **3.4.2:** Implement an `inventoryChangeLog` that records every inventory mutation with sufficient detail to support rollbacks (who, when, what changed, previous values, correlation ID).
-3. **3.4.3:** Ensure atomicity: mutations update the `inventories` table and append an `inventoryChangeLog` entry in the same transaction.
-4. **3.4.4:** Implement Convex actions/workflows that consume the change log and enqueue sync operations to BrickLink and BrickOwl, track per-change sync status, and retry with backoff on transient failures.
-5. **3.4.5:** Provide idempotency for sync actions (deduplicate by change ID) and conflict handling if a marketplace rejects an update (surface status and reason back to UI).
-6. **3.4.6:** Expose progress/status endpoints/queries so the UI can present sync state per inventory item and per change.
-7. **3.4.7:** Provide a rollback capability that replays the inverse of a specific change (and enqueues compensating updates to marketplaces); guard with RBAC and audit logging.
-8. **3.4.8:** Add observability: structured logs and metrics around queue depth, success/failure rates, retry counts, and latency; no secrets in logs.
+1. **3.4.1:** Provide Convex queries/mutations for managing our canonical `inventoryItems` data (create/update/delete/read) for authenticated users with RBAC enforcement (owner role required).
+2. **3.4.2:** Implement an `inventorySyncQueue` table that records every inventory mutation with complete details: who, when, change type, previous values, new values, correlation ID, and sync status per provider.
+3. **3.4.3:** Ensure atomicity: mutations update the `inventoryItems` table and append an `inventorySyncQueue` entry in the same transaction.
+4. **3.4.4:** Implement Convex actions that consume the sync queue and execute sync operations to configured marketplaces (BrickLink and/or BrickOwl), track per-change sync status per provider, and retry with exponential backoff on transient failures.
+5. **3.4.5:** Provide idempotency for sync actions using change ID as the deduplication key, and conflict handling when a marketplace rejects an update (surface status back to queries).
+6. **3.4.6:** Expose queries that return sync state per inventory item and per change, enabling UI to show real-time sync progress and status.
+7. **3.4.7:** Provide a rollback/undo capability that executes the inverse of a specific change (and enqueues compensating marketplace updates); guard with RBAC and create compensating sync queue entries.
+8. **3.4.8:** Add observability: structured logs and metrics for sync queue depth, success/failure rates, retry counts, and sync latency per provider; no secrets logged.
 
 > Notes:
 >
-> - Consider feature flags to gate external syncing per environment.
-> - Ensure consistent mapping by delegating to the BrickLink/BrickOwl clients' data mappers.
+> - Feature flags: `DISABLE_EXTERNAL_CALLS`, `INVENTORY_SYNC_ENABLED`, `BRICKLINK_SYNC_ENABLED`, `BRICKOWL_SYNC_ENABLED`
+> - Scheduled cron job (30s interval) processes pending changes for all business accounts
+> - Multi-provider sync: tracks sync status independently per provider (BrickLink, BrickOwl)
+> - Uses marketplace client factories from Stories 3.2-3.3 with database-backed rate limiting
+> - Change ID serves as idempotency key for marketplace operations to prevent duplicates on retry
 
-## Story 3.5: Inventory Change History and Rollback UI
+## Story 3.5: Inventory Files (Batch Collections)
+
+As a **user**,
+I want **to create and manage inventory files (collections) that I can batch-sync to marketplaces**,
+so that **I can organize inventory imports and selectively sync batches without automatic marketplace synchronization**.
+
+### Acceptance Criteria
+
+1. **3.5.1:** Provide inventory file management: create, read, update, delete inventory file collections with name, description, creation date, last modified timestamp, and item count.
+2. **3.5.2:** Display inventory files list view showing all files for the user's business account with summary stats (item count, creation date, last modified), search/filter capabilities, and quick action buttons (view, sync, delete).
+3. **3.5.3:** When adding a part to inventory, provide "Inventory File" field with dropdown to select existing file or "Create New" option; items added to files via `inventoryItems.fileId` reference are NOT automatically synced to `inventorySyncQueue`.
+4. **3.5.4:** Implement inventory file detail view displaying all items within the selected file (`inventoryItems` filtered by `fileId`) with standard inventory fields (part identifier, quantity, condition, price, location, notes, status).
+5. **3.5.5:** Support item CRUD operations within inventory files: add items with `fileId`, edit items in file, remove items from file (delete or clear `fileId`); changes update `inventoryItems` only without triggering sync queue.
+6. **3.5.6:** Provide "Sync to Marketplace" batch action that allows user to select target marketplace(s) (BrickLink and/or BrickOwl) and directly creates inventory lots via Convex actions to marketplace clients, respecting marketplace bulk API limits (batches of ~100 items per request).
+7. **3.5.7:** Implement batch processing with chunking: split inventory file items into batches respecting marketplace API limits (~100 items), process sequentially with progress tracking, handle partial batch failures gracefully.
+8. **3.5.8:** For each batch operation, track per-item sync results: on success, record entry in `inventoryHistory` table with marketplace reference; on failure, mark item with error status and capture error details for UI display.
+9. **3.5.9:** Display real-time sync progress with UI indicators: current batch X of Y, items processing/succeeded/failed counts, per-item status updates as batches complete.
+10. **3.5.10:** After sync completion, provide detailed summary report: total items attempted, successful syncs per marketplace with marketplace lot IDs, failed items list with actionable error messages and affected item identifiers.
+11. **3.5.11:** Validate prerequisites before sync: marketplace credentials configured, valid item data (required fields present), sufficient rate limit capacity; surface blocking issues with clear guidance before initiating sync.
+12. **3.5.12:** Enforce RBAC: only owner role can create files, modify file items, and execute marketplace sync operations; audit all sync actions with user, timestamp, marketplace, and result counts in `inventoryHistory`.
+13. **3.5.13:** Provide filtering and sorting within inventory file view: filter by condition, part type, sync status; sort by quantity, price, date added; support bulk selection for operations.
+14. **3.5.14:** After successful sync, update item sync metadata (marketplace IDs, last synced timestamp) in `inventoryItems` and offer option to move items from file to main inventory (clear `fileId`) or keep in file for reference.
+
+> Notes:
+>
+> - Schema: `inventoryFiles` table with `_id`, `businessId`, `name`, `description`, `createdAt`, `updatedAt`, `itemCount` (computed)
+> - Use existing `inventoryItems` table with optional `fileId: v.optional(v.id("inventoryFiles"))` reference
+> - Items with `fileId` set are NOT processed by `inventorySyncQueue` mutations; they bypass the queue entirely
+> - Batch sync operation:
+>   - Chunks items into batches of ~100 (respect BrickLink/BrickOwl bulk limits)
+>   - Calls marketplace client `bulkCreateLots()` or similar bulk endpoint
+>   - On success: creates `inventoryHistory` entries for each item with marketplace lot ID
+>   - On batch failure: marks all items in failed batch with error status; if API provides partial results, mark individually
+>   - Uses existing marketplace client rate limiting and retry logic from Stories 3.2-3.3
+> - Consider adding `syncStatus` field to `inventoryItems`: null (not synced), 'syncing', 'synced', 'failed'
+> - Add `marketplaceRefs` to `inventoryItems`: object with `bricklink.lotId`, `brickowl.lotId` for tracking
+> - Audit logging: record sync operations in `inventoryHistory` with operation type 'batch_sync', marketplace, item count, success/failure counts
+
+## Story 3.6: Inventory Change History and Rollback UI
 
 As a **user**,
 I want **to view my complete inventory change history and rollback changes when needed**,
@@ -94,27 +135,28 @@ so that **I can track all inventory modifications, correct mistakes, and maintai
 
 ### Acceptance Criteria
 
-1. **3.5.1:** Provide a dedicated "Inventory Change History" UI accessible from the inventory management section showing all `inventoryChangeLog` entries for the user's business account with most recent changes displayed first (paginated).
-2. **3.5.2:** Display comprehensive change details per entry: timestamp, actor (user who made the change), change type (create/update/adjust/delete), item identifier, delta values, reason/notes, and sync status to marketplaces.
-3. **3.5.3:** Implement append-only audit logging: every change creates an immutable log entry, and undo operations create new compensating entries that reference the original change (never delete or modify existing logs).
-4. **3.5.4:** Support undo functionality with explicit tracking: when a user undoes a change, create a new log entry marked as `isUndo: true` with `undoesLogId` referencing the original log, and update the original log with `undoneByLogId` to mark it as undone.
-5. **3.5.5:** Allow users to undo an undo (effectively a redo): treating undo-of-undo as another compensating action with proper reference chain tracking in the audit log.
-6. **3.5.6:** Provide visual indicators in the UI: show "[UNDONE]" badge on entries that have been reversed, "[UNDO]" badge on undo operations, and display the reference chain (e.g., "Undid change #123").
-7. **3.5.7:** Implement "Undo" action buttons per change entry (where applicable) that prompt for a reason, execute the compensating operation on local inventory and enqueue marketplace syncs, then create the undo audit log entry atomically.
-8. **3.5.8:** Prevent duplicate undos: disable undo button and show status if a change has already been undone (check `undoneByLogId` field).
-9. **3.5.9:** Enforce RBAC on undo operations: only authorized users (with appropriate permissions) can perform rollbacks; audit who initiated each undo.
-10. **3.5.10:** Provide filtering and search capabilities: filter by date range, change type, actor, item, or undo status; search by item identifier or reason text.
-11. **3.5.11:** Show sync status per change: indicate if marketplace sync is pending, completed, or failed; surface any sync errors with actionable messages.
-12. **3.5.12:** Ensure complete audit trail for compliance: all undo operations are logged with who performed the undo, when, and why; no logs are ever deleted or modified.
+1. **3.6.1:** Provide a dedicated "Inventory Change History" UI accessible from the inventory management section showing all `inventorySyncQueue` entries for the user's business account with most recent changes displayed first (paginated).
+2. **3.6.2:** Display comprehensive change details per entry: timestamp, actor (user who made the change), change type (create/update/delete), item identifier, data snapshots (previousData, newData), reason/notes, and sync status per provider (BrickLink, BrickOwl).
+3. **3.6.3:** Implement append-only sync queue: every change creates an immutable queue entry, and undo operations create new compensating entries that reference the original change (never delete or modify existing entries).
+4. **3.6.4:** Support undo functionality with explicit tracking: when a user undoes a change, create a new queue entry marked as `isUndo: true` with `undoesChangeId` referencing the original change, and update the original entry with `undoneByChangeId` to mark it as undone.
+5. **3.6.5:** Allow users to undo an undo (effectively a redo): treating undo-of-undo as another compensating action with proper reference chain tracking in the audit log.
+6. **3.6.6:** Provide visual indicators in the UI: show "[UNDONE]" badge on entries that have been reversed, "[UNDO]" badge on undo operations, and display the reference chain (e.g., "Undid change #123").
+7. **3.6.7:** Implement "Undo" action buttons per change entry (where applicable) that prompt for a reason, execute the compensating operation on `inventoryItems` and create compensating sync queue entry with marketplace sync, atomically.
+8. **3.6.8:** Prevent duplicate undos: disable undo button and show status if a change has already been undone (check `undoneByChangeId` field).
+9. **3.6.9:** Enforce RBAC on undo operations: only owner role can perform rollbacks; audit who initiated each undo.
+10. **3.6.10:** Provide filtering and search capabilities: filter by date range, change type, actor, item, or undo status; search by item identifier or reason text.
+11. **3.6.11:** Show multi-provider sync status per change: display sync status independently for BrickLink and BrickOwl (pending, syncing, synced, failed); surface per-provider sync errors with timestamps and actionable messages.
+12. **3.6.12:** Ensure complete audit trail for compliance: all undo operations are logged with who performed the undo, when, and why; no logs are ever deleted or modified.
 
 > Notes:
 >
-> - Schema should include `isUndo` (boolean), `undoesLogId` (reference to original log), `undoneByLogId` (set when this log is undone), and `reason` (user explanation) fields in `inventoryChangeLog`.
-> - When processing an undo: (1) check if already undone, (2) execute compensating operation on inventory table, (3) enqueue marketplace sync, (4) create new undo log entry, (5) update original log with `undoneByLogId` — all in single transaction.
-> - UI should clearly communicate the undo chain for transparency: "Alice created item → Bob deleted (undid Alice's create) → Alice created (undid Bob's undo)".
-> - Consider displaying a timeline view or activity feed showing the evolution of specific inventory items through multiple changes and undos.
+> - Schema fields: `isUndo` (boolean), `undoesChangeId` (reference to original change), `undoneByChangeId` (set when undone), `reason` (user explanation) already exist in `inventorySyncQueue` from Story 3.4
+> - When processing an undo: (1) check if already undone, (2) execute compensating operation on `inventoryItems` table, (3) create new sync queue entry marked as undo, (4) update original queue entry with `undoneByChangeId` — all in single atomic transaction
+> - UI should clearly communicate the undo chain for transparency: "Alice created item → Bob deleted (undid Alice's create) → Alice created (undid Bob's undo)"
+> - Multi-provider sync status: Each change shows independent sync state for BrickLink and BrickOwl with timestamps and error details
+> - Consider displaying a timeline view or activity feed showing the evolution of specific inventory items through multiple changes and undos
 
-## Story 3.6: Inventory Upload and Import
+## Story 3.7: Inventory Upload and Import
 
 As a **user**,
 I want **to upload my existing inventory data in bulk**,
@@ -122,15 +164,15 @@ so that **I can quickly migrate my current inventory without manual entry**.
 
 ### Acceptance Criteria
 
-1. **3.6.1:** User can upload XML files with inventory data
-2. **3.6.2:** System validates uploaded data format and provides error feedback
-3. **3.6.3:** System maps uploaded columns to inventory fields (part number, quantity, location, etc.)
-4. **3.6.4:** User can preview and confirm data before import
-5. **3.6.5:** System processes bulk import with progress indicators
-6. **3.6.6:** System handles duplicate entries and provides resolution options
-7. **3.6.7:** Import process completes within 30 seconds for 1000+ items
+1. **3.7.1:** User can upload XML files with inventory data
+2. **3.7.2:** System validates uploaded data format and provides error feedback
+3. **3.7.3:** System maps uploaded columns to inventory fields (part number, quantity, location, etc.)
+4. **3.7.4:** User can preview and confirm data before import
+5. **3.7.5:** System processes bulk import with progress indicators
+6. **3.7.6:** System handles duplicate entries and provides resolution options
+7. **3.7.7:** Import process completes within 30 seconds for 1000+ items
 
-## Story 3.7: Advanced Inventory Management
+## Story 3.8: Advanced Inventory Management
 
 As a **user**,
 I want **comprehensive inventory management features**,
@@ -138,15 +180,15 @@ so that **I can efficiently organize and maintain large inventories**.
 
 ### Acceptance Criteria
 
-1. **3.7.1:** User can organize inventory by location, category, or custom tags
-2. **3.7.2:** User can perform bulk operations (edit, delete, status changes) on multiple items
-3. **3.7.3:** System provides advanced filtering and sorting options
-4. **3.7.4:** User can export inventory data in various formats
-5. **3.7.5:** System maintains inventory history and change tracking
-6. **3.7.6:** User can set low stock alerts and notifications
-7. **3.7.7:** System provides inventory analytics and insights
+1. **3.8.1:** User can organize inventory by location, category, or custom tags
+2. **3.8.2:** User can perform bulk operations (edit, delete, status changes) on multiple items
+3. **3.8.3:** System provides advanced filtering and sorting options
+4. **3.8.4:** User can export inventory data in various formats
+5. **3.8.5:** System maintains inventory history and change tracking
+6. **3.8.6:** User can set low stock alerts and notifications
+7. **3.8.7:** System provides inventory analytics and insights
 
-## Story 3.8: Inventory Validation and Quality Control
+## Story 3.9: Inventory Validation and Quality Control
 
 As a **user**,
 I want **inventory validation and quality control features**,
@@ -154,10 +196,10 @@ so that **I can maintain data accuracy and identify issues**.
 
 ### Acceptance Criteria
 
-1. **3.8.1:** System validates part numbers against catalog database
-2. **3.8.2:** System flags potential data inconsistencies or errors
-3. **3.8.3:** User can review and correct flagged items
-4. **3.8.4:** System provides data quality metrics and reports
-5. **3.8.5:** System suggests corrections for common data entry errors
-6. **3.8.6:** User can set up automated validation rules
-7. **3.8.7:** System maintains data integrity across all operations
+1. **3.9.1:** System validates part numbers against catalog database
+2. **3.9.2:** System flags potential data inconsistencies or errors
+3. **3.9.3:** User can review and correct flagged items
+4. **3.9.4:** System provides data quality metrics and reports
+5. **3.9.5:** System suggests corrections for common data entry errors
+6. **3.9.6:** User can set up automated validation rules
+7. **3.9.7:** System maintains data integrity across all operations

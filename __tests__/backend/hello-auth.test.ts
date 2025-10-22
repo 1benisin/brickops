@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
 import { describe, expect, it } from "vitest";
-import { deriveTenantId } from "@/convex/functions/hello";
+import { deriveTenantId } from "@/convex/hello";
 
 describe("deriveTenantId", () => {
   it("supports colon delimiters", () => {

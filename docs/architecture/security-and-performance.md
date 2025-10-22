@@ -2,12 +2,23 @@
 
 ## Security Requirements
 
-- Input Validation: Zod schemas at Convex function boundaries
-- Rate Limiting: Per-user limits (e.g., identify: 100/hour, order processing: 50/hour)
-- Provider Quotas: Bricklink default 5,000 calls/day (API Terms 2023-02-02). Enforce daily budgeting with alerts at ≥80% usage and hard stop beyond quota for compliance.
-- CORS: Restrict to production domains
-- Secrets: Never hardcode; use environment variables with encryption
-- Tenant Isolation: All queries scoped by businessAccountId
+- **Input Validation**: Zod schemas at Convex function boundaries
+- **Rate Limiting**:
+  - Per-user limits (e.g., identify: 100/hour, order processing: 50/hour)
+  - Database-backed marketplace rate limiting (Stories 3.2-3.3) with circuit breaker
+- **Provider Quotas**:
+  - BrickLink: 5,000 calls/day per business account
+  - BrickOwl: 200 calls/minute per business account
+  - Enforce with alerts at ≥80% usage and hard stop beyond quota
+- **Credential Encryption (Story 3.1)**:
+  - User marketplace credentials encrypted at rest using AES-GCM
+  - Implementation: `convex/lib/encryption.ts` using Web Crypto API
+  - Encryption key: `ENCRYPTION_KEY` environment variable (32-byte base64-encoded)
+  - Never return plaintext credentials; always decrypt server-side only
+- **CORS**: Restrict to production domains
+- **Secrets**: Never hardcode; use environment variables (system) or encrypted database storage (user BYOK)
+- **Tenant Isolation**: All queries scoped by businessAccountId
+- **RBAC**: Owner role required for marketplace credential management and inventory sync operations
 
 ## Performance Optimization
 

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { AuthenticatedHeader } from "@/components/layout/authenticated-header";
-import { NavigationItem } from "@/components/layout/app-navigation";
+import { AuthenticatedHeader } from "@/components/layout/AuthenticatedHeader";
+import { NavigationItem } from "@/components/layout/AppNavigation";
 import { Home, Package, ShoppingCart } from "lucide-react";
 
 // Mock the ThemeToggle component

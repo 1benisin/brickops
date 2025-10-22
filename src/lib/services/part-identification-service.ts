@@ -59,7 +59,7 @@ export class PartIdentificationService {
 
   async generateUploadUrl(): Promise<string> {
     try {
-      return await this.client.mutation(api.functions.identify.generateUploadUrl, {});
+      return await this.client.mutation(api.identify.mutations.generateUploadUrl, {});
     } catch (error) {
       throw this.normalizeError(error);
     }
@@ -69,7 +69,7 @@ export class PartIdentificationService {
     request: PartIdentificationRequest,
   ): Promise<PartIdentificationResult> {
     try {
-      return await this.client.action(api.functions.identifyActions.identifyPartFromImage, request);
+      return await this.client.action(api.identify.actions.identifyPartFromImage, request);
     } catch (error) {
       throw this.normalizeError(error);
     }

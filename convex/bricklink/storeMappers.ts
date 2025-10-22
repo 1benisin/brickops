@@ -21,30 +21,19 @@ export function mapBricklinkToConvexInventory(
   // Map condition: "N" -> "new", "U" -> "used"
   const condition: "new" | "used" = bricklinkInventory.new_or_used === "N" ? "new" : "used";
 
-  // Map location from stock room
-  let location = "Main"; // Default location
-  if (bricklinkInventory.is_stock_room && bricklinkInventory.stock_room_id) {
-    location = `Stockroom ${bricklinkInventory.stock_room_id}`;
-  }
-
-  // Generate SKU from part number + color + condition
-  const sku = `${bricklinkInventory.item.no}-${bricklinkInventory.color_id}-${condition}`;
+  // Map location from remarks field
+  const location = bricklinkInventory.remarks || "Main"; // Default to "Main" if no remarks
 
   // Parse price from fixed-point string to number
   const price = bricklinkInventory.unit_price
     ? parseFloat(bricklinkInventory.unit_price)
     : undefined;
 
-  // Combine description and remarks into notes
-  const notes =
-    [bricklinkInventory.description, bricklinkInventory.remarks]
-      .filter(Boolean)
-      .join(" | ")
-      .trim() || undefined;
+  // Map description to notes (public-facing description)
+  const notes = bricklinkInventory.description || undefined;
 
   return {
     businessAccountId,
-    sku,
     name: bricklinkInventory.item.name,
     partNumber: bricklinkInventory.item.no,
     colorId: bricklinkInventory.color_id.toString(), // Convert number to string
@@ -70,22 +59,14 @@ export function mapConvexToBricklinkCreate(
   // Map condition: "new" -> "N", "used" -> "U"
   const new_or_used: "N" | "U" = convexInventory.condition === "new" ? "N" : "U";
 
-  // Parse stock room from location
-  let is_stock_room = false;
-  let stock_room_id: "A" | "B" | "C" | undefined;
-  if (convexInventory.location.startsWith("Stockroom ")) {
-    is_stock_room = true;
-    const roomLetter = convexInventory.location.replace("Stockroom ", "");
-    if (roomLetter === "A" || roomLetter === "B" || roomLetter === "C") {
-      stock_room_id = roomLetter;
-    }
-  }
-
   // Format price as fixed-point string
   const unit_price = convexInventory.price?.toFixed(4) ?? "0.0000";
 
-  // Parse notes into description (keep it simple - use notes as description)
+  // Map notes to description (public-facing description)
   const description = convexInventory.notes || "";
+
+  // Map location to remarks (private internal location)
+  const remarks = convexInventory.location || "";
 
   // Validate required fields
   if (!convexInventory.partNumber) {
@@ -102,11 +83,11 @@ export function mapConvexToBricklinkCreate(
     unit_price,
     new_or_used,
     description,
-    remarks: "", // Could enhance to split notes into description/remarks
+    remarks, // Maps to our location field
     bulk: 1, // Default bulk amount
     is_retain: false, // Default: don't retain after sold out
-    is_stock_room,
-    stock_room_id,
+    is_stock_room: false, // Not using stock room feature
+    stock_room_id: undefined,
   };
 }
 
@@ -123,17 +104,6 @@ export function mapConvexToBricklinkUpdate(
   convexInventory: Doc<"inventoryItems">,
   previousQuantity?: number,
 ): BricklinkInventoryUpdateRequest {
-  // Parse stock room from location
-  let is_stock_room = false;
-  let stock_room_id: "A" | "B" | "C" | undefined;
-  if (convexInventory.location.startsWith("Stockroom ")) {
-    is_stock_room = true;
-    const roomLetter = convexInventory.location.replace("Stockroom ", "");
-    if (roomLetter === "A" || roomLetter === "B" || roomLetter === "C") {
-      stock_room_id = roomLetter;
-    }
-  }
-
   // Format price as fixed-point string
   const unit_price = convexInventory.price?.toFixed(4);
 
@@ -146,18 +116,21 @@ export function mapConvexToBricklinkUpdate(
     }
   }
 
-  // Parse notes into description
+  // Map notes to description (public-facing description)
   const description = convexInventory.notes;
+
+  // Map location to remarks (private internal location)
+  const remarks = convexInventory.location;
 
   return {
     quantity,
     unit_price,
     description,
-    remarks: "", // Could enhance to split notes
+    remarks, // Maps to our location field
     bulk: 1,
     is_retain: false,
-    is_stock_room,
-    stock_room_id,
+    is_stock_room: false, // Not using stock room feature
+    stock_room_id: undefined,
   };
 }
 

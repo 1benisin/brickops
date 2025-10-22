@@ -20,102 +20,23 @@ import {
   buildAuthorizationHeader,
   type OAuthCredentials,
 } from "./oauth";
-import { getRateLimitConfig } from "../marketplaces/rateLimitConfig";
+import { getRateLimitConfig } from "../marketplace/rateLimitConfig";
 
 const BASE_URL = "https://api.bricklink.com/api/store/v1/";
 const HEALTH_ENDPOINT = "/orders";
 
-// Get BrickLink rate limit configuration from shared source
-const RATE_LIMIT = getRateLimitConfig("bricklink");
+// Get BrickLink rate limit configuration from shared source (reserved for metrics or headers)
+const _RATE_LIMIT = getRateLimitConfig("bricklink");
 
 export class BricklinkClient {
   private readonly credentials: ReturnType<typeof getBricklinkCredentials>;
   private readonly nonce: () => string;
   private readonly timestamp: () => number;
 
-  private static quotaState = {
-    count: 0,
-    windowStart: 0,
-    alertEmitted: false,
-  };
-
   constructor() {
     this.credentials = getBricklinkCredentials();
     this.nonce = () => randomHex(16);
     this.timestamp = () => Math.floor(Date.now() / 1000);
-  }
-
-  /** @internal Test only - creates client with custom options */
-  static createForTesting(
-    options: {
-      credentials?: ReturnType<typeof getBricklinkCredentials>;
-      nonce?: () => string;
-      timestamp?: () => number;
-    } = {},
-  ) {
-    const client = Object.create(BricklinkClient.prototype);
-    client.credentials = options.credentials ?? getBricklinkCredentials();
-    client.nonce = options.nonce ?? (() => randomHex(16));
-    client.timestamp = options.timestamp ?? (() => Math.floor(Date.now() / 1000));
-    return client;
-  }
-
-  /** @internal Test only - resets quota tracking state */
-  static resetQuotaForTests() {
-    BricklinkClient.quotaState = {
-      count: 0,
-      windowStart: 0,
-      alertEmitted: false,
-    };
-  }
-
-  private static recordQuotaUsage() {
-    const now = Date.now();
-    const windowElapsed = now - BricklinkClient.quotaState.windowStart;
-    if (
-      BricklinkClient.quotaState.windowStart === 0 ||
-      windowElapsed >= RATE_LIMIT.windowDurationMs
-    ) {
-      BricklinkClient.quotaState.windowStart = now;
-      BricklinkClient.quotaState.count = 0;
-      BricklinkClient.quotaState.alertEmitted = false;
-    }
-
-    const nextCount = BricklinkClient.quotaState.count + 1;
-    const percentage = nextCount / RATE_LIMIT.capacity;
-
-    if (nextCount > RATE_LIMIT.capacity) {
-      const timeUntilReset =
-        RATE_LIMIT.windowDurationMs - (now - BricklinkClient.quotaState.windowStart);
-
-      recordMetric("external.bricklink.quota.blocked", {
-        count: BricklinkClient.quotaState.count,
-        capacity: RATE_LIMIT.capacity,
-        percentage: BricklinkClient.quotaState.count / RATE_LIMIT.capacity,
-        retryAfterMs: timeUntilReset,
-      });
-
-      throw new Error(
-        `Bricklink API hourly quota exceeded (${RATE_LIMIT.capacity} requests/hour); retry after ${Math.ceil(timeUntilReset / 1000)} seconds`,
-      );
-    }
-
-    BricklinkClient.quotaState.count = nextCount;
-
-    recordMetric("external.bricklink.quota", {
-      count: nextCount,
-      capacity: RATE_LIMIT.capacity,
-      percentage,
-    });
-
-    if (percentage >= RATE_LIMIT.alertThreshold && !BricklinkClient.quotaState.alertEmitted) {
-      BricklinkClient.quotaState.alertEmitted = true;
-      recordMetric("external.bricklink.quota.alert", {
-        count: nextCount,
-        capacity: RATE_LIMIT.capacity,
-        percentage,
-      });
-    }
   }
 
   async request<T>(options: {
@@ -170,9 +91,6 @@ export class BricklinkClient {
 
     // Build Authorization header using shared helper
     const authorization = buildAuthorizationHeader(oauthCredentials, signature, oauthParams);
-
-    // Check quota before making request - will throw error if quota is exceeded
-    BricklinkClient.recordQuotaUsage();
 
     // Make HTTP request
     const response = await fetch(url.href, {
@@ -357,7 +275,8 @@ export class BricklinkClient {
           path: `/items/${itemType}/${partNo}/price`,
           query,
         });
-        return mapPriceGuide(result.data.data);
+        // Pass the colorId we requested since Bricklink doesn't echo it back
+        return mapPriceGuide(result.data.data, guideType, colorId);
       };
 
       // Run all 4 requests in parallel
@@ -411,16 +330,4 @@ export class BricklinkClient {
   }
 }
 
-/**
- * Shared BricklinkClient instance for catalog data
- *
- * This singleton instance is used for BrickOps internal catalog queries:
- * - Parts, colors, categories, price guides (reference data)
- * - NOT for user store operations (use storeClient for that)
- * - Quota tracking is global (all code shares the same rate limit counter)
- * - Efficient resource usage (no repeated instantiation)
- * - Consistent behavior across all Bricklink catalog API calls
- *
- * For testing, use BricklinkClient.createForTesting() instead.
- */
 export const catalogClient = new BricklinkClient();

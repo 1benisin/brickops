@@ -10,9 +10,9 @@
 
 import type { Doc } from "../_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { catalogClient } from "./catalogClient";
+import { internal } from "../_generated/api";
 import { recordMetric } from "../lib/external/metrics";
 
 // ============================================================================
@@ -94,7 +94,7 @@ export const checkAndScheduleRefresh = internalMutation({
 
       // Check if already queued (pending or processing)
       const existing = await ctx.db
-        .query("refreshQueue")
+        .query("catalogRefreshQueue")
         .withIndex("by_table_primary_secondary", (q) =>
           q
             .eq("tableName", params.tableName)
@@ -110,8 +110,8 @@ export const checkAndScheduleRefresh = internalMutation({
         // Generate display recordId for logging
         const recordId = secondaryKey ? `${primaryKey}:${secondaryKey}` : primaryKey;
 
-        // Add to queue - cron job should pick it up.
-        await ctx.db.insert("refreshQueue", {
+        // Add to queue - cron job or scheduleRefreshAction will process it
+        await ctx.db.insert("catalogRefreshQueue", {
           tableName: params.tableName,
           primaryKey,
           secondaryKey,
@@ -140,7 +140,7 @@ export const cleanupQueue = internalMutation({
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     const oldItems = await ctx.db
-      .query("refreshQueue")
+      .query("catalogRefreshQueue")
       .filter((q) =>
         q.and(
           q.or(q.eq(q.field("status"), "completed"), q.eq(q.field("status"), "failed")),
@@ -168,85 +168,6 @@ export const cleanupQueue = internalMutation({
 // ============================================================================
 
 /**
- * Upsert part data into database
- */
-export const upsertPart = internalMutation({
-  args: {
-    data: v.object({
-      no: v.string(),
-      name: v.string(),
-      type: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
-      categoryId: v.optional(v.number()),
-      alternateNo: v.optional(v.string()),
-      imageUrl: v.optional(v.string()),
-      thumbnailUrl: v.optional(v.string()),
-      weight: v.optional(v.number()),
-      dimX: v.optional(v.string()),
-      dimY: v.optional(v.string()),
-      dimZ: v.optional(v.string()),
-      yearReleased: v.optional(v.number()),
-      description: v.optional(v.string()),
-      isObsolete: v.optional(v.boolean()),
-      lastFetched: v.number(),
-      createdAt: v.number(),
-    }),
-  },
-  handler: async (ctx, args) => {
-    // Check if part already exists
-    const existing = await ctx.db
-      .query("parts")
-      .withIndex("by_no", (q) => q.eq("no", args.data.no))
-      .first();
-
-    if (existing) {
-      // Update existing part (preserve original createdAt)
-      const { createdAt: _unused, ...updateData } = args.data;
-      await ctx.db.patch(existing._id, updateData);
-    } else {
-      // Insert new part
-      await ctx.db.insert("parts", args.data);
-    }
-  },
-});
-
-/**
- * Upsert part colors into database
- */
-export const upsertPartColors = internalMutation({
-  args: {
-    data: v.array(
-      v.object({
-        partNo: v.string(),
-        colorId: v.number(),
-        quantity: v.number(),
-        lastFetched: v.number(),
-        createdAt: v.number(),
-      }),
-    ),
-  },
-  handler: async (ctx, args) => {
-    for (const partColor of args.data) {
-      // Check if this part-color combination exists
-      const existing = await ctx.db
-        .query("partColors")
-        .withIndex("by_partNo_colorId", (q) =>
-          q.eq("partNo", partColor.partNo).eq("colorId", partColor.colorId),
-        )
-        .first();
-
-      if (existing) {
-        // Update existing (preserve original createdAt)
-        const { createdAt: _unused, ...updateData } = partColor;
-        await ctx.db.patch(existing._id, updateData);
-      } else {
-        // Insert new
-        await ctx.db.insert("partColors", partColor);
-      }
-    }
-  },
-});
-
-/**
  * Upsert color data into database
  */
 export const upsertColor = internalMutation({
@@ -271,34 +192,6 @@ export const upsertColor = internalMutation({
       await ctx.db.patch(existing._id, updateData);
     } else {
       await ctx.db.insert("colors", args.data);
-    }
-  },
-});
-
-/**
- * Upsert category data into database
- */
-export const upsertCategory = internalMutation({
-  args: {
-    data: v.object({
-      categoryId: v.number(),
-      categoryName: v.string(),
-      parentId: v.optional(v.number()),
-      lastFetched: v.number(),
-      createdAt: v.number(),
-    }),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("categories")
-      .withIndex("by_categoryId", (q) => q.eq("categoryId", args.data.categoryId))
-      .first();
-
-    if (existing) {
-      const { createdAt: _unused, ...updateData } = args.data;
-      await ctx.db.patch(existing._id, updateData);
-    } else {
-      await ctx.db.insert("categories", args.data);
     }
   },
 });
@@ -359,9 +252,9 @@ export const upsertPriceGuide = internalMutation({
  */
 export const getBatch = internalQuery({
   args: { batchSize: v.number() },
-  handler: async (ctx, args): Promise<Doc<"refreshQueue">[]> => {
+  handler: async (ctx, args): Promise<Doc<"catalogRefreshQueue">[]> => {
     const items = await ctx.db
-      .query("refreshQueue")
+      .query("catalogRefreshQueue")
       .withIndex("by_status_priority", (q) => q.eq("status", "pending"))
       .order("asc") // Processes by priority (1, 2, 3)
       .take(args.batchSize);
@@ -375,7 +268,7 @@ export const getBatch = internalQuery({
  * Exported as internalMutation for processQueue to call
  */
 export const updateStatusProcessing = internalMutation({
-  args: { queueId: v.id("refreshQueue") },
+  args: { queueId: v.id("catalogRefreshQueue") },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.queueId, {
       status: "processing",
@@ -388,7 +281,7 @@ export const updateStatusProcessing = internalMutation({
  * Exported as internalMutation for processQueue to call
  */
 export const updateStatusCompleted = internalMutation({
-  args: { queueId: v.id("refreshQueue") },
+  args: { queueId: v.id("catalogRefreshQueue") },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.queueId, {
       status: "completed",
@@ -402,7 +295,7 @@ export const updateStatusCompleted = internalMutation({
  * Exported as internalMutation for processQueue to call
  */
 export const updateStatusFailed = internalMutation({
-  args: { queueId: v.id("refreshQueue"), errorMessage: v.string() },
+  args: { queueId: v.id("catalogRefreshQueue"), errorMessage: v.string() },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.queueId, {
       status: "failed",
@@ -436,8 +329,9 @@ export const processQueue = internalAction({
     }),
   ),
   handler: async (ctx) => {
+    // Enforce global BrickLink limiter per batch item
     // Get next batch from queue - type is inferred from getBatch return type
-    const batch: Doc<"refreshQueue">[] = await ctx.runQuery(
+    const batch: Doc<"catalogRefreshQueue">[] = await ctx.runQuery(
       internal.bricklink.dataRefresher.getBatch,
       {
         batchSize: BATCH_SIZE,
@@ -455,6 +349,13 @@ export const processQueue = internalAction({
 
     for (const item of batch) {
       try {
+        const token = await ctx.runMutation(internal.ratelimit.mutations.takeToken, {
+          bucket: "bricklink:global",
+        });
+        if (!token.granted) {
+          const retryAfterMs = Math.max(0, token.resetAt - Date.now());
+          throw new Error(`RATE_LIMIT_EXCEEDED:retry after ${retryAfterMs}ms`);
+        }
         // Mark as processing
         await ctx.runMutation(internal.bricklink.dataRefresher.updateStatusProcessing, {
           queueId: item._id,
@@ -464,11 +365,11 @@ export const processQueue = internalAction({
         if (item.tableName === "parts") {
           // primaryKey = partNo
           const partData = await catalogClient.getRefreshedPart(item.primaryKey);
-          await ctx.runMutation(internal.bricklink.dataRefresher.upsertPart, { data: partData });
+          await ctx.runMutation(internal.catalog.mutations.upsertPart, { data: partData });
         } else if (item.tableName === "partColors") {
           // primaryKey = partNo
           const partColorsData = await catalogClient.getRefreshedPartColors(item.primaryKey);
-          await ctx.runMutation(internal.bricklink.dataRefresher.upsertPartColors, {
+          await ctx.runMutation(internal.catalog.mutations.upsertPartColors, {
             data: partColorsData,
           });
         } else if (item.tableName === "colors") {
@@ -478,7 +379,7 @@ export const processQueue = internalAction({
         } else if (item.tableName === "categories") {
           // primaryKey = categoryId
           const categoryData = await catalogClient.getRefreshedCategory(parseInt(item.primaryKey));
-          await ctx.runMutation(internal.bricklink.dataRefresher.upsertCategory, {
+          await ctx.runMutation(internal.catalog.mutations.upsertCategory, {
             data: categoryData,
           });
         } else if (item.tableName === "partPrices") {
@@ -533,7 +434,6 @@ export const processQueue = internalAction({
         });
       }
     }
-
     console.log(`[catalog] Queue processed: ${successCount} success, ${failCount} failed`);
 
     return {

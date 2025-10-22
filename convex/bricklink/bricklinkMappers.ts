@@ -7,7 +7,17 @@
  * Uses Convex generated types as single source of truth.
  */
 
+import { decode } from "he";
 import type { Doc } from "../_generated/dataModel";
+
+/**
+ * Decodes HTML entities in a string using the 'he' library
+ * Handles both named entities (&amp;) and numeric entities (&#40;)
+ */
+export function decodeHtmlEntities(input: string): string {
+  // decode everything, including malformed & legacy numeric refs
+  return decode(input, { isAttributeValue: false });
+}
 
 /**
  * Utility type: Strip Convex metadata fields to get insertable record type
@@ -83,7 +93,11 @@ export const mapColor = (bricklinkColor: BricklinkColorResponse): InsertRecord<"
 
   return {
     colorId: bricklinkColor.color_id,
-    colorName: bricklinkColor.color_name,
+    // if color_id is 0, set colorName to "(Not Applicable)"
+    colorName:
+      bricklinkColor.color_id === 0
+        ? "(Not Applicable)"
+        : decodeHtmlEntities(bricklinkColor.color_name),
     colorCode: bricklinkColor.color_code,
     colorType: bricklinkColor.color_type,
     lastFetched: now,
@@ -101,7 +115,7 @@ export const mapCategory = (
 
   return {
     categoryId: bricklinkCategory.category_id,
-    categoryName: bricklinkCategory.category_name,
+    categoryName: decodeHtmlEntities(bricklinkCategory.category_name),
     parentId: bricklinkCategory.parent_id === 0 ? undefined : bricklinkCategory.parent_id,
     lastFetched: now,
     createdAt: now,
@@ -116,7 +130,7 @@ export const mapPart = (bricklinkItem: BricklinkItemResponse): InsertRecord<"par
 
   return {
     no: bricklinkItem.no,
-    name: bricklinkItem.name,
+    name: decodeHtmlEntities(bricklinkItem.name),
     type: bricklinkItem.type as "PART" | "MINIFIG" | "SET",
     categoryId: bricklinkItem.category_id,
     alternateNo: bricklinkItem.alternate_no,
@@ -127,7 +141,9 @@ export const mapPart = (bricklinkItem: BricklinkItemResponse): InsertRecord<"par
     dimY: bricklinkItem.dim_y,
     dimZ: bricklinkItem.dim_z,
     yearReleased: bricklinkItem.year_released,
-    description: bricklinkItem.description,
+    description: bricklinkItem.description
+      ? decodeHtmlEntities(bricklinkItem.description)
+      : undefined,
     isObsolete: bricklinkItem.is_obsolete,
     lastFetched: now,
     createdAt: now,
@@ -157,13 +173,15 @@ export const mapPartColors = (
  */
 export const mapPriceGuide = (
   bricklinkPriceGuide: BricklinkPriceGuideResponse,
+  guideType: "sold" | "stock",
+  colorId: number,
 ): InsertRecord<"partPrices"> => {
   const now = Date.now();
 
   return {
     partNo: bricklinkPriceGuide.item.no,
     partType: bricklinkPriceGuide.item.type as "PART" | "MINIFIG" | "SET",
-    colorId: bricklinkPriceGuide.color_id ?? 0, // Default to 0 if not provided (should not happen for valid price data)
+    colorId, // Use the colorId we requested, not from API response (Bricklink doesn't echo it back)
     newOrUsed: bricklinkPriceGuide.new_or_used as "N" | "U",
     currencyCode: bricklinkPriceGuide.currency_code,
     minPrice: bricklinkPriceGuide.min_price ? parseFloat(bricklinkPriceGuide.min_price) : undefined,
@@ -174,7 +192,7 @@ export const mapPriceGuide = (
       : undefined,
     unitQuantity: bricklinkPriceGuide.unit_quantity,
     totalQuantity: bricklinkPriceGuide.total_quantity,
-    guideType: bricklinkPriceGuide.guide_type as "sold" | "stock",
+    guideType,
     lastFetched: now,
     createdAt: now,
   };
@@ -186,36 +204,3 @@ export const mapPriceGuide = (
 export const isStale = (lastFetched: number, maxAgeMs: number): boolean => {
   return Date.now() - lastFetched > maxAgeMs;
 };
-
-/**
- * Configuration for refresh thresholds per table type
- */
-export const REFRESH_THRESHOLDS = {
-  colors: 30 * 24 * 60 * 60 * 1000, // 30 days
-  categories: 30 * 24 * 60 * 60 * 1000, // 30 days
-  parts: 7 * 24 * 60 * 60 * 1000, // 7 days
-  partColors: 7 * 24 * 60 * 60 * 1000, // 7 days
-  partPrices: 24 * 60 * 60 * 1000, // 1 day
-} as const;
-
-/**
- * Refresh priorities (lower number = higher priority)
- */
-export const REFRESH_PRIORITIES = {
-  partPrices: 1, // Highest priority
-  parts: 2,
-  partColors: 3,
-  categories: 4,
-  colors: 5, // Lowest priority
-} as const;
-
-/**
- * Batch sizes for refresh operations
- */
-export const BATCH_SIZES = {
-  colors: 50,
-  categories: 50,
-  parts: 25,
-  partColors: 25,
-  partPrices: 10,
-} as const;

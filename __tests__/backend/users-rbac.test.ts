@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { ConvexError } from "convex/values";
 
-import { updateUserRole, removeUser } from "@/convex/functions/users";
+import { updateUserRole, removeUser } from "@/convex/users/mutations";
 import {
   buildSeedData,
   createConvexTestContext,

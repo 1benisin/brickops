@@ -31,7 +31,7 @@
  * - Use for rollback preview: "What would happen if I reversed this change?"
  *
  * STORY 3.4 INTEGRATION:
- * - inventoryAuditLogs table tracks all changes with changeType
+ * - inventoryHistory table tracks all changes with changeType
  * - Each log entry stores data needed for compensating operation
  * - UI presents change history with "Undo" button
  * - Undo triggers compensating operation via this client
@@ -47,8 +47,10 @@ import {
   generateOAuthParams,
   generateOAuthSignature,
   buildAuthorizationHeader,
+  generateRequestId,
   type OAuthCredentials,
 } from "./oauth";
+import type { StoreOperationResult } from "../marketplace/types";
 
 const BASE_URL = "https://api.bricklink.com/api/store/v1/";
 
@@ -462,7 +464,7 @@ export class BricklinkStoreClient {
     });
 
     // 1. Pre-flight quota check
-    const quota = await this.ctx.runQuery(internal.functions.marketplace.getQuotaState, {
+    const quota = await this.ctx.runQuery(internal.marketplace.mutations.getQuotaState, {
       businessAccountId: this.businessAccountId,
       provider: "bricklink",
     });
@@ -529,6 +531,28 @@ export class BricklinkStoreClient {
       tokenSecret: this.credentials.tokenSecret,
     };
 
+    // DEBUG: Log credential info (not the actual secrets)
+    console.log("[OAuth Debug] Credential check", {
+      hasConsumerKey: !!this.credentials.consumerKey,
+      consumerKeyLength: this.credentials.consumerKey?.length,
+      consumerKeyPrefix: this.credentials.consumerKey?.substring(0, 4),
+      consumerKeySuffix: this.credentials.consumerKey?.substring(
+        this.credentials.consumerKey.length - 4,
+      ),
+      hasConsumerSecret: !!this.credentials.consumerSecret,
+      consumerSecretLength: this.credentials.consumerSecret?.length,
+      hasTokenValue: !!this.credentials.tokenValue,
+      tokenValueLength: this.credentials.tokenValue?.length,
+      tokenValuePrefix: this.credentials.tokenValue?.substring(0, 4),
+      tokenValueSuffix: this.credentials.tokenValue?.substring(
+        this.credentials.tokenValue.length - 4,
+      ),
+      hasTokenSecret: !!this.credentials.tokenSecret,
+      tokenSecretLength: this.credentials.tokenSecret?.length,
+      url: url.href,
+      method,
+    });
+
     // Generate OAuth parameters
     const oauthParams = generateOAuthParams();
 
@@ -549,6 +573,16 @@ export class BricklinkStoreClient {
 
     // Generate OAuth signature
     const baseUrl = url.href.split("?")[0];
+
+    // DEBUG: Log signature generation details
+    console.log("[OAuth Debug] Signature generation", {
+      method,
+      baseUrl,
+      paramCount: allParams.length,
+      hasBody: !!options.body,
+      bodyPreview: options.body ? JSON.stringify(options.body).substring(0, 100) : null,
+    });
+
     const signature = await generateOAuthSignature(oauthCredentials, method, baseUrl, allParams);
 
     // Build Authorization header
@@ -574,7 +608,7 @@ export class BricklinkStoreClient {
       const duration = Date.now() - started;
 
       // Record failure for circuit breaker
-      await this.ctx.runMutation(internal.functions.marketplace.recordFailure, {
+      await this.ctx.runMutation(internal.marketplace.mutations.recordFailure, {
         businessAccountId: this.businessAccountId,
         provider: "bricklink",
       });
@@ -610,7 +644,7 @@ export class BricklinkStoreClient {
       }
 
       // Record failure for circuit breaker
-      await this.ctx.runMutation(internal.functions.marketplace.recordFailure, {
+      await this.ctx.runMutation(internal.marketplace.mutations.recordFailure, {
         businessAccountId: this.businessAccountId,
         provider: "bricklink",
       });
@@ -632,19 +666,19 @@ export class BricklinkStoreClient {
     }
 
     // 4. Record successful quota usage
-    await this.ctx.runMutation(internal.functions.marketplace.incrementQuota, {
+    await this.ctx.runMutation(internal.marketplace.mutations.incrementQuota, {
       businessAccountId: this.businessAccountId,
       provider: "bricklink",
     });
 
     // Reset consecutive failures on success
-    await this.ctx.runMutation(internal.functions.marketplace.resetFailures, {
+    await this.ctx.runMutation(internal.marketplace.mutations.resetFailures, {
       businessAccountId: this.businessAccountId,
       provider: "bricklink",
     });
 
     // Check if alert threshold was reached and emit metric
-    const updatedQuota = await this.ctx.runQuery(internal.functions.marketplace.getQuotaState, {
+    const updatedQuota = await this.ctx.runQuery(internal.marketplace.mutations.getQuotaState, {
       businessAccountId: this.businessAccountId,
       provider: "bricklink",
     });
@@ -668,6 +702,47 @@ export class BricklinkStoreClient {
     });
 
     const data = (await response.json()) as T;
+
+    // CRITICAL: BrickLink returns HTTP 200 with errors in the response body
+    // Check for error responses in meta.code field
+    if (typeof data === "object" && data !== null && "meta" in data) {
+      const meta = (data as { meta: { code?: number; message?: string; description?: string } })
+        .meta;
+      if (meta.code && meta.code >= 400) {
+        // Log full response for debugging
+        console.error(`[BrickLink Error ${meta.code}] ${meta.message}`, {
+          description: meta.description,
+          endpoint: options.path,
+          fullResponse: JSON.stringify(data),
+        });
+
+        // Treat as HTTP error even though status is 200
+        await this.ctx.runMutation(internal.marketplace.mutations.recordFailure, {
+          businessAccountId: this.businessAccountId,
+          provider: "bricklink",
+        });
+
+        recordMetric("external.bricklink.store.error", {
+          businessAccountId: this.businessAccountId,
+          operation: options.path,
+          httpStatus: meta.code,
+          durationMs: duration,
+          correlationId,
+        });
+
+        throw normalizeApiError(
+          "bricklink",
+          new Error(`BrickLink Error ${meta.code}: ${meta.message} - ${meta.description}`),
+          {
+            endpoint: options.path,
+            status: meta.code,
+            body: data,
+            correlationId,
+          },
+        );
+      }
+    }
+
     return {
       data,
       status: response.status,
@@ -724,51 +799,52 @@ export class BricklinkStoreClient {
   async createInventory(
     payload: BricklinkInventoryCreateRequest,
     options?: OperationOptions,
-  ): Promise<BricklinkInventoryResponse> {
+  ): Promise<StoreOperationResult> {
+    const correlationId = generateRequestId();
+
     // Dry-run mode: validate without executing
     if (options?.dryRun) {
       this.validateCreatePayload(payload);
-      // Return mock response for dry-run
       return {
-        inventory_id: 0, // Mock ID
-        item: {
-          no: payload.item.no,
-          name: "Dry Run Item",
-          type: payload.item.type,
-          category_id: 0,
-        },
-        color_id: payload.color_id,
-        color_name: "Dry Run",
-        quantity: payload.quantity,
-        new_or_used: payload.new_or_used,
-        unit_price: payload.unit_price,
-        bind_id: 0,
-        description: payload.description ?? "",
-        remarks: payload.remarks ?? "",
-        bulk: payload.bulk ?? 1,
-        is_retain: payload.is_retain ?? false,
-        is_stock_room: payload.is_stock_room ?? false,
-        stock_room_id: payload.stock_room_id,
-        date_created: new Date().toISOString(),
-        completeness: payload.completeness,
-        my_cost: payload.my_cost,
-        sale_rate: payload.sale_rate,
-        tier_quantity1: payload.tier_quantity1,
-        tier_price1: payload.tier_price1,
-        tier_quantity2: payload.tier_quantity2,
-        tier_price2: payload.tier_price2,
-        tier_quantity3: payload.tier_quantity3,
-        tier_price3: payload.tier_price3,
+        success: true,
+        bricklinkInventoryId: 0, // Mock ID
+        correlationId,
       };
     }
 
-    const response = await this.request<BricklinkApiResponse<BricklinkInventoryResponse>>({
-      path: "/inventories",
-      method: "POST",
-      body: payload,
-    });
+    try {
+      const response = await this.request<BricklinkApiResponse<BricklinkInventoryResponse>>({
+        path: "/inventories",
+        method: "POST",
+        body: payload,
+      });
 
-    return response.data.data;
+      // Defensive check: ensure response.data.data exists
+      if (!response.data?.data) {
+        console.error("BrickLink API returned invalid response structure", response.data);
+        throw new ConvexError({
+          code: "INVALID_RESPONSE",
+          message: "BrickLink API returned invalid response structure",
+          responseData: JSON.stringify(response.data),
+        });
+      }
+
+      const inventoryData = response.data.data;
+      return {
+        success: true,
+        bricklinkInventoryId: inventoryData.inventory_id,
+        correlationId,
+        rollbackData: {
+          originalPayload: payload,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: this.normalizeError(error),
+        correlationId,
+      };
+    }
   }
 
   /**
@@ -793,64 +869,107 @@ export class BricklinkStoreClient {
     inventoryId: number,
     payload: BricklinkInventoryUpdateRequest,
     options?: OperationOptions,
-  ): Promise<BricklinkInventoryResponse> {
+  ): Promise<StoreOperationResult> {
+    const correlationId = generateRequestId();
+
     // Validate payload
     this.validateUpdatePayload(payload);
 
     // Dry-run mode: validate without executing
     if (options?.dryRun) {
-      // Return mock response for dry-run with validated data
       return {
-        inventory_id: inventoryId,
-        item: { no: "dry-run", name: "Dry Run", type: "PART", category_id: 0 },
-        color_id: 0,
-        color_name: "Dry Run",
-        quantity: 0,
-        new_or_used: "N",
-        unit_price: payload.unit_price ?? "0.0000",
-        bind_id: 0,
-        description: payload.description ?? "",
-        remarks: payload.remarks ?? "",
-        bulk: payload.bulk ?? 1,
-        is_retain: payload.is_retain ?? false,
-        is_stock_room: payload.is_stock_room ?? false,
-        stock_room_id: payload.stock_room_id,
-        date_created: new Date().toISOString(),
+        success: true,
+        bricklinkInventoryId: inventoryId,
+        correlationId,
       };
     }
 
-    const response = await this.request<BricklinkApiResponse<BricklinkInventoryResponse>>({
-      path: `/inventories/${inventoryId}`,
-      method: "PUT",
-      body: payload,
-    });
+    try {
+      const response = await this.request<BricklinkApiResponse<BricklinkInventoryResponse>>({
+        path: `/inventories/${inventoryId}`,
+        method: "PUT",
+        body: payload,
+      });
 
-    return response.data.data;
+      // Defensive check: ensure response.data.data exists
+      if (!response.data?.data) {
+        throw new ConvexError({
+          code: "INVALID_RESPONSE",
+          message: "BrickLink API returned invalid response structure",
+          responseData: JSON.stringify(response.data),
+        });
+      }
+
+      const inventoryData = response.data.data;
+      return {
+        success: true,
+        bricklinkInventoryId: inventoryData.inventory_id,
+        correlationId,
+        rollbackData: {
+          previousQuantity: payload.quantity ? inventoryData.quantity : undefined,
+          previousPrice: payload.unit_price,
+          previousLocation: payload.remarks,
+          previousNotes: payload.description,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: this.normalizeError(error),
+        correlationId,
+      };
+    }
   }
 
   /**
    * Delete a store inventory
    * DELETE /inventories/{inventory_id}
    */
-  async deleteInventory(inventoryId: number, options?: OperationOptions): Promise<void> {
+  async deleteInventory(
+    inventoryId: number,
+    options?: OperationOptions,
+  ): Promise<StoreOperationResult> {
+    const correlationId = generateRequestId();
+
     // Validate inventory ID
     if (!inventoryId || inventoryId <= 0) {
-      throw new ConvexError({
-        code: "INVALID_INVENTORY_ID",
-        message: "inventoryId must be a positive number",
-      });
+      return {
+        success: false,
+        error: {
+          code: "INVALID_INVENTORY_ID",
+          message: "inventoryId must be a positive number",
+        },
+        correlationId,
+      };
     }
 
     // Dry-run mode: validate without executing
     if (options?.dryRun) {
-      // Validation passed, return without making API call
-      return;
+      return {
+        success: true,
+        bricklinkInventoryId: inventoryId,
+        correlationId,
+      };
     }
 
-    await this.request<BricklinkApiResponse<null>>({
-      path: `/inventories/${inventoryId}`,
-      method: "DELETE",
-    });
+    try {
+      await this.request<BricklinkApiResponse<null>>({
+        path: `/inventories/${inventoryId}`,
+        method: "DELETE",
+      });
+
+      return {
+        success: true,
+        bricklinkInventoryId: inventoryId,
+        correlationId,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: this.normalizeError(error),
+        correlationId,
+      };
+    }
   }
 
   /**
@@ -995,7 +1114,6 @@ export class BricklinkStoreClient {
 
       for (let itemIndex = 0; itemIndex < chunk.length; itemIndex++) {
         const update = chunk[itemIndex];
-        const correlationId = crypto.randomUUID();
         const itemKey = options?.idempotencyKey
           ? `${options.idempotencyKey}-${update.inventoryId}`
           : undefined;
@@ -1005,34 +1123,25 @@ export class BricklinkStoreClient {
           continue;
         }
 
-        try {
-          const result = await this.updateInventory(update.inventoryId, update.payload);
+        const result = await this.updateInventory(update.inventoryId, update.payload);
 
-          results.push({
-            success: true,
-            bricklinkInventoryId: result.inventory_id,
-            correlationId,
-          });
+        results.push({
+          success: result.success,
+          bricklinkInventoryId: result.bricklinkInventoryId,
+          error: result.error,
+          correlationId: result.correlationId,
+        });
 
+        if (result.success) {
           succeeded++;
           if (itemKey) {
             processedKeys.add(itemKey);
           }
-        } catch (error) {
-          const errorDetails = {
-            code:
-              error instanceof ConvexError
-                ? (error.data as { code?: string }).code ?? "UNKNOWN_ERROR"
-                : "UNKNOWN_ERROR",
-            message: error instanceof Error ? error.message : String(error),
-            details: error,
+        } else {
+          const errorDetails = result.error ?? {
+            code: "UNKNOWN_ERROR",
+            message: "Unknown error occurred",
           };
-
-          results.push({
-            success: false,
-            error: errorDetails,
-            correlationId,
-          });
 
           errors.push({
             batchIndex,
@@ -1105,7 +1214,6 @@ export class BricklinkStoreClient {
 
       for (let itemIndex = 0; itemIndex < chunk.length; itemIndex++) {
         const inventoryId = chunk[itemIndex];
-        const correlationId = crypto.randomUUID();
         const itemKey = options?.idempotencyKey
           ? `${options.idempotencyKey}-${inventoryId}`
           : undefined;
@@ -1115,34 +1223,25 @@ export class BricklinkStoreClient {
           continue;
         }
 
-        try {
-          await this.deleteInventory(inventoryId);
+        const result = await this.deleteInventory(inventoryId);
 
-          results.push({
-            success: true,
-            bricklinkInventoryId: inventoryId,
-            correlationId,
-          });
+        results.push({
+          success: result.success,
+          bricklinkInventoryId: result.bricklinkInventoryId,
+          error: result.error,
+          correlationId: result.correlationId,
+        });
 
+        if (result.success) {
           succeeded++;
           if (itemKey) {
             processedKeys.add(itemKey);
           }
-        } catch (error) {
-          const errorDetails = {
-            code:
-              error instanceof ConvexError
-                ? (error.data as { code?: string }).code ?? "UNKNOWN_ERROR"
-                : "UNKNOWN_ERROR",
-            message: error instanceof Error ? error.message : String(error),
-            details: error,
+        } else {
+          const errorDetails = result.error ?? {
+            code: "UNKNOWN_ERROR",
+            message: "Unknown error occurred",
           };
-
-          results.push({
-            success: false,
-            error: errorDetails,
-            correlationId,
-          });
 
           errors.push({
             batchIndex,
@@ -1269,6 +1368,30 @@ export class BricklinkStoreClient {
         message: "unit_price must be a valid fixed-point number string",
       });
     }
+  }
+
+  /**
+   * Normalize error to standard format for StoreOperationResult
+   */
+  private normalizeError(error: unknown): {
+    code: string;
+    message: string;
+    details?: unknown;
+  } {
+    if (error instanceof ConvexError) {
+      return {
+        code: "CONVEX_ERROR",
+        message: error.message ?? "An error occurred",
+        details: error.data,
+      };
+    }
+
+    const normalized = normalizeApiError("bricklink", error);
+    return {
+      code: normalized.error.code,
+      message: normalized.error.message,
+      details: normalized.error.details,
+    };
   }
 
   /**

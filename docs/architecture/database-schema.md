@@ -101,29 +101,43 @@ inventoryItems: defineTable({
   businessAccountId: v.id("businessAccounts"),
   sku: v.string(),
   name: v.string(),
+  partNumber: v.string(),              // Added in Stories 3.2-3.3 - BrickLink/BrickOwl part number
   colorId: v.string(),
   location: v.string(),
   quantityAvailable: v.number(),
-  quantityReserved: v.number(),      // Added in Story 1.6
-  quantitySold: v.number(),          // Added in Story 1.6
+  quantityReserved: v.number(),        // Added in Story 1.6
+  quantitySold: v.number(),            // Added in Story 1.6
   status: v.union(v.literal("available"), v.literal("reserved"), v.literal("sold")), // Added in Story 1.6
   condition: v.union(v.literal("new"), v.literal("used")),
+  price: v.optional(v.number()),       // Added in Stories 3.2-3.3 - Unit price for marketplace sync
+  notes: v.optional(v.string()),       // Added in Stories 3.2-3.3 - Description/remarks from marketplace
+  bricklinkInventoryId: v.optional(v.number()), // Added in Story 3.2 - BrickLink inventory_id for sync tracking
+  brickowlLotId: v.optional(v.string()),        // Added in Story 3.3 - BrickOwl lot_id for sync tracking
   createdBy: v.id("users"),
   createdAt: v.number(),
   updatedAt: v.optional(v.number()),
   isArchived: v.optional(v.boolean()), // Added in Story 1.6 - soft delete support
   deletedAt: v.optional(v.number()),   // Added in Story 1.6 - soft delete support
+  // Sync status tracking (Story 3.4)
+  lastSyncedAt: v.optional(v.number()),
+  syncErrors: v.optional(v.array(v.object({
+    provider: v.string(),
+    error: v.string(),
+    occurredAt: v.number(),
+  }))),
 })
-.index("by_businessAccount", ["businessAccountId"])  // Tenant isolation
-.index("by_sku", ["businessAccountId", "sku"]),      // Duplicate prevention
+.index("by_businessAccount", ["businessAccountId"])              // Tenant isolation
+.index("by_sku", ["businessAccountId", "sku"])                   // Duplicate prevention
+.index("by_bricklinkInventoryId", ["businessAccountId", "bricklinkInventoryId"])  // BrickLink sync lookup
+.index("by_brickowlLotId", ["businessAccountId", "brickowlLotId"]),              // BrickOwl sync lookup
 ```
 
-### inventoryAuditLogs
+### inventoryHistory
 
-**Purpose**: Complete audit trail for inventory changes
+**Purpose**: Complete audit trail for all local inventory changes (compliance/historical record)
 
 ```typescript
-inventoryAuditLogs: defineTable({
+inventoryHistory: defineTable({
   businessAccountId: v.id("businessAccounts"),
   itemId: v.id("inventoryItems"),
   changeType: v.union(
@@ -146,6 +160,119 @@ inventoryAuditLogs: defineTable({
 .index("by_createdAt", ["businessAccountId", "createdAt"]),     // Chronological queries
 ```
 
+### inventorySyncQueue (Story 3.4)
+
+**Purpose**: Marketplace sync orchestration queue (work items pending sync to marketplaces)
+
+```typescript
+inventorySyncQueue: defineTable({
+  businessAccountId: v.id("businessAccounts"),
+  inventoryItemId: v.id("inventoryItems"),
+  changeType: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
+
+  // Change data snapshots
+  previousData: v.optional(v.any()),  // Full previous state (for update/delete)
+  newData: v.optional(v.any()),       // Full new state (for create/update)
+  reason: v.optional(v.string()),     // User-provided reason
+
+  // Multi-provider sync tracking
+  syncStatus: v.union(
+    v.literal("pending"),
+    v.literal("syncing"),
+    v.literal("synced"),
+    v.literal("failed"),
+  ),
+  bricklinkSyncedAt: v.optional(v.number()),
+  brickowlSyncedAt: v.optional(v.number()),
+  bricklinkSyncError: v.optional(v.string()),
+  brickowlSyncError: v.optional(v.string()),
+
+  // Conflict tracking
+  conflictStatus: v.optional(v.union(v.literal("detected"), v.literal("resolved"))),
+  conflictDetails: v.optional(v.any()),
+
+  // Undo tracking
+  isUndo: v.optional(v.boolean()),
+  undoesChangeId: v.optional(v.id("inventorySyncQueue")),
+  undoneByChangeId: v.optional(v.id("inventorySyncQueue")),
+
+  // Metadata
+  correlationId: v.string(),
+  createdBy: v.id("users"),
+  createdAt: v.number(),
+})
+.index("by_business_pending", ["businessAccountId", "syncStatus"])  // Sync queue queries
+.index("by_inventory_item", ["inventoryItemId", "createdAt"])       // Item sync history
+.index("by_correlation", ["correlationId"]),                        // Distributed tracing
+```
+
+### marketplaceCredentials (Story 3.1)
+
+**Purpose**: User marketplace API credentials (BYOK model) - encrypted at rest
+
+```typescript
+marketplaceCredentials: defineTable({
+  businessAccountId: v.id("businessAccounts"),
+  provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+
+  // Encrypted OAuth 1.0a credentials for BrickLink
+  bricklinkConsumerKey: v.optional(v.string()),     // encrypted
+  bricklinkConsumerSecret: v.optional(v.string()),  // encrypted
+  bricklinkTokenValue: v.optional(v.string()),      // encrypted
+  bricklinkTokenSecret: v.optional(v.string()),     // encrypted
+
+  // Encrypted API key for BrickOwl
+  brickowlApiKey: v.optional(v.string()),           // encrypted
+
+  // Metadata
+  isActive: v.boolean(),
+  lastValidatedAt: v.optional(v.number()),
+  validationStatus: v.optional(v.union(
+    v.literal("success"),
+    v.literal("pending"),
+    v.literal("failed")
+  )),
+  validationMessage: v.optional(v.string()),
+  createdBy: v.id("users"),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+.index("by_business_provider", ["businessAccountId", "provider"])  // Primary lookup
+.index("by_businessAccount", ["businessAccountId"]),               // All credentials per tenant
+```
+
+### marketplaceRateLimits (Stories 3.2-3.3)
+
+**Purpose**: Per-tenant, per-provider rate limiting for marketplace APIs with circuit breaker support
+
+```typescript
+marketplaceRateLimits: defineTable({
+  businessAccountId: v.id("businessAccounts"),
+  provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+
+  // Quota tracking
+  windowStart: v.number(),        // Unix timestamp when current window started
+  requestCount: v.number(),       // Requests made in current window
+  capacity: v.number(),           // Max requests per window (provider-specific)
+  windowDurationMs: v.number(),   // Window size in ms (provider-specific)
+
+  // Alerting
+  alertThreshold: v.number(),     // Percentage (0-1) to trigger alert (default: 0.8)
+  alertEmitted: v.boolean(),      // Whether alert has been sent for current window
+
+  // Circuit breaker
+  consecutiveFailures: v.number(),              // Track failures for circuit breaker
+  circuitBreakerOpenUntil: v.optional(v.number()), // If set, circuit is open
+
+  // Metadata
+  lastRequestAt: v.number(),
+  lastResetAt: v.number(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+.index("by_business_provider", ["businessAccountId", "provider"]),  // Primary lookup
+```
+
 ## Index Usage Patterns
 
 ### Inventory Queries
@@ -156,15 +283,34 @@ inventoryAuditLogs: defineTable({
 
 ### Audit Queries
 
-- **Item History**: `by_item` index for viewing change history of specific inventory items
+- **Item History**: `by_item` index on `inventoryHistory` for viewing change history of specific inventory items
 - **Timeline Views**: `by_createdAt` composite index for chronological audit reports
 - **Tenant Audit**: `by_businessAccount` index for business-wide audit trail access
+
+### Marketplace Tables (Stories 3.1-3.3)
+
+**Credentials Isolation**:
+
+- `by_business_provider` index on `marketplaceCredentials` ensures one credential set per provider per tenant
+- Supports zero, one, or both marketplaces configured independently
+
+**Rate Limit Isolation**:
+
+- `by_business_provider` index on `marketplaceRateLimits` provides per-tenant, per-provider quota tracking
+- BrickLink and BrickOwl quotas are completely independent
+
+### Sync Queue Queries (Story 3.4)
+
+- **Pending Sync**: `by_business_pending` index on `inventorySyncQueue` for fetching items needing marketplace sync
+- **Item Sync History**: `by_inventory_item` index for viewing sync status per item
+- **Distributed Tracing**: `by_correlation` index for tracing changes through the sync pipeline
 
 ## Performance Considerations
 
 1. **Tenant Isolation**: All queries must filter by `businessAccountId` to use indexes effectively
 2. **Soft Deletes**: Archived items remain in indexes but are filtered at application level
-3. **Audit Scale**: Audit logs grow over time; consider pagination limits (current: 200 max per query)
+3. **Audit Scale**: History logs grow over time; consider pagination limits (current: 200 max per query)
+4. **Sync Queue**: `inventorySyncQueue` is actively updated with sync status; queries are real-time reactive
 
 ## Schema Evolution Notes
 
@@ -173,5 +319,26 @@ inventoryAuditLogs: defineTable({
 - Added quantity split fields (`quantityReserved`, `quantitySold`) to support status tracking
 - Added `status` enum field for inventory state management
 - Added soft delete fields (`isArchived`, `deletedAt`) for data preservation
-- Created complete `inventoryAuditLogs` table with comprehensive change tracking
+- Created complete `inventoryHistory` table with comprehensive change tracking
 - Enhanced indexes for efficient tenant-scoped queries
+
+**Story 3.1 Changes (Marketplace Credentials)**:
+
+- Created `marketplaceCredentials` table for encrypted user marketplace API credentials (BYOK model)
+- Supports BrickLink OAuth 1.0a credentials (4 fields) and BrickOwl API key (1 field)
+- One credential set per provider per business account via `by_business_provider` index
+- All credential fields stored encrypted at rest using AES-GCM
+
+**Story 3.2-3.3 Changes (Marketplace Clients)**:
+
+- Created `marketplaceRateLimits` table for database-backed rate limiting per tenant per provider
+- Extended `inventoryItems` with marketplace sync fields: `partNumber`, `price`, `notes`, `bricklinkInventoryId`, `brickowlLotId`
+- Added indexes `by_bricklinkInventoryId` and `by_brickowlLotId` for efficient sync lookups
+- Rate limiting supports circuit breaker pattern (opens after 5 failures) with 80% alert threshold
+
+**Story 3.4 Changes (Sync Orchestration)**:
+
+- Created `inventorySyncQueue` table for marketplace sync orchestration with per-provider status tracking
+- Extended `inventoryItems` with quick sync status fields: `lastSyncedAt`, `syncErrors` array
+- Sync queue supports: multi-provider sync (BrickLink + BrickOwl), conflict detection, undo tracking
+- Indexes enable efficient queue processing, item history queries, and distributed tracing via correlation IDs

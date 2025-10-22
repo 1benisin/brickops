@@ -7,7 +7,6 @@ const navigation = [
   { label: "Inventory", href: "/inventory" as const },
   { label: "Orders", href: "/orders" as const },
   { label: "Catalog", href: "/catalog" as const },
-  { label: "Design System", href: "/design-system" as const },
 ];
 
 export default function HomePage() {
@@ -32,9 +31,6 @@ export default function HomePage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button asChild>
-                <Link href="/design-system">Explore design system</Link>
-              </Button>
               <Button asChild variant="outline">
                 <Link href="https://nextjs.org/docs">Next.js docs</Link>
               </Button>

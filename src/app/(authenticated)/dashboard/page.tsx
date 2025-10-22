@@ -3,10 +3,10 @@
 import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
-import { TotalsCard } from "@/components/dashboard/totals-card";
+import { TotalsCard } from "@/components/dashboard/TotalsCard";
 
 export default function DashboardPage() {
-  const currentUser = useQuery(api.functions.users.getCurrentUser);
+  const currentUser = useQuery(api.users.queries.getCurrentUser);
   const businessAccountId = currentUser?.businessAccount?._id;
   const isLoading = currentUser === undefined;
 

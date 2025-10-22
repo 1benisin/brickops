@@ -1,7 +1,7 @@
 import userEvent from "@testing-library/user-event";
 import { screen } from "@testing-library/react";
 
-import { InventoryCard } from "@/components/inventory";
+import { InventoryCard } from "@/components/inventory/InventoryCard";
 import { renderWithProviders } from "@/test-utils/render-with-providers";
 import { setMockPathname } from "@/test-utils/next-navigation";
 

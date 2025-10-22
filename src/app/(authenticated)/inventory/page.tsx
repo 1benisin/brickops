@@ -1,21 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -25,172 +16,52 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { FileSelector } from "@/components/inventory/FileSelector";
 
 export default function InventoryPage() {
-  const currentUser = useQuery(api.functions.users.getCurrentUser);
+  const router = useRouter();
+  const currentUser = useQuery(api.users.queries.getCurrentUser);
   const businessAccountId = currentUser?.businessAccount?._id;
 
   const items = useQuery(
-    api.functions.inventory.listInventoryItems,
+    api.inventory.queries.listInventoryItems,
     businessAccountId ? { businessAccountId } : "skip",
   );
   const totals = useQuery(
-    api.functions.inventory.getInventoryTotals,
+    api.inventory.queries.getInventoryTotals,
     businessAccountId ? { businessAccountId } : "skip",
   );
 
   const [auditItemId, setAuditItemId] = useState<Id<"inventoryItems"> | null>(null);
+  const [selectedFileId, setSelectedFileId] = useState<Id<"inventoryFiles"> | "none">("none");
   const auditLogs = useQuery(
-    api.functions.inventory.listInventoryAuditLogs,
+    api.inventory.queries.listInventoryHistory,
     businessAccountId && auditItemId
       ? { businessAccountId, itemId: auditItemId, limit: 20 }
       : "skip",
   );
 
-  const addInventoryItem = useMutation(api.functions.inventory.addInventoryItem);
-  const deleteInventoryItem = useMutation(api.functions.inventory.deleteInventoryItem);
+  const deleteInventoryItem = useMutation(api.inventory.mutations.deleteInventoryItem);
 
-  const [isSubmitting, startTransition] = useTransition();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({
-    sku: "",
-    name: "",
-    colorId: "",
-    location: "",
-    quantityAvailable: 0,
-    quantityReserved: 0,
-    quantitySold: 0,
-    status: "available" as "available" | "reserved" | "sold",
-    condition: "new" as "new" | "used",
-  });
-
-  const canSubmit = useMemo(() => {
-    return (
-      !!businessAccountId &&
-      form.sku.trim() !== "" &&
-      form.name.trim() !== "" &&
-      form.colorId.trim() !== "" &&
-      form.location.trim() !== "" &&
-      form.quantityAvailable >= 0 &&
-      form.quantityReserved >= 0 &&
-      form.quantitySold >= 0
-    );
-  }, [businessAccountId, form]);
-
-  const handleCreate = () => {
-    if (!businessAccountId || !canSubmit) return;
-    startTransition(async () => {
-      await addInventoryItem({
-        businessAccountId,
-        ...form,
-      });
-      setDialogOpen(false);
-      setForm({
-        sku: "",
-        name: "",
-        colorId: "",
-        location: "",
-        quantityAvailable: 0,
-        quantityReserved: 0,
-        quantitySold: 0,
-        status: "available",
-        condition: "new",
-      });
-    });
+  const handleDelete = async (itemId: Id<"inventoryItems">) => {
+    await deleteInventoryItem({ itemId, reason: "user-request" });
   };
 
-  const handleDelete = (itemId: Id<"inventoryItems">) => {
-    startTransition(async () => {
-      await deleteInventoryItem({ itemId, reason: "user-request" });
-    });
+  const handleFileSelect = (value: Id<"inventoryFiles"> | "none" | undefined) => {
+    if (!value || value === "none") {
+      setSelectedFileId("none");
+      return;
+    }
+
+    setSelectedFileId(value);
+    router.push(`/inventory/files/${encodeURIComponent(value as unknown as string)}`);
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Inventory</h1>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>Add Item</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Inventory Item</DialogTitle>
-              <DialogDescription>
-                Add a new item to your inventory with details like SKU, name, color, and quantities.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-3 py-2">
-              <Input
-                placeholder="SKU"
-                value={form.sku}
-                onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-              />
-              <Input
-                placeholder="Name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              />
-              <Input
-                placeholder="Color ID"
-                value={form.colorId}
-                onChange={(e) => setForm((f) => ({ ...f, colorId: e.target.value }))}
-              />
-              <Input
-                placeholder="Location"
-                value={form.location}
-                onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-              />
-              <Input
-                type="number"
-                placeholder="Qty Available"
-                value={form.quantityAvailable}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, quantityAvailable: Number(e.target.value) }))
-                }
-              />
-              <Input
-                type="number"
-                placeholder="Qty Reserved"
-                value={form.quantityReserved}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, quantityReserved: Number(e.target.value) }))
-                }
-              />
-              <Input
-                type="number"
-                placeholder="Qty Sold"
-                value={form.quantitySold}
-                onChange={(e) => setForm((f) => ({ ...f, quantitySold: Number(e.target.value) }))}
-              />
-              <Input
-                placeholder="Status (available/reserved/sold)"
-                value={form.status}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    status: e.target.value as "available" | "reserved" | "sold",
-                  }))
-                }
-              />
-              <Input
-                placeholder="Condition (new/used)"
-                value={form.condition}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, condition: e.target.value as "new" | "used" }))
-                }
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreate} disabled={!canSubmit || isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => router.push("/inventory/files")}>Add Item</Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -205,6 +76,28 @@ export default function InventoryPage() {
             <div>Sold: {totals?.totals.sold ?? 0}</div>
           </CardContent>
         </Card>
+        {businessAccountId && (
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle>Inventory Files</CardTitle>
+              <CardDescription>
+                Jump into file-based batches for marketplace syncing or create a new file.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FileSelector
+                value={selectedFileId}
+                onChange={handleFileSelect}
+                label="Select an inventory file"
+              />
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => router.push("/inventory/files")}>
+                  Manage Files
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <Card>
@@ -215,7 +108,7 @@ export default function InventoryPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>SKU</TableHead>
+                <TableHead>Part Number</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Color</TableHead>
                 <TableHead>Location</TableHead>
@@ -229,7 +122,7 @@ export default function InventoryPage() {
             <TableBody>
               {(items ?? []).map((item) => (
                 <TableRow key={item._id}>
-                  <TableCell>{item.sku}</TableCell>
+                  <TableCell>{item.partNumber}</TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.colorId}</TableCell>
                   <TableCell>{item.location}</TableCell>

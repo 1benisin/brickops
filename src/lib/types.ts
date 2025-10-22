@@ -6,7 +6,6 @@ export type StoreIdentifier = {
 
 export type InventoryItem = {
   id: string;
-  sku: string;
   name: string;
   quantityOnHand: number;
   reorderPoint: number;

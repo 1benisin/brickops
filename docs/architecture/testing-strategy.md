@@ -223,10 +223,10 @@ describe("InventoryCard", () => {
 ### Backend Function Test
 
 ```typescript
-// convex/functions/inventory.test.ts
+// __tests__/backend/inventory-functions.test.ts
 import { convexTest } from "convex-test";
-import { api } from "./_generated/api";
-import schema from "./schema";
+import { api } from "../../convex/_generated/api";
+import schema from "../../convex/schema";
 
 test("addInventoryItem creates item with correct data", async () => {
   const t = convexTest(schema);
@@ -240,7 +240,7 @@ test("addInventoryItem creates item with correct data", async () => {
     });
   });
 
-  const itemId = await t.mutation(api.inventory.addInventoryItem, {
+  const itemId = await t.mutation(api.inventory.mutations.addInventoryItem, {
     businessAccountId,
     partNumber: "3001",
     colorId: "5",

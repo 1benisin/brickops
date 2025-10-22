@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 
-import { AppProviders } from "@/components/providers/app-providers";
+import { AppProviders } from "@/components/providers/AppProviders";
 import "./globals.css";
 
 export const metadata: Metadata = {

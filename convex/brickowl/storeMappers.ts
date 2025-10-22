@@ -23,25 +23,14 @@ export function mapBrickOwlToConvexInventory(
   // "usedc", "usedi", "usedn", "usedg", "useda", "other" -> "used"
   const condition: "new" | "used" = brickowlInventory.condition.startsWith("new") ? "new" : "used";
 
-  // Location: BrickOwl doesn't support location field - use default
-  // User can update location after import
-  const location = "Main"; // Default location
-
-  // Generate SKU from part number + color + condition
-  // Use external_id_1 if available (our previously synced SKU), otherwise generate
-  const sku =
-    brickowlInventory.external_id_1 ||
-    `${brickowlInventory.boid}-${brickowlInventory.color_id ?? "0"}-${condition}`;
+  // Map location from personal_note field (private internal location)
+  const location = brickowlInventory.personal_note || "Main"; // Default to "Main" if no personal_note
 
   // Price is already a number in BrickOwl (unlike BrickLink's string)
   const price = brickowlInventory.price;
 
-  // Combine personal_note and public_note into notes
-  const notes =
-    [brickowlInventory.personal_note, brickowlInventory.public_note]
-      .filter(Boolean)
-      .join(" | ")
-      .trim() || undefined;
+  // Map public_note to notes (public-facing description)
+  const notes = brickowlInventory.public_note || undefined;
 
   // Name: BrickOwl doesn't provide name in inventory response
   // We'll need to look up from parts catalog or use boid as placeholder
@@ -49,7 +38,6 @@ export function mapBrickOwlToConvexInventory(
 
   return {
     businessAccountId,
-    sku,
     name, // Will be enriched from catalog lookup
     partNumber: brickowlInventory.boid,
     colorId: brickowlInventory.color_id?.toString() ?? "0", // Convert number to string
@@ -78,18 +66,11 @@ export function mapConvexToBrickOwlCreate(
   // Price is already a number (BrickOwl expects number, not string like BrickLink)
   const price = convexInventory.price ?? 0;
 
-  // Parse notes into personal_note (private) and public_note (visible to customers)
-  // If notes contain " | ", split into personal and public
-  // Otherwise use as personal_note only
-  let personal_note: string | undefined;
-  let public_note: string | undefined;
-  if (convexInventory.notes?.includes(" | ")) {
-    const [personal, publicPart] = convexInventory.notes.split(" | ");
-    personal_note = personal.trim() || undefined;
-    public_note = publicPart.trim() || undefined;
-  } else {
-    personal_note = convexInventory.notes;
-  }
+  // Map location to personal_note (private internal location)
+  const personal_note = convexInventory.location || undefined;
+
+  // Map notes to public_note (public-facing description visible to customers)
+  const public_note = convexInventory.notes || undefined;
 
   // Validate required fields
   if (!convexInventory.partNumber) {
@@ -102,9 +83,9 @@ export function mapConvexToBrickOwlCreate(
     quantity: convexInventory.quantityAvailable,
     price,
     condition,
-    external_id: convexInventory.sku, // Use our SKU as external reference
-    personal_note,
-    public_note,
+    external_id: convexInventory._id, // Use Convex ID as external reference (unique per lot)
+    personal_note, // Maps to our location field
+    public_note, // Maps to our notes field
   };
 }
 
@@ -143,16 +124,11 @@ export function mapConvexToBrickOwlUpdate(
     }
   }
 
-  // Parse notes into personal_note and public_note
-  let personal_note: string | undefined;
-  let public_note: string | undefined;
-  if (convexInventory.notes?.includes(" | ")) {
-    const [personal, publicPart] = convexInventory.notes.split(" | ");
-    personal_note = personal.trim() || undefined;
-    public_note = publicPart.trim() || undefined;
-  } else {
-    personal_note = convexInventory.notes;
-  }
+  // Map location to personal_note (private internal location)
+  const personal_note = convexInventory.location || undefined;
+
+  // Map notes to public_note (public-facing description visible to customers)
+  const public_note = convexInventory.notes || undefined;
 
   // Map for_sale based on status
   const for_sale = convexInventory.status === "available" ? (1 as const) : (0 as const);
@@ -165,8 +141,8 @@ export function mapConvexToBrickOwlUpdate(
     relative_quantity,
     for_sale,
     price,
-    personal_note,
-    public_note,
+    personal_note, // Maps to our location field
+    public_note, // Maps to our notes field
     condition,
   };
 }
@@ -274,10 +250,10 @@ export function validateBrickOwlUpdate(payload: UpdateInventoryPayload): void {
 
 /**
  * Build external_id from Convex inventory for BrickOwl sync
- * This enables BrickOwl to reference our SKU for future lookups
+ * This enables BrickOwl to reference our Convex ID for future lookups
  */
 export function buildExternalId(convexInventory: Doc<"inventoryItems">): string {
-  return convexInventory.sku;
+  return convexInventory._id;
 }
 
 /**

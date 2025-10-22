@@ -6,32 +6,15 @@ import { renderWithProviders } from "../../../test/utils/render-with-providers";
 import InventoryPage from "../../../src/app/(authenticated)/inventory/page";
 import { api } from "../../../convex/_generated/api";
 
-// Mock Radix Dialog to avoid act warnings and portal issues
-jest.mock("@radix-ui/react-dialog", () => ({
-  Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Trigger: ({
-    children,
-    asChild,
-    ...props
-  }: React.ComponentProps<"button"> & { asChild?: boolean }) => {
-    // If asChild is true, render children directly without wrapping button
-    return asChild ? <>{children}</> : <button {...props}>{children}</button>;
-  },
-  Portal: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Overlay: ({ children, ...props }: React.ComponentProps<"div">) => (
-    <div {...props}>{children}</div>
-  ),
-  Content: ({ children, ...props }: React.ComponentProps<"div">) => (
-    <div {...props}>{children}</div>
-  ),
-  Title: ({ children, ...props }: React.ComponentProps<"h2">) => <h2 {...props}>{children}</h2>,
-  Description: ({ children, ...props }: React.ComponentProps<"p">) => <p {...props}>{children}</p>,
-  Close: ({ children, ...props }: React.ComponentProps<"button">) => (
-    <button {...props}>{children}</button>
-  ),
+// Mock next/navigation
+const mockPush = jest.fn();
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
 }));
 
-// Provide deterministic values to enable the Save button
+// Provide deterministic values
 jest.mock("convex/react", () => {
   const actual = jest.requireActual("convex/react");
   return {
@@ -39,16 +22,16 @@ jest.mock("convex/react", () => {
     ...actual,
     useQuery: jest.fn((queryFn: unknown, _args: unknown) => {
       switch (queryFn) {
-        case api.functions.users.getCurrentUser:
+        case api.users.getCurrentUser:
           return { businessAccount: { _id: "ba_1" } } as unknown;
-        case api.functions.inventory.listInventoryItems:
+        case api.inventory.listInventoryItems:
           return [] as unknown;
-        case api.functions.inventory.getInventoryTotals:
+        case api.inventory.getInventoryTotals:
           return {
             counts: { items: 0 },
             totals: { available: 0, reserved: 0, sold: 0 },
           } as unknown;
-        case api.functions.inventory.listInventoryAuditLogs:
+        case api.inventory.listInventoryHistory:
           return [] as unknown;
         default:
           return undefined;
@@ -59,10 +42,14 @@ jest.mock("convex/react", () => {
 });
 
 describe("InventoryPage", () => {
-  it("renders inventory page with add item functionality", async () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+  });
+
+  it("renders inventory page with navigation to add item", async () => {
     const user = userEvent.setup();
 
-    // Render with mocked Convex client and Radix components
+    // Render with mocked Convex client and router
     renderWithProviders(<InventoryPage />);
 
     // Page should render with main title (level 1 heading)
@@ -71,18 +58,8 @@ describe("InventoryPage", () => {
     // Should have Add Item button
     expect(screen.getByRole("button", { name: /add item/i })).toBeInTheDocument();
 
-    // Open dialog
+    // Clicking Add Item should navigate to inventory files page
     await user.click(screen.getByRole("button", { name: /add item/i }));
-
-    // Dialog should open with form fields
-    expect(screen.getByRole("heading", { name: /add inventory item/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/SKU/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Name/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Color ID/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Location/i)).toBeInTheDocument();
-
-    // Save button should be present (validation state tested elsewhere)
-    expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+    expect(mockPush).toHaveBeenCalledWith("/inventory/files");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { helloImpl } from "@/convex/functions/hello_impl";
+import { helloImpl } from "@/convex/hello_impl";
 
 describe("helloImpl", () => {
   it("greets the requester", () => {

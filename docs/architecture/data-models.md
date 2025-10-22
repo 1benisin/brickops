@@ -57,19 +57,21 @@ The following core business entities are used across the stack:
 
 ## InventoryItem
 
-- Purpose: Tracks actual inventory with status splits and audit trail support
+- Purpose: Tracks actual inventory with status splits, marketplace sync tracking, and audit trail support
 - Key Attributes:
-  - Basic: sku, name, colorId, location, condition (new/used)
+  - Basic: sku, name, partNumber, colorId, location, condition (new/used)
   - Quantities: quantityAvailable, quantityReserved, quantitySold
   - Status: status (available/reserved/sold)
+  - Marketplace: price, notes, bricklinkInventoryId, brickowlLotId (Stories 3.2-3.3)
+  - Sync Status: lastSyncedAt, syncErrors[] (Story 3.4)
   - Audit: createdBy, createdAt, updatedAt
   - Soft Delete: isArchived, deletedAt
-- Relationships: Belongs to BusinessAccount; tracked in InventoryAuditLogs
-- Indexes: by_businessAccount, by_sku (for duplicate prevention)
+- Relationships: Belongs to BusinessAccount; tracked in InventoryHistory and InventorySyncQueue; syncs to marketplaces via marketplace IDs
+- Indexes: by_businessAccount, by_sku (duplicate prevention), by_bricklinkInventoryId, by_brickowlLotId (marketplace sync lookups)
 
-## InventoryAuditLogs
+## InventoryHistory
 
-- Purpose: Complete audit trail for all inventory changes with quantity deltas
+- Purpose: Complete audit trail for local inventory changes with quantity deltas (separate from marketplace sync queue)
 - Key Attributes:
   - References: businessAccountId, itemId, actorUserId
   - Change Type: changeType (create/update/adjust/delete)
@@ -78,6 +80,45 @@ The following core business entities are used across the stack:
   - Metadata: reason, createdAt
 - Relationships: References InventoryItem and User
 - Indexes: by_item, by_businessAccount, by_createdAt (for chronological queries)
+
+## InventorySyncQueue (Story 3.4)
+
+- Purpose: Marketplace sync orchestration queue tracking changes pending sync to BrickLink and/or BrickOwl
+- Key Attributes:
+  - References: businessAccountId, inventoryItemId, createdBy
+  - Change Data: changeType (create/update/delete), previousData, newData, reason
+  - Multi-Provider Sync: syncStatus, bricklinkSyncedAt, brickowlSyncedAt, bricklinkSyncError, brickowlSyncError
+  - Conflict Tracking: conflictStatus, conflictDetails
+  - Undo Chain: isUndo, undoesChangeId, undoneByChangeId
+  - Tracing: correlationId, createdAt
+- Relationships: References InventoryItem; bidirectional undo chain references
+- Indexes: by_business_pending (queue processing), by_inventory_item (item history), by_correlation (distributed tracing)
+
+## MarketplaceCredentials (Story 3.1)
+
+- Purpose: User marketplace API credentials (BYOK model) stored encrypted at rest
+- Key Attributes:
+  - References: businessAccountId, provider (bricklink/brickowl), createdBy
+  - BrickLink: bricklinkConsumerKey, bricklinkConsumerSecret, bricklinkTokenValue, bricklinkTokenSecret (all encrypted)
+  - BrickOwl: brickowlApiKey (encrypted)
+  - Validation: isActive, lastValidatedAt, validationStatus, validationMessage
+  - Metadata: createdAt, updatedAt
+- Relationships: One per provider per business account; used by marketplace store clients
+- Indexes: by_business_provider (primary lookup), by_businessAccount (all credentials per tenant)
+- Security: All credential fields encrypted using AES-GCM; never returned in plaintext
+
+## MarketplaceRateLimits (Stories 3.2-3.3)
+
+- Purpose: Database-backed rate limiting for marketplace APIs with circuit breaker support
+- Key Attributes:
+  - References: businessAccountId, provider (bricklink/brickowl)
+  - Quota: windowStart, requestCount, capacity, windowDurationMs
+  - Alerting: alertThreshold (0.8), alertEmitted
+  - Circuit Breaker: consecutiveFailures, circuitBreakerOpenUntil
+  - Metadata: lastRequestAt, lastResetAt, createdAt, updatedAt
+- Relationships: One per provider per business account; queried/mutated by marketplace store clients
+- Indexes: by_business_provider (primary lookup)
+- Implementation: Pre-flight quota check + post-request recording; 24-hour window for BrickLink, 1-minute window for BrickOwl
 
 ## MarketplaceOrder, PickSession, TodoItem
 

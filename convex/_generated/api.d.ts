@@ -8,27 +8,43 @@
  * @module
  */
 
-import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
-import type * as actions_email from "../actions/email.js";
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as auth from "../auth.js";
-import type * as bricklink_bricklinkClient from "../bricklink/bricklinkClient.js";
 import type * as bricklink_bricklinkMappers from "../bricklink/bricklinkMappers.js";
+import type * as bricklink_catalogClient from "../bricklink/catalogClient.js";
 import type * as bricklink_dataRefresher from "../bricklink/dataRefresher.js";
 import type * as bricklink_oauth from "../bricklink/oauth.js";
 import type * as bricklink_storeClient from "../bricklink/storeClient.js";
 import type * as bricklink_storeMappers from "../bricklink/storeMappers.js";
-import type * as catalog from "../catalog.js";
+import type * as brickowl_auth from "../brickowl/auth.js";
+import type * as brickowl_storeClient from "../brickowl/storeClient.js";
+import type * as brickowl_storeMappers from "../brickowl/storeMappers.js";
+import type * as catalog_actions from "../catalog/actions.js";
+import type * as catalog_helpers from "../catalog/helpers.js";
+import type * as catalog_mutations from "../catalog/mutations.js";
+import type * as catalog_queries from "../catalog/queries.js";
+import type * as catalog_validators from "../catalog/validators.js";
 import type * as crons from "../crons.js";
-import type * as functions_hello from "../functions/hello.js";
-import type * as functions_hello_impl from "../functions/hello_impl.js";
-import type * as functions_identify from "../functions/identify.js";
-import type * as functions_identifyActions from "../functions/identifyActions.js";
-import type * as functions_internal from "../functions/internal.js";
-import type * as functions_inventory from "../functions/inventory.js";
-import type * as functions_marketplace from "../functions/marketplace.js";
-import type * as functions_users from "../functions/users.js";
+import type * as hello from "../hello.js";
+import type * as hello_impl from "../hello_impl.js";
 import type * as http from "../http.js";
-import type * as internal_identify from "../internal/identify.js";
+import type * as identify_actions from "../identify/actions.js";
+import type * as identify_helpers from "../identify/helpers.js";
+import type * as identify_mutations from "../identify/mutations.js";
+import type * as inventory_files_actions from "../inventory/files/actions.js";
+import type * as inventory_files_helpers from "../inventory/files/helpers.js";
+import type * as inventory_files_mutations from "../inventory/files/mutations.js";
+import type * as inventory_files_queries from "../inventory/files/queries.js";
+import type * as inventory_files_validators from "../inventory/files/validators.js";
+import type * as inventory_helpers from "../inventory/helpers.js";
+import type * as inventory_mutations from "../inventory/mutations.js";
+import type * as inventory_queries from "../inventory/queries.js";
+import type * as inventory_sync from "../inventory/sync.js";
+import type * as inventory_validators from "../inventory/validators.js";
 import type * as lib_dbRateLimiter from "../lib/dbRateLimiter.js";
 import type * as lib_encryption from "../lib/encryption.js";
 import type * as lib_external_brickognize from "../lib/external/brickognize.js";
@@ -45,8 +61,18 @@ import type * as lib_external_types from "../lib/external/types.js";
 import type * as lib_external_validate from "../lib/external/validate.js";
 import type * as lib_rateLimiterAdapter from "../lib/rateLimiterAdapter.js";
 import type * as lib_webcrypto from "../lib/webcrypto.js";
-import type * as marketplaces_types from "../marketplaces/types.js";
-import type * as validators_catalog from "../validators/catalog.js";
+import type * as marketplace_actions from "../marketplace/actions.js";
+import type * as marketplace_helpers from "../marketplace/helpers.js";
+import type * as marketplace_mutations from "../marketplace/mutations.js";
+import type * as marketplace_queries from "../marketplace/queries.js";
+import type * as marketplace_rateLimitConfig from "../marketplace/rateLimitConfig.js";
+import type * as marketplace_types from "../marketplace/types.js";
+import type * as ratelimit_mutations from "../ratelimit/mutations.js";
+import type * as ratelimit_rateLimitConfig from "../ratelimit/rateLimitConfig.js";
+import type * as users_actions from "../users/actions.js";
+import type * as users_helpers from "../users/helpers.js";
+import type * as users_mutations from "../users/mutations.js";
+import type * as users_queries from "../users/queries.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -57,26 +83,38 @@ import type * as validators_catalog from "../validators/catalog.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  "actions/email": typeof actions_email;
   auth: typeof auth;
-  "bricklink/bricklinkClient": typeof bricklink_bricklinkClient;
   "bricklink/bricklinkMappers": typeof bricklink_bricklinkMappers;
+  "bricklink/catalogClient": typeof bricklink_catalogClient;
   "bricklink/dataRefresher": typeof bricklink_dataRefresher;
   "bricklink/oauth": typeof bricklink_oauth;
   "bricklink/storeClient": typeof bricklink_storeClient;
   "bricklink/storeMappers": typeof bricklink_storeMappers;
-  catalog: typeof catalog;
+  "brickowl/auth": typeof brickowl_auth;
+  "brickowl/storeClient": typeof brickowl_storeClient;
+  "brickowl/storeMappers": typeof brickowl_storeMappers;
+  "catalog/actions": typeof catalog_actions;
+  "catalog/helpers": typeof catalog_helpers;
+  "catalog/mutations": typeof catalog_mutations;
+  "catalog/queries": typeof catalog_queries;
+  "catalog/validators": typeof catalog_validators;
   crons: typeof crons;
-  "functions/hello": typeof functions_hello;
-  "functions/hello_impl": typeof functions_hello_impl;
-  "functions/identify": typeof functions_identify;
-  "functions/identifyActions": typeof functions_identifyActions;
-  "functions/internal": typeof functions_internal;
-  "functions/inventory": typeof functions_inventory;
-  "functions/marketplace": typeof functions_marketplace;
-  "functions/users": typeof functions_users;
+  hello: typeof hello;
+  hello_impl: typeof hello_impl;
   http: typeof http;
-  "internal/identify": typeof internal_identify;
+  "identify/actions": typeof identify_actions;
+  "identify/helpers": typeof identify_helpers;
+  "identify/mutations": typeof identify_mutations;
+  "inventory/files/actions": typeof inventory_files_actions;
+  "inventory/files/helpers": typeof inventory_files_helpers;
+  "inventory/files/mutations": typeof inventory_files_mutations;
+  "inventory/files/queries": typeof inventory_files_queries;
+  "inventory/files/validators": typeof inventory_files_validators;
+  "inventory/helpers": typeof inventory_helpers;
+  "inventory/mutations": typeof inventory_mutations;
+  "inventory/queries": typeof inventory_queries;
+  "inventory/sync": typeof inventory_sync;
+  "inventory/validators": typeof inventory_validators;
   "lib/dbRateLimiter": typeof lib_dbRateLimiter;
   "lib/encryption": typeof lib_encryption;
   "lib/external/brickognize": typeof lib_external_brickognize;
@@ -93,8 +131,24 @@ declare const fullApi: ApiFromModules<{
   "lib/external/validate": typeof lib_external_validate;
   "lib/rateLimiterAdapter": typeof lib_rateLimiterAdapter;
   "lib/webcrypto": typeof lib_webcrypto;
-  "marketplaces/types": typeof marketplaces_types;
-  "validators/catalog": typeof validators_catalog;
+  "marketplace/actions": typeof marketplace_actions;
+  "marketplace/helpers": typeof marketplace_helpers;
+  "marketplace/mutations": typeof marketplace_mutations;
+  "marketplace/queries": typeof marketplace_queries;
+  "marketplace/rateLimitConfig": typeof marketplace_rateLimitConfig;
+  "marketplace/types": typeof marketplace_types;
+  "ratelimit/mutations": typeof ratelimit_mutations;
+  "ratelimit/rateLimitConfig": typeof ratelimit_rateLimitConfig;
+  "users/actions": typeof users_actions;
+  "users/helpers": typeof users_helpers;
+  "users/mutations": typeof users_mutations;
+  "users/queries": typeof users_queries;
 }>;
-export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
-export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;

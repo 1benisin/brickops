@@ -1,6 +1,6 @@
 "use client";
 
-import { CameraIdentificationPanel } from "@/components/identify/camera-identification-panel";
+import { CameraIdentificationPanel } from "@/components/identify/CameraIdentificationPanel";
 
 export default function IdentifyPage() {
   return (

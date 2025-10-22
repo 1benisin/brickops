@@ -31,7 +31,7 @@
  * - Use for rollback preview: "What would happen if I reversed this change?"
  *
  * STORY 3.4 INTEGRATION:
- * - inventoryAuditLogs table tracks all changes with changeType
+ * - inventoryHistory table tracks all changes with changeType
  * - Each log entry stores data needed for compensating operation
  * - UI presents change history with "Undo" button
  * - Undo triggers compensating operation via this client
@@ -49,7 +49,7 @@ import {
   validateApiKey,
   type BrickOwlCredentials,
 } from "./auth";
-import type { StoreOperationResult } from "../marketplaces/types";
+import type { StoreOperationResult } from "../marketplace/types";
 
 const BASE_URL = "https://api.brickowl.com/v1";
 
@@ -367,7 +367,7 @@ export class BrickOwlStoreClient {
       }
 
       // 2. Pre-flight quota check
-      const quota = await this.ctx.runQuery(internal.functions.marketplace.getQuotaState, {
+      const quota = await this.ctx.runQuery(internal.marketplace.mutations.getQuotaState, {
         businessAccountId: this.businessAccountId,
         provider: "brickowl",
       });
@@ -428,7 +428,7 @@ export class BrickOwlStoreClient {
       });
 
       // 5. Record quota usage AFTER request
-      await this.ctx.runMutation(internal.functions.marketplace.incrementQuota, {
+      await this.ctx.runMutation(internal.marketplace.mutations.incrementQuota, {
         businessAccountId: this.businessAccountId,
         provider: "brickowl",
       });
@@ -473,7 +473,7 @@ export class BrickOwlStoreClient {
 
       // Record failure for circuit breaker on network errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        await this.ctx.runMutation(internal.functions.marketplace.recordFailure, {
+        await this.ctx.runMutation(internal.marketplace.mutations.recordFailure, {
           businessAccountId: this.businessAccountId,
           provider: "brickowl",
         });
@@ -539,7 +539,7 @@ export class BrickOwlStoreClient {
 
     // Record failure for circuit breaker (5xx errors and network failures)
     if (response.status >= 500) {
-      await this.ctx.runMutation(internal.functions.marketplace.recordFailure, {
+      await this.ctx.runMutation(internal.marketplace.mutations.recordFailure, {
         businessAccountId: this.businessAccountId,
         provider: "brickowl",
       });

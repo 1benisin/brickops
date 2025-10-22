@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const requiredPaths = [
-  "convex/functions",
+  "convex/users",
+  "convex/inventory",
+  "convex/catalog",
+  "convex/identify",
+  "convex/marketplace",
   "convex/schema.ts",
   "src/app",
   "src/components",

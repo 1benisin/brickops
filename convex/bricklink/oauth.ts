@@ -109,3 +109,11 @@ export function buildAuthorizationHeader(
 
   return `OAuth ${params.map(([key, value]) => `${percentEncode(key)}="${percentEncode(value)}"`).join(", ")}`;
 }
+
+/**
+ * Generate unique request ID for correlation and tracing
+ * @returns Unique request identifier
+ */
+export function generateRequestId(): string {
+  return `bl-${Date.now()}-${randomHex(8)}`;
+}

@@ -6,13 +6,40 @@ BrickOps uses Convex serverless functions instead of a traditional REST API. The
 - External API quotas to respect:
   - Bricklink: default 5,000 calls/day (API Terms 2023-02-02). Implement daily budgeting and monitoring.
 
+## Dual Credential Architecture
+
+BrickOps uses **two distinct credential systems** for marketplace integrations:
+
+### 1. BrickOps System Credentials (Environment Variables)
+
+Used for global catalog operations (Story 2.3):
+
+- **Purpose**: Query global parts catalog, colors, categories, price guides
+- **Scope**: System-wide operations shared across all tenants
+- **Storage**: Convex environment variables
+- **Rate Limiting**: Static in-memory tracking (single shared quota pool)
+- **Example Use**: Catalog search, part details, price guide queries
+
+### 2. User BYOK Credentials (Database, Encrypted)
+
+Used for user marketplace store operations (Stories 3.1-3.3):
+
+- **Purpose**: Manage user's BrickLink/BrickOwl store (inventory, orders)
+- **Scope**: Per-business-account operations
+- **Storage**: `marketplaceCredentials` table, encrypted at rest with AES-GCM
+- **Rate Limiting**: Database-backed per-tenant tracking with circuit breaker
+- **Example Use**: Inventory sync, order management, store settings
+
+**CRITICAL**: Never mix credential types. System credentials cannot access user stores; user credentials should not query global catalog.
+
 ## External Provider Credentials
 
 ### Convex Environment Management
 
-- All secrets live in the Convex environment; never hardcode credentials in source control.
-- Use `npx convex env set <deployment> <key> <value>` (or the Convex dashboard) to configure values for each deployment.
-- Limit access to administrators. Rotate keys on provider-requested cadence and immediately when compromise is suspected.
+- System credentials (BrickOps) live in the Convex environment; never hardcode in source control
+- User credentials (BYOK) stored encrypted in `marketplaceCredentials` table with `ENCRYPTION_KEY` env var for encryption
+- Use `npx convex env set <deployment> <key> <value>` (or the Convex dashboard) to configure values for each deployment
+- Limit access to administrators. Rotate keys on provider-requested cadence and immediately when compromise is suspected
 
 ### Brickognize API Key
 
@@ -20,22 +47,42 @@ BrickOps uses Convex serverless functions instead of a traditional REST API. The
 - Provider does not require an API key; service is accessible without authentication.
 - Grant application services read-only access. Health checks use the `/health/` endpoint to verify connectivity.
 
-### Bricklink OAuth 1.0a Credentials
+### Bricklink OAuth 1.0a Credentials (BrickOps System Account)
 
-- Follow Bricklink’s OAuth 1.0a requirements (HMAC-SHA1 signatures, UTF-8 encoding, SSL enforced).
+- Follow Bricklink's OAuth 1.0a requirements (HMAC-SHA1 signatures, UTF-8 encoding, SSL enforced).
 - Register the application in the Bricklink member portal to obtain consumer credentials, then generate access tokens.
 - Configure the following Convex environment variables:
-  - `BRICKLINK_CONSUMER_KEY`
-  - `BRICKLINK_CONSUMER_SECRET`
-  - `BRICKLINK_ACCESS_TOKEN`
-  - `BRICKLINK_TOKEN_SECRET`
+  - `BRICKLINK_CONSUMER_KEY` - System catalog access
+  - `BRICKLINK_CONSUMER_SECRET` - System catalog access
+  - `BRICKLINK_ACCESS_TOKEN` - System catalog access
+  - `BRICKLINK_TOKEN_SECRET` - System catalog access
 - Tokens must be scoped to the BrickOps store account and rotated per Bricklink policy. Validation utilities assert signature correctness without performing destructive operations.
 
-### Brickowl API Key
+**Note**: User BrickLink credentials (BYOK) are stored in `marketplaceCredentials` table, not environment variables.
+
+### Brickowl API Key (BrickOps System Account - Future Use)
 
 - Generate a key via the Brickowl account settings page (`/user/{id}/api_keys`).
 - Respect Brickowl rate limits (typically 600 requests/minute; 200 requests/minute for bulk endpoints).
-- Store the key as `BRICKOWL_API_KEY` in the Convex environment and scope usage to server-side functions.
+- Store the key as `BRICKOWL_API_KEY` in the Convex environment if needed for system operations.
+
+**Note**: User BrickOwl credentials (BYOK) are stored in `marketplaceCredentials` table, not environment variables.
+
+### Encryption Key (Story 3.1)
+
+**Required for user credential encryption**:
+
+- `ENCRYPTION_KEY` - 32-byte base64-encoded key for AES-GCM encryption of user marketplace credentials
+- Generate: `openssl rand -base64 32`
+- Used by `convex/lib/encryption.ts` to encrypt/decrypt credentials in `marketplaceCredentials` table
+- Must be set in Convex environment for production; rotate periodically per security policy
+
+### Feature Flags
+
+- `DISABLE_EXTERNAL_CALLS` - When set, marketplace test connections return mock success (useful for CI/CD)
+- `INVENTORY_SYNC_ENABLED` - Global toggle for inventory sync processing (Story 3.4)
+- `BRICKLINK_SYNC_ENABLED` - BrickLink-specific sync control (Story 3.4)
+- `BRICKOWL_SYNC_ENABLED` - BrickOwl-specific sync control (Story 3.4)
 
 ### Documentation Cross-References
 

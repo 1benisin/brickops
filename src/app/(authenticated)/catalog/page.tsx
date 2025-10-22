@@ -1,23 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import { usePaginatedQuery, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { CatalogDetailDrawer } from "@/components/catalog/catalog-detail-drawer";
-import { CatalogResultCard } from "@/components/catalog/catalog-result-card";
-import { CatalogSearchBar } from "@/components/catalog/catalog-search-bar";
+import { PartDetailDrawer } from "@/components/catalog/PartDetailDrawer";
+import { CatalogResultCard } from "@/components/catalog/CatalogResultCard";
+import { CatalogSearchBar } from "@/components/catalog/CatalogSearchBar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSearchStore } from "@/hooks/useSearchStore";
-import type { CatalogPart, CatalogPartDetails } from "@/types/catalog";
+import type { CatalogPart } from "@/types/catalog";
 
 // Removed manual pagination state - now using usePaginatedQuery hook
 // Removed sortNumericValues (no longer needed with simplified search fields)
 
 export default function CatalogPage() {
-  const currentUser = useQuery(api.functions.users.getCurrentUser);
+  const currentUser = useQuery(api.users.queries.getCurrentUser);
   const businessAccountId = currentUser?.businessAccount?._id as Id<"businessAccounts"> | undefined;
 
   useEffect(() => {
@@ -108,54 +108,18 @@ export default function CatalogPage() {
     status: paginationStatus,
     loadMore,
     isLoading: searchLoading,
-  } = usePaginatedQuery(api.catalog.searchParts, searchArgs, {
+  } = usePaginatedQuery(api.catalog.queries.searchParts, searchArgs, {
     initialNumItems: pageSize,
   });
 
   const parts = results ?? [];
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedPart, setSelectedPart] = useState<CatalogPart | null>(null);
-  const [detailError, setDetailError] = useState<string | null>(null);
-  const [refreshingDetail, setRefreshingDetail] = useState(false);
-
-  const [detailData, setDetailData] = useState<CatalogPartDetails | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const getPartDetailsMutation = useMutation(api.catalog.getPartDetails);
-
-  // Fetch part details when drawer opens or part changes
-  useEffect(() => {
-    if (!drawerOpen || !selectedPart) {
-      setDetailData(null);
-      return;
-    }
-
-    const fetchDetails = async () => {
-      setDetailLoading(true);
-      setDetailError(null);
-      try {
-        const result = await getPartDetailsMutation({
-          partNumber: selectedPart.partNumber,
-          fetchFromBricklink: false,
-        });
-        setDetailData(result as CatalogPartDetails);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load part details";
-        setDetailError(message);
-      } finally {
-        setDetailLoading(false);
-      }
-    };
-
-    void fetchDetails();
-  }, [drawerOpen, selectedPart, getPartDetailsMutation]);
-
-  const refreshPart = useMutation(api.catalog.forcePartDetailsRefresh);
+  const [selectedPartNumber, setSelectedPartNumber] = useState<string | null>(null);
 
   const handleSelectPart = (part: CatalogPart) => {
-    setSelectedPart(part);
+    setSelectedPartNumber(part.partNumber);
     setDrawerOpen(true);
-    setDetailError(null);
   };
 
   const handleLoadMore = () => {
@@ -167,27 +131,6 @@ export default function CatalogPage() {
   const hasMoreResults = paginationStatus === "CanLoadMore";
   const isLoading = paginationStatus === "LoadingFirstPage" || paginationStatus === "LoadingMore";
   const isExhausted = paginationStatus === "Exhausted";
-
-  const handleRefreshDetail = async () => {
-    if (!selectedPart) return;
-    try {
-      setRefreshingDetail(true);
-      await refreshPart({ partNumber: selectedPart.partNumber });
-
-      // Refetch details after queuing refresh
-      const result = await getPartDetailsMutation({
-        partNumber: selectedPart.partNumber,
-        fetchFromBricklink: false,
-      });
-      setDetailData(result as CatalogPartDetails);
-      setDetailError(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to refresh part details";
-      setDetailError(message);
-    } finally {
-      setRefreshingDetail(false);
-    }
-  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -305,21 +248,15 @@ export default function CatalogPage() {
         </div>
       </div>
 
-      <CatalogDetailDrawer
+      <PartDetailDrawer
         open={drawerOpen}
         onOpenChange={(open) => {
           setDrawerOpen(open);
           if (!open) {
-            setSelectedPart(null);
-            setDetailError(null);
+            setSelectedPartNumber(null);
           }
         }}
-        part={selectedPart}
-        details={detailData}
-        loading={detailLoading}
-        onRefresh={handleRefreshDetail}
-        refreshLoading={refreshingDetail}
-        error={detailError}
+        partNumber={selectedPartNumber}
       />
     </div>
   );

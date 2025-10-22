@@ -1,3 +1,3 @@
-export * from "./app-header";
-export * from "./app-navigation";
-export * from "./page-container";
+export * from "./AppHeader";
+export * from "./AppNavigation";
+export * from "./PageContainer";

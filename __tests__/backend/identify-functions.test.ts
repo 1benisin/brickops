@@ -4,9 +4,8 @@ import { Blob } from "node:buffer";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { ConvexError } from "convex/values";
 
-import { generateUploadUrl } from "@/convex/functions/identify";
-import { consumeIdentificationRate } from "@/convex/internal/identify";
-import { identifyPartFromImage } from "@/convex/functions/identifyActions";
+import { generateUploadUrl, consumeIdentificationRate } from "@/convex/identify/mutations";
+import { identifyPartFromImage } from "@/convex/identify/actions";
 import { api } from "@/convex/_generated/api";
 import {
   buildSeedData,
@@ -139,7 +138,7 @@ describe("identify functions", () => {
       businessAccountId,
     });
 
-    expect(ctx.runQuery).toHaveBeenCalledWith(api.functions.users.getCurrentUser, {});
+    expect(ctx.runQuery).toHaveBeenCalledWith(api.users.getCurrentUser, {});
     // TODO: Re-enable when rate limiting is implemented
     // expect(ctx.runMutation).toHaveBeenCalledWith(api.internal.identify.consumeIdentificationRate, {
     //   userId,

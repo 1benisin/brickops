@@ -2,13 +2,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { ConvexError } from "convex/values";
 
-import {
-  getCurrentUser,
-  listMembers,
-  regenerateInviteCode,
-  updateProfile,
-  createUserInvite,
-} from "@/convex/functions/users";
+import { getCurrentUser, listMembers } from "@/convex/users/queries";
+import { regenerateInviteCode, updateProfile, createUserInvite } from "@/convex/users/mutations";
 import {
   buildSeedData,
   createConvexTestContext,

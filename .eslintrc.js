@@ -5,6 +5,7 @@ module.exports = {
     tsconfigRootDir: __dirname,
     project: ["./tsconfig.json", "./tsconfig.test.json"],
   },
+  ignorePatterns: ["src/components/ui/**/*"],
   env: {
     browser: true,
     es2021: true,
@@ -45,6 +46,9 @@ module.exports = {
         caughtErrorsIgnorePattern: "^_",
       },
     ],
+    // Prefer TS-aware no-redeclare rule to support function overloads
+    "no-redeclare": "off",
+    "@typescript-eslint/no-redeclare": "error",
   },
   overrides: [
     {
