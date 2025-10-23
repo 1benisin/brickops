@@ -111,7 +111,7 @@ inventoryItems: defineTable({
   condition: v.union(v.literal("new"), v.literal("used")),
   price: v.optional(v.number()),       // Added in Stories 3.2-3.3 - Unit price for marketplace sync
   notes: v.optional(v.string()),       // Added in Stories 3.2-3.3 - Description/remarks from marketplace
-  bricklinkInventoryId: v.optional(v.number()), // Added in Story 3.2 - BrickLink inventory_id for sync tracking
+  bricklinkLotId: v.optional(v.number()), // Added in Story 3.2 - BrickLink inventory_id for sync tracking
   brickowlLotId: v.optional(v.string()),        // Added in Story 3.3 - BrickOwl lot_id for sync tracking
   createdBy: v.id("users"),
   createdAt: v.number(),
@@ -128,7 +128,7 @@ inventoryItems: defineTable({
 })
 .index("by_businessAccount", ["businessAccountId"])              // Tenant isolation
 .index("by_sku", ["businessAccountId", "sku"])                   // Duplicate prevention
-.index("by_bricklinkInventoryId", ["businessAccountId", "bricklinkInventoryId"])  // BrickLink sync lookup
+.index("by_bricklinkLotId", ["businessAccountId", "bricklinkLotId"])  // BrickLink sync lookup
 .index("by_brickowlLotId", ["businessAccountId", "brickowlLotId"]),              // BrickOwl sync lookup
 ```
 
@@ -332,8 +332,8 @@ marketplaceRateLimits: defineTable({
 **Story 3.2-3.3 Changes (Marketplace Clients)**:
 
 - Created `marketplaceRateLimits` table for database-backed rate limiting per tenant per provider
-- Extended `inventoryItems` with marketplace sync fields: `partNumber`, `price`, `notes`, `bricklinkInventoryId`, `brickowlLotId`
-- Added indexes `by_bricklinkInventoryId` and `by_brickowlLotId` for efficient sync lookups
+- Extended `inventoryItems` with marketplace sync fields: `partNumber`, `price`, `notes`, `bricklinkLotId`, `brickowlLotId`
+- Added indexes `by_bricklinkLotId` and `by_brickowlLotId` for efficient sync lookups
 - Rate limiting supports circuit breaker pattern (opens after 5 failures) with 80% alert threshold
 
 **Story 3.4 Changes (Sync Orchestration)**:

@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, internalMutation, internalQuery } from "../_generated/server";
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { now, requireUser, assertBusinessMembership, requireOwnerRole } from "./helpers";
 import {
@@ -33,7 +34,6 @@ export const addInventoryItem = mutation({
   handler: async (ctx, args) => {
     const { user } = await requireUser(ctx);
     const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
-    requireOwnerRole(user); // AC: 3.4.1 - owner role required
 
     if (args.quantityAvailable < 0) {
       throw new ConvexError("Quantity available cannot be negative");
@@ -76,28 +76,70 @@ export const addInventoryItem = mutation({
       createdAt: timestamp,
     });
 
-    // AC: 3.5.3 - CRITICAL: Only create sync queue entry if item is NOT in a file
-    // Items in files are synced via batch operations, not automatic sync
-    if (!args.fileId) {
-      const correlationId = crypto.randomUUID();
-      await ctx.db.insert("inventorySyncQueue", {
+    // Set initial sync status to "syncing" for enabled marketplaces
+    const syncStatusUpdates: {
+      bricklinkSyncStatus?: "syncing" | "synced" | "failed";
+      brickowlSyncStatus?: "syncing" | "synced" | "failed";
+    } = {};
+
+    // Get configured providers
+    const providers: Array<"bricklink" | "brickowl"> = [];
+
+    // Check BrickLink credentials
+    const bricklinkCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", businessAccountId).eq("provider", "bricklink"),
+      )
+      .first();
+
+    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
+      providers.push("bricklink");
+    }
+
+    // Check BrickOwl credentials
+    const brickowlCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", businessAccountId).eq("provider", "brickowl"),
+      )
+      .first();
+
+    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
+      providers.push("brickowl");
+    }
+
+    if (providers.includes("bricklink")) {
+      syncStatusUpdates.bricklinkSyncStatus = "syncing";
+    }
+    if (providers.includes("brickowl")) {
+      syncStatusUpdates.brickowlSyncStatus = "syncing";
+    }
+
+    // Update inventory item with syncing status
+    if (Object.keys(syncStatusUpdates).length > 0) {
+      await ctx.db.patch(id, syncStatusUpdates);
+    }
+
+    // Trigger immediate sync instead of adding to sync queue
+    const correlationId = crypto.randomUUID();
+
+    // Schedule immediate sync (non-blocking)
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.immediateSync.syncInventoryChangeImmediately,
+      {
         businessAccountId,
         inventoryItemId: id,
         changeType: "create",
-        newData: document, // Full state for marketplace sync
-        syncStatus: "pending",
+        newData: document,
         correlationId,
-        createdBy: user._id,
-        createdAt: timestamp,
-      });
-    }
+      },
+    );
 
     return id;
   },
 });
-
-// Alias for Story 3.4 compatibility
-export const createInventoryItem = addInventoryItem;
 
 export const updateInventoryQuantity = mutation({
   args: updateInventoryQuantityArgs,
@@ -204,23 +246,67 @@ export const updateInventoryItem = mutation({
       createdAt: timestamp,
     });
 
-    // AC: 3.5.5 - CRITICAL: Only create sync queue entry if item is NOT in a file
-    // Items in files are synced via batch operations, not automatic sync
-    if (!item.fileId) {
-      const correlationId = crypto.randomUUID();
-      await ctx.db.insert("inventorySyncQueue", {
+    // Set sync status to "syncing" for enabled marketplaces
+    const syncStatusUpdates: {
+      bricklinkSyncStatus?: "syncing" | "synced" | "failed";
+      brickowlSyncStatus?: "syncing" | "synced" | "failed";
+    } = {};
+
+    // Get configured providers
+    const providers: Array<"bricklink" | "brickowl"> = [];
+
+    // Check BrickLink credentials
+    const bricklinkCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", item.businessAccountId).eq("provider", "bricklink"),
+      )
+      .first();
+
+    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
+      providers.push("bricklink");
+    }
+
+    // Check BrickOwl credentials
+    const brickowlCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", item.businessAccountId).eq("provider", "brickowl"),
+      )
+      .first();
+
+    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
+      providers.push("brickowl");
+    }
+
+    if (providers.includes("bricklink")) {
+      syncStatusUpdates.bricklinkSyncStatus = "syncing";
+    }
+    if (providers.includes("brickowl")) {
+      syncStatusUpdates.brickowlSyncStatus = "syncing";
+    }
+
+    // Update inventory item with syncing status
+    if (Object.keys(syncStatusUpdates).length > 0) {
+      await ctx.db.patch(args.itemId, syncStatusUpdates);
+    }
+
+    // Trigger immediate sync instead of adding to sync queue
+    const correlationId = crypto.randomUUID();
+
+    // Schedule immediate sync (non-blocking)
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.immediateSync.syncInventoryChangeImmediately,
+      {
         businessAccountId: item.businessAccountId,
         inventoryItemId: args.itemId,
         changeType: "update",
-        previousData, // Full previous state for rollback
-        newData, // Full new state for marketplace sync
-        reason: args.reason,
-        syncStatus: "pending",
+        newData,
+        previousData,
         correlationId,
-        createdBy: user._id,
-        createdAt: timestamp,
-      });
-    }
+      },
+    );
 
     return { itemId: args.itemId };
   },
@@ -256,22 +342,66 @@ export const deleteInventoryItem = mutation({
       createdAt: timestamp,
     });
 
-    // AC: 3.5.5 - CRITICAL: Only create sync queue entry if item is NOT in a file
-    // Items in files are synced via batch operations, not automatic sync
-    if (!item.fileId) {
-      const correlationId = crypto.randomUUID();
-      await ctx.db.insert("inventorySyncQueue", {
+    // Set sync status to "syncing" for enabled marketplaces
+    const syncStatusUpdates: {
+      bricklinkSyncStatus?: "syncing" | "synced" | "failed";
+      brickowlSyncStatus?: "syncing" | "synced" | "failed";
+    } = {};
+
+    // Get configured providers
+    const providers: Array<"bricklink" | "brickowl"> = [];
+
+    // Check BrickLink credentials
+    const bricklinkCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", item.businessAccountId).eq("provider", "bricklink"),
+      )
+      .first();
+
+    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
+      providers.push("bricklink");
+    }
+
+    // Check BrickOwl credentials
+    const brickowlCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", item.businessAccountId).eq("provider", "brickowl"),
+      )
+      .first();
+
+    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
+      providers.push("brickowl");
+    }
+
+    if (providers.includes("bricklink")) {
+      syncStatusUpdates.bricklinkSyncStatus = "syncing";
+    }
+    if (providers.includes("brickowl")) {
+      syncStatusUpdates.brickowlSyncStatus = "syncing";
+    }
+
+    // Update inventory item with syncing status
+    if (Object.keys(syncStatusUpdates).length > 0) {
+      await ctx.db.patch(args.itemId, syncStatusUpdates);
+    }
+
+    // Trigger immediate sync instead of adding to sync queue
+    const correlationId = crypto.randomUUID();
+
+    // Schedule immediate sync (non-blocking)
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.immediateSync.syncInventoryChangeImmediately,
+      {
         businessAccountId: item.businessAccountId,
         inventoryItemId: args.itemId,
         changeType: "delete",
-        previousData, // Full previous state for rollback
-        reason: args.reason,
-        syncStatus: "pending",
+        previousData,
         correlationId,
-        createdBy: user._id,
-        createdAt: timestamp,
-      });
-    }
+      },
+    );
 
     return { itemId: args.itemId, archived: true };
   },
@@ -576,9 +706,59 @@ export const markSyncing = internalMutation({
   args: markSyncingArgs,
   returns: markSyncingReturns,
   handler: async (ctx, { changeId }) => {
+    const change = await ctx.db.get(changeId);
+    if (!change) {
+      throw new Error(`Change not found: ${changeId}`);
+    }
+
     await ctx.db.patch(changeId, {
       syncStatus: "syncing",
     });
+
+    // Update inventory item sync status to syncing for enabled marketplaces
+    const syncStatusUpdates: {
+      bricklinkSyncStatus?: "syncing";
+      brickowlSyncStatus?: "syncing";
+    } = {};
+
+    // Get configured providers to determine which statuses to update
+    const providers: Array<"bricklink" | "brickowl"> = [];
+
+    // Check BrickLink credentials
+    const bricklinkCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", change.businessAccountId).eq("provider", "bricklink"),
+      )
+      .first();
+
+    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
+      providers.push("bricklink");
+    }
+
+    // Check BrickOwl credentials
+    const brickowlCreds = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", change.businessAccountId).eq("provider", "brickowl"),
+      )
+      .first();
+
+    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
+      providers.push("brickowl");
+    }
+
+    if (providers.includes("bricklink")) {
+      syncStatusUpdates.bricklinkSyncStatus = "syncing";
+    }
+    if (providers.includes("brickowl")) {
+      syncStatusUpdates.brickowlSyncStatus = "syncing";
+    }
+
+    // Update inventory item with syncing status
+    if (Object.keys(syncStatusUpdates).length > 0) {
+      await ctx.db.patch(change.inventoryItemId, syncStatusUpdates);
+    }
   },
 });
 
@@ -603,25 +783,39 @@ export const updateSyncStatus = internalMutation({
       if (args.success) {
         updates.bricklinkSyncedAt = timestamp;
         if (typeof args.marketplaceId === "number") {
-          // Also update the inventory item with bricklink ID
+          // Update the inventory item with bricklink ID and sync status
           await ctx.db.patch(change.inventoryItemId, {
-            bricklinkInventoryId: args.marketplaceId,
+            bricklinkLotId: args.marketplaceId,
+            bricklinkSyncStatus: "synced",
+            bricklinkSyncError: undefined, // Clear any previous errors
           });
         }
       } else {
         updates.bricklinkSyncError = args.error;
+        // Update inventory item with failed status and error
+        await ctx.db.patch(change.inventoryItemId, {
+          bricklinkSyncStatus: "failed",
+          bricklinkSyncError: args.error,
+        });
       }
     } else if (args.provider === "brickowl") {
       if (args.success) {
         updates.brickowlSyncedAt = timestamp;
         if (typeof args.marketplaceId === "string") {
-          // Also update the inventory item with brickowl ID
+          // Update the inventory item with brickowl ID and sync status
           await ctx.db.patch(change.inventoryItemId, {
             brickowlLotId: args.marketplaceId,
+            brickowlSyncStatus: "synced",
+            brickowlSyncError: undefined, // Clear any previous errors
           });
         }
       } else {
         updates.brickowlSyncError = args.error;
+        // Update inventory item with failed status and error
+        await ctx.db.patch(change.inventoryItemId, {
+          brickowlSyncStatus: "failed",
+          brickowlSyncError: args.error,
+        });
       }
     }
 
@@ -828,5 +1022,46 @@ export const resolveConflict = mutation({
 
       return { changeId: args.changeId, newChangeId, resolution: args.resolution };
     }
+  },
+});
+
+/**
+ * Update sync status after immediate sync attempt
+ */
+export const updateImmediateSyncStatus = internalMutation({
+  args: {
+    inventoryItemId: v.id("inventoryItems"),
+    results: v.array(
+      v.object({
+        provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+        success: v.boolean(),
+        error: v.optional(v.any()),
+        marketplaceId: v.optional(v.union(v.string(), v.number())),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const updates: {
+      bricklinkSyncStatus?: "synced" | "failed";
+      brickowlSyncStatus?: "synced" | "failed";
+      bricklinkLotId?: number;
+      brickowlLotId?: string;
+    } = {};
+
+    for (const result of args.results) {
+      if (result.provider === "bricklink") {
+        updates.bricklinkSyncStatus = result.success ? "synced" : "failed";
+        if (result.success && result.marketplaceId) {
+          updates.bricklinkLotId = result.marketplaceId as number;
+        }
+      } else if (result.provider === "brickowl") {
+        updates.brickowlSyncStatus = result.success ? "synced" : "failed";
+        if (result.success && result.marketplaceId) {
+          updates.brickowlLotId = result.marketplaceId as string;
+        }
+      }
+    }
+
+    await ctx.db.patch(args.inventoryItemId, updates);
   },
 });

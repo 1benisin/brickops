@@ -29,6 +29,7 @@ crons.daily(
 
 // Process inventory sync queue every 5 minutes (Story 3.4, Task 4)
 // Syncs pending inventory changes to all configured marketplaces (BrickLink, BrickOwl)
-crons.interval("inventory-sync", { minutes: 5 }, internal.inventory.sync.processAllPendingChanges);
+// DEPRECATED: Replaced with immediate sync in Story 3.6
+// crons.interval("inventory-sync", { minutes: 5 }, internal.inventory.sync.processAllPendingChanges);
 
 export default crons;

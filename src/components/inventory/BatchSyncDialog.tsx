@@ -51,6 +51,7 @@ export function BatchSyncDialog({ fileId, onOpenChange }: BatchSyncDialogProps) 
     api.inventory.files.queries.validateBatchSync,
     fileId ? { fileId } : "skip",
   );
+  const syncSettings = useQuery(api.marketplace.mutations.getSyncSettings);
 
   // Batch sync action
   const batchSyncFile = useAction(api.inventory.files.actions.batchSyncFile);
@@ -195,6 +196,10 @@ export function BatchSyncDialog({ fileId, onOpenChange }: BatchSyncDialogProps) 
                     <label htmlFor="bricklink" className="text-sm cursor-pointer">
                       BrickLink
                     </label>
+                    {syncSettings?.find((s) => s.provider === "bricklink")?.syncEnabled ===
+                      false && (
+                      <span className="text-xs text-muted-foreground">(Auto-sync disabled)</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2" data-testid="marketplace-brickowl">
                     <Checkbox
@@ -206,6 +211,10 @@ export function BatchSyncDialog({ fileId, onOpenChange }: BatchSyncDialogProps) 
                     <label htmlFor="brickowl" className="text-sm cursor-pointer">
                       BrickOwl
                     </label>
+                    {syncSettings?.find((s) => s.provider === "brickowl")?.syncEnabled ===
+                      false && (
+                      <span className="text-xs text-muted-foreground">(Auto-sync disabled)</span>
+                    )}
                   </div>
                 </div>
                 {!selectedMarketplaces.bricklink && !selectedMarketplaces.brickowl && (

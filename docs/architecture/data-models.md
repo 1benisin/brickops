@@ -62,12 +62,12 @@ The following core business entities are used across the stack:
   - Basic: sku, name, partNumber, colorId, location, condition (new/used)
   - Quantities: quantityAvailable, quantityReserved, quantitySold
   - Status: status (available/reserved/sold)
-  - Marketplace: price, notes, bricklinkInventoryId, brickowlLotId (Stories 3.2-3.3)
+  - Marketplace: price, notes, bricklinkLotId, brickowlLotId (Stories 3.2-3.3)
   - Sync Status: lastSyncedAt, syncErrors[] (Story 3.4)
   - Audit: createdBy, createdAt, updatedAt
   - Soft Delete: isArchived, deletedAt
 - Relationships: Belongs to BusinessAccount; tracked in InventoryHistory and InventorySyncQueue; syncs to marketplaces via marketplace IDs
-- Indexes: by_businessAccount, by_sku (duplicate prevention), by_bricklinkInventoryId, by_brickowlLotId (marketplace sync lookups)
+- Indexes: by_businessAccount, by_sku (duplicate prevention), by_bricklinkLotId, by_brickowlLotId (marketplace sync lookups)
 
 ## InventoryHistory
 

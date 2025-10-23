@@ -80,9 +80,14 @@ Used for user marketplace store operations (Stories 3.1-3.3):
 ### Feature Flags
 
 - `DISABLE_EXTERNAL_CALLS` - When set, marketplace test connections return mock success (useful for CI/CD)
-- `INVENTORY_SYNC_ENABLED` - Global toggle for inventory sync processing (Story 3.4)
-- `BRICKLINK_SYNC_ENABLED` - BrickLink-specific sync control (Story 3.4)
-- `BRICKOWL_SYNC_ENABLED` - BrickOwl-specific sync control (Story 3.4)
+
+### Sync Settings
+
+Sync behavior is now controlled through marketplace credential settings rather than environment flags:
+
+- Each marketplace credential has a `syncEnabled` field (defaults to `true`)
+- Users can enable/disable auto-sync per marketplace through the settings UI
+- The sync orchestration respects these settings when determining which providers to sync to
 
 ### Documentation Cross-References
 

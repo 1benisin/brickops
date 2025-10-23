@@ -19,6 +19,7 @@ import {
 } from "@/components/ui";
 import { BrickLinkCredentialsForm } from "@/components/settings/BricklinkCredentialsForm";
 import { BrickOwlCredentialsForm } from "@/components/settings/BrickowlCredentialsForm";
+import { Switch } from "@/components/ui/switch";
 
 type Role = "manager" | "picker" | "viewer";
 
@@ -43,6 +44,8 @@ export default function SettingsPage() {
   const updateUserRole = useMutation(api.users.mutations.updateUserRole);
   const removeUser = useMutation(api.users.mutations.removeUser);
   const createUserInvite = useMutation(api.users.mutations.createUserInvite);
+  const updateSyncSettings = useMutation(api.marketplace.mutations.updateSyncSettings);
+  const syncSettings = useQuery(api.marketplace.mutations.getSyncSettings);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -185,8 +188,16 @@ export default function SettingsPage() {
     });
   };
 
+  const handleSyncSettingsChange = async (provider: "bricklink" | "brickowl", enabled: boolean) => {
+    try {
+      await updateSyncSettings({ provider, syncEnabled: enabled });
+    } catch (err) {
+      console.error("Failed to update sync settings:", err);
+    }
+  };
+
   const sortedMembers: MemberRow[] = useMemo(() => {
-    if (!members) return [];
+    if (!members || !Array.isArray(members)) return [];
     return [...members].sort((a, b) => {
       if (a.isCurrentUser) return -1;
       if (b.isCurrentUser) return 1;
@@ -401,8 +412,44 @@ export default function SettingsPage() {
 
             {isMarketplaceExpanded && (
               <div className="space-y-6 border-t p-6">
-                {/* BrickLink Credentials Section */}
+                {/* Sync Settings Section */}
                 <div className="space-y-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">Auto-Sync Settings</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Control which marketplaces automatically sync inventory changes.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    {syncSettings?.map((setting) => (
+                      <div key={setting.provider} className="flex items-center justify-between">
+                        <div>
+                          <label className="text-sm font-medium">
+                            Auto-sync to {setting.provider}
+                          </label>
+                          <p className="text-xs text-muted-foreground">
+                            Automatically sync inventory changes to {setting.provider}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={setting.syncEnabled}
+                          onCheckedChange={(enabled: boolean) =>
+                            handleSyncSettingsChange(setting.provider, enabled)
+                          }
+                          disabled={!setting.isActive}
+                        />
+                      </div>
+                    ))}
+                    {(!syncSettings || syncSettings.length === 0) && (
+                      <p className="text-sm text-muted-foreground">
+                        Configure marketplace credentials above to enable sync settings.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* BrickLink Credentials Section */}
+                <div className="space-y-4 border-t pt-6">
                   <div>
                     <h3 className="text-base font-semibold text-foreground">
                       BrickLink Credentials{" "}

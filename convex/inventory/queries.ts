@@ -209,7 +209,7 @@ export const getChangeSyncStatus = query({
       syncStatus: change.syncStatus,
       bricklinkSyncedAt: change.bricklinkSyncedAt,
       bricklinkSyncError: change.bricklinkSyncError,
-      bricklinkInventoryId: item?.bricklinkInventoryId,
+      bricklinkLotId: item?.bricklinkLotId,
       brickowlSyncedAt: change.brickowlSyncedAt,
       brickowlSyncError: change.brickowlSyncError,
       brickowlLotId: item?.brickowlLotId,

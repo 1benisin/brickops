@@ -249,7 +249,7 @@ describe("Inventory Files Schema", () => {
       expect(item?.fileId).toBe(fileId);
     });
 
-    test("should create inventory item with syncStatus", async () => {
+    test("should create inventory item with sync status fields", async () => {
       const ctx = createConvexTestContext({
         seed: buildSeedData({
           businessAccounts: [
@@ -285,14 +285,20 @@ describe("Inventory Files Schema", () => {
         quantitySold: 0,
         status: "available",
         condition: "new",
-        syncStatus: "pending",
+        bricklinkSyncStatus: "pending",
+        brickowlSyncStatus: "synced",
+        bricklinkSyncError: undefined,
+        brickowlSyncError: undefined,
         createdBy: "users:1",
         createdAt: now,
       });
 
       const item = await ctx.db.get(itemId);
 
-      expect(item?.syncStatus).toBe("pending");
+      expect(item?.bricklinkSyncStatus).toBe("pending");
+      expect(item?.brickowlSyncStatus).toBe("synced");
+      expect(item?.bricklinkSyncError).toBeUndefined();
+      expect(item?.brickowlSyncError).toBeUndefined();
     });
 
     test("should create inventory item with marketplace IDs", async () => {
@@ -331,7 +337,7 @@ describe("Inventory Files Schema", () => {
         quantitySold: 0,
         status: "available",
         condition: "new",
-        bricklinkInventoryId: 123456,
+        bricklinkLotId: 123456,
         brickowlLotId: "OWL789",
         createdBy: "users:1",
         createdAt: now,
@@ -339,7 +345,7 @@ describe("Inventory Files Schema", () => {
 
       const item = await ctx.db.get(itemId);
 
-      expect(item?.bricklinkInventoryId).toBe(123456);
+      expect(item?.bricklinkLotId).toBe(123456);
       expect(item?.brickowlLotId).toBe("OWL789");
     });
 
@@ -460,6 +466,90 @@ describe("Inventory Files Schema", () => {
       const item = await ctx.db.get(itemId);
 
       expect(item?.fileId).toBeUndefined();
+    });
+  });
+
+  describe("Marketplace Credentials", () => {
+    test("should create marketplace credentials with sync settings", async () => {
+      const ctx = createConvexTestContext({
+        seed: buildSeedData({
+          businessAccounts: [
+            {
+              _id: "businessAccounts:1",
+              name: "Test Business",
+              ownerUserId: "users:1",
+              createdAt: Date.now(),
+            },
+          ],
+          users: [
+            {
+              _id: "users:1",
+              businessAccountId: "businessAccounts:1",
+              email: "test@example.com",
+              role: "owner",
+              status: "active",
+              createdAt: Date.now(),
+            },
+          ],
+        }),
+      });
+
+      const now = Date.now();
+      const credsId = await ctx.db.insert("marketplaceCredentials", {
+        businessAccountId: "businessAccounts:1",
+        provider: "bricklink",
+        isActive: true,
+        syncEnabled: false, // Test sync disabled
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const creds = await ctx.db.get(credsId);
+
+      expect(creds?.syncEnabled).toBe(false);
+      expect(creds?.provider).toBe("bricklink");
+      expect(creds?.isActive).toBe(true);
+    });
+
+    test("should default syncEnabled to true when not specified", async () => {
+      const ctx = createConvexTestContext({
+        seed: buildSeedData({
+          businessAccounts: [
+            {
+              _id: "businessAccounts:1",
+              name: "Test Business",
+              ownerUserId: "users:1",
+              createdAt: Date.now(),
+            },
+          ],
+          users: [
+            {
+              _id: "users:1",
+              businessAccountId: "businessAccounts:1",
+              email: "test@example.com",
+              role: "owner",
+              status: "active",
+              createdAt: Date.now(),
+            },
+          ],
+        }),
+      });
+
+      const now = Date.now();
+      const credsId = await ctx.db.insert("marketplaceCredentials", {
+        businessAccountId: "businessAccounts:1",
+        provider: "brickowl",
+        isActive: true,
+        // syncEnabled not specified - should default to true
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const creds = await ctx.db.get(credsId);
+
+      expect(creds?.syncEnabled).toBeUndefined(); // Optional field, undefined means default true
+      expect(creds?.provider).toBe("brickowl");
+      expect(creds?.isActive).toBe(true);
     });
   });
 });

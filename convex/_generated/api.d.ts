@@ -41,6 +41,7 @@ import type * as inventory_files_mutations from "../inventory/files/mutations.js
 import type * as inventory_files_queries from "../inventory/files/queries.js";
 import type * as inventory_files_validators from "../inventory/files/validators.js";
 import type * as inventory_helpers from "../inventory/helpers.js";
+import type * as inventory_immediateSync from "../inventory/immediateSync.js";
 import type * as inventory_mutations from "../inventory/mutations.js";
 import type * as inventory_queries from "../inventory/queries.js";
 import type * as inventory_sync from "../inventory/sync.js";
@@ -111,6 +112,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/files/queries": typeof inventory_files_queries;
   "inventory/files/validators": typeof inventory_files_validators;
   "inventory/helpers": typeof inventory_helpers;
+  "inventory/immediateSync": typeof inventory_immediateSync;
   "inventory/mutations": typeof inventory_mutations;
   "inventory/queries": typeof inventory_queries;
   "inventory/sync": typeof inventory_sync;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
@@ -16,7 +16,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { ArrowUpDown } from "lucide-react";
 import { FileSelector } from "@/components/inventory/FileSelector";
+import { SyncStatusIndicator } from "@/components/inventory/SyncStatusIndicator";
+import { AddInventoryItemButton } from "@/components/inventory/AddInventoryItemButton";
+
+type SortDirection = "asc" | "desc";
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -31,9 +36,12 @@ export default function InventoryPage() {
     api.inventory.queries.getInventoryTotals,
     businessAccountId ? { businessAccountId } : "skip",
   );
+  const syncSettings = useQuery(api.marketplace.mutations.getSyncSettings);
 
   const [auditItemId, setAuditItemId] = useState<Id<"inventoryItems"> | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<Id<"inventoryFiles"> | "none">("none");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
   const auditLogs = useQuery(
     api.inventory.queries.listInventoryHistory,
     businessAccountId && auditItemId
@@ -41,11 +49,23 @@ export default function InventoryPage() {
       : "skip",
   );
 
-  const deleteInventoryItem = useMutation(api.inventory.mutations.deleteInventoryItem);
+  // Sort items by date created
+  const sortedItems = useMemo(() => {
+    if (!items) return [];
 
-  const handleDelete = async (itemId: Id<"inventoryItems">) => {
-    await deleteInventoryItem({ itemId, reason: "user-request" });
+    const sorted = [...items].sort((a, b) => {
+      const comparison = a.createdAt - b.createdAt;
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [items, sortDirection]);
+
+  const toggleSort = () => {
+    setSortDirection(sortDirection === "asc" ? "desc" : "asc");
   };
+
+  const deleteInventoryItem = useMutation(api.inventory.mutations.deleteInventoryItem);
 
   const handleFileSelect = (value: Id<"inventoryFiles"> | "none" | undefined) => {
     if (!value || value === "none") {
@@ -57,11 +77,15 @@ export default function InventoryPage() {
     router.push(`/inventory/files/${encodeURIComponent(value as unknown as string)}`);
   };
 
+  const handleDelete = async (itemId: Id<"inventoryItems">) => {
+    await deleteInventoryItem({ itemId, reason: "user-request" });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Inventory</h1>
-        <Button onClick={() => router.push("/inventory/files")}>Add Item</Button>
+        <AddInventoryItemButton />
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -116,11 +140,18 @@ export default function InventoryPage() {
                 <TableHead className="text-right">Resv</TableHead>
                 <TableHead className="text-right">Sold</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-center">Sync Status</TableHead>
+                <TableHead className="cursor-pointer" onClick={toggleSort}>
+                  <div className="flex items-center gap-2">
+                    Date Created
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                </TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(items ?? []).map((item) => (
+              {(sortedItems ?? []).map((item) => (
                 <TableRow key={item._id}>
                   <TableCell>{item.partNumber}</TableCell>
                   <TableCell>{item.name}</TableCell>
@@ -130,6 +161,31 @@ export default function InventoryPage() {
                   <TableCell className="text-right">{item.quantityReserved ?? 0}</TableCell>
                   <TableCell className="text-right">{item.quantitySold ?? 0}</TableCell>
                   <TableCell>{item.status ?? "available"}</TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <SyncStatusIndicator
+                        item={item}
+                        marketplace="bricklink"
+                        syncEnabled={
+                          syncSettings?.find((s) => s.provider === "bricklink")?.syncEnabled ?? true
+                        }
+                      />
+                      <SyncStatusIndicator
+                        item={item}
+                        marketplace="brickowl"
+                        syncEnabled={
+                          syncSettings?.find((s) => s.provider === "brickowl")?.syncEnabled ?? true
+                        }
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(item.createdAt).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1">
                       <Sheet>

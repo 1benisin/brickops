@@ -5,7 +5,7 @@
 
 import { internalAction, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { v } from "convex/values";
+import { v, Infer } from "convex/values";
 import type { Id, Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import { createBricklinkStoreClient, createBrickOwlStoreClient } from "../marketplace/helpers";
@@ -52,15 +52,7 @@ export const getBusinessAccountsWithPendingChanges = internalQuery({
 export const processAllPendingChanges = internalAction({
   args: {},
   returns: processAllPendingChangesReturns,
-  handler: async (
-    ctx,
-  ): Promise<{
-    accountsProcessed: number;
-    totalProcessed: number;
-    totalSucceeded: number;
-    totalFailed: number;
-    durationMs: number;
-  }> => {
+  handler: async (ctx): Promise<Infer<typeof processAllPendingChangesReturns>> => {
     const startTime = Date.now();
 
     // Get all accounts with pending changes
@@ -152,35 +144,14 @@ export const processPendingChanges = internalAction({
   }> => {
     const startTime = Date.now();
 
-    // Check feature flags
-    const inventorySyncEnabled = process.env.INVENTORY_SYNC_ENABLED !== "false";
-    const bricklinkSyncEnabled = process.env.BRICKLINK_SYNC_ENABLED !== "false";
-    const brickowlSyncEnabled = process.env.BRICKOWL_SYNC_ENABLED !== "false";
+    // Check if external calls are disabled (for testing/development)
     const disableExternalCalls = process.env.DISABLE_EXTERNAL_CALLS === "true";
 
-    // Log feature flag state for debugging
-    console.log("Inventory sync feature flags:", {
-      inventorySyncEnabled,
-      bricklinkSyncEnabled,
-      brickowlSyncEnabled,
+    // Log sync state for debugging
+    console.log("Inventory sync state:", {
       disableExternalCalls,
       businessAccountId,
     });
-
-    // If inventory sync is disabled, skip processing
-    if (!inventorySyncEnabled) {
-      console.log("Inventory sync is disabled via INVENTORY_SYNC_ENABLED flag");
-      recordMetric("inventory.sync.disabled", {
-        businessAccountId,
-        reason: "INVENTORY_SYNC_ENABLED=false",
-      });
-      return {
-        processed: 0,
-        succeeded: 0,
-        failed: 0,
-        reason: "Inventory sync disabled by feature flag",
-      };
-    }
 
     // Get pending changes (FIFO order)
     const changes = await ctx.runQuery(internal.inventory.mutations.getPendingChanges, {
@@ -198,48 +169,19 @@ export const processPendingChanges = internalAction({
       count: changes.length,
     });
 
-    // Get configured providers
-    let providers = await ctx.runQuery(internal.marketplace.mutations.getConfiguredProviders, {
+    // Get configured providers (already filtered by sync settings)
+    const providers = await ctx.runQuery(internal.marketplace.mutations.getConfiguredProviders, {
       businessAccountId,
     });
 
-    // Filter providers based on feature flags
-    const originalProviders = [...providers];
-    if (!bricklinkSyncEnabled) {
-      providers = providers.filter((p) => p !== "bricklink");
-      if (originalProviders.includes("bricklink")) {
-        console.log("BrickLink sync disabled by BRICKLINK_SYNC_ENABLED flag");
-        recordMetric("inventory.sync.provider_disabled", {
-          businessAccountId,
-          provider: "bricklink",
-          reason: "BRICKLINK_SYNC_ENABLED=false",
-        });
-      }
-    }
-    if (!brickowlSyncEnabled) {
-      providers = providers.filter((p) => p !== "brickowl");
-      if (originalProviders.includes("brickowl")) {
-        console.log("BrickOwl sync disabled by BRICKOWL_SYNC_ENABLED flag");
-        recordMetric("inventory.sync.provider_disabled", {
-          businessAccountId,
-          provider: "brickowl",
-          reason: "BRICKOWL_SYNC_ENABLED=false",
-        });
-      }
-    }
-
     if (providers.length === 0) {
-      // No providers configured or all disabled by feature flags
-      const reason =
-        originalProviders.length === 0
-          ? "No providers configured"
-          : "All providers disabled by feature flags";
-      console.log(reason);
+      // No providers configured or all disabled by sync settings
+      console.log("No providers configured or all sync disabled");
       return {
         processed: 0,
         succeeded: 0,
         failed: 0,
-        reason,
+        reason: "No providers configured or all sync disabled",
       };
     }
 
@@ -506,8 +448,7 @@ async function syncCreate(
   const result = await client.createInventory(payload, { idempotencyKey });
 
   // Extract marketplace ID from provider-specific field
-  const marketplaceId =
-    provider === "bricklink" ? result.bricklinkInventoryId : result.brickowlLotId;
+  const marketplaceId = provider === "bricklink" ? result.bricklinkLotId : result.brickowlLotId;
 
   return {
     success: result.success,
@@ -536,7 +477,7 @@ async function syncUpdate(
     itemId: item.inventoryItemId,
   });
   const marketplaceId =
-    provider === "bricklink" ? inventoryItem?.bricklinkInventoryId : inventoryItem?.brickowlLotId;
+    provider === "bricklink" ? inventoryItem?.bricklinkLotId : inventoryItem?.brickowlLotId;
 
   if (!marketplaceId) {
     // Item not yet synced to this provider - treat as create
@@ -550,7 +491,7 @@ async function syncUpdate(
 
   // Extract marketplace ID from provider-specific field
   const updatedMarketplaceId =
-    provider === "bricklink" ? result.bricklinkInventoryId : result.brickowlLotId;
+    provider === "bricklink" ? result.bricklinkLotId : result.brickowlLotId;
 
   return {
     success: result.success,
@@ -573,7 +514,7 @@ async function syncDelete(
   // Get marketplace ID from previous data
   const marketplaceId =
     provider === "bricklink"
-      ? change.previousData?.bricklinkInventoryId
+      ? change.previousData?.bricklinkLotId
       : change.previousData?.brickowlLotId;
 
   if (!marketplaceId) {

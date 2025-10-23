@@ -45,7 +45,7 @@ export function mapBricklinkToConvexInventory(
     condition,
     price,
     notes,
-    bricklinkInventoryId: bricklinkInventory.inventory_id,
+    bricklinkLotId: bricklinkInventory.inventory_id,
   };
 }
 

@@ -110,12 +110,12 @@ function MatrixSkeleton() {
     >
       {/* Small: column headers */}
       <GridHeader className="col-[1] row-[1] lg:hidden"> </GridHeader>
-      <GridHeader className="col-[2] row-[1] lg:hidden">Stock</GridHeader>
+      <GridHeader className="col-[2] row-[1] lg:hidden">For Sale</GridHeader>
       <GridHeader className="col-[3] row-[1] lg:hidden">Sold</GridHeader>
 
       {/* Small: row header 'New' */}
       <GridHeader className="col-[1] row-[2] lg:hidden">New</GridHeader>
-      {/* New: Stock / Sold */}
+      {/* New: For Sale / Sold */}
       <div className="col-[2] row-[2] lg:col-[1] lg:row-[3]">
         <Skeleton className="h-16 w-full rounded-md" />
       </div>
@@ -125,7 +125,7 @@ function MatrixSkeleton() {
 
       {/* Small: row header 'Used' */}
       <GridHeader className="col-[1] row-[3] lg:hidden">Used</GridHeader>
-      {/* Used: Stock / Sold */}
+      {/* Used: For Sale / Sold */}
       <div className="col-[2] row-[3] lg:col-[3] lg:row-[3]">
         <Skeleton className="h-16 w-full rounded-md" />
       </div>
@@ -133,25 +133,25 @@ function MatrixSkeleton() {
         <Skeleton className="h-16 w-full rounded-md" />
       </div>
 
-      {/* Large: top condition headers spanning columns */}
-      <GridHeader className="hidden lg:block lg:col-[1/3] lg:row-[1] lg:text-center lg:uppercase lg:bg-emerald-100/40 lg:rounded-md dark:lg:bg-emerald-900/20">
+      {/* Large: top condition headers spanning columns - no gap between */}
+      <GridHeader className="hidden lg:block lg:col-[1/3] lg:row-[1] lg:text-center lg:uppercase lg:bg-emerald-100/40 dark:lg:bg-emerald-900/20 lg:border-r lg:border-emerald-200 dark:lg:border-emerald-800">
         New
       </GridHeader>
-      <GridHeader className="hidden lg:block lg:col-[3/5] lg:row-[1] lg:text-center lg:uppercase lg:bg-amber-100/40 lg:rounded-md dark:lg:bg-amber-900/20">
+      <GridHeader className="hidden lg:block lg:col-[3/5] lg:row-[1] lg:text-center lg:uppercase lg:bg-amber-100/40 dark:lg:bg-amber-900/20">
         Used
       </GridHeader>
 
-      {/* Large: market sub-headers */}
-      <GridHeader className="hidden lg:block lg:col-[1] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
-        Stock
+      {/* Large: market sub-headers - no gaps, merged appearance */}
+      <GridHeader className="hidden lg:block lg:col-[1] lg:row-[2] lg:text-center lg:bg-muted/60 lg:border-r lg:border-muted-foreground/20">
+        For Sale
       </GridHeader>
-      <GridHeader className="hidden lg:block lg:col-[2] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
+      <GridHeader className="hidden lg:block lg:col-[2] lg:row-[2] lg:text-center lg:bg-muted/60 lg:border-r lg:border-muted-foreground/20">
         Sold
       </GridHeader>
-      <GridHeader className="hidden lg:block lg:col-[3] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
-        Stock
+      <GridHeader className="hidden lg:block lg:col-[3] lg:row-[2] lg:text-center lg:bg-muted/60 lg:border-r lg:border-muted-foreground/20">
+        For Sale
       </GridHeader>
-      <GridHeader className="hidden lg:block lg:col-[4] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
+      <GridHeader className="hidden lg:block lg:col-[4] lg:row-[2] lg:text-center lg:bg-muted/60">
         Sold
       </GridHeader>
     </div>
@@ -219,8 +219,8 @@ export function PartPriceGuide({ partNumber, colorId }: PartPriceGuideProps) {
         ) : (
           /**
            * Grid layout:
-           * - Small (default): 3 columns [left header | Stock | Sold], 3 rows [top header | New | Used]
-           * - Large (lg): 4 columns (1x4): New Stock, New Sold, Used Stock, Used Sold
+           * - Small (default): 3 columns [left header | For Sale | Sold], 3 rows [top header | New | Used]
+           * - Large (lg): 4 columns (1x4): New For Sale, New Sold, Used For Sale, Used Sold
            *   Top header row shows "NEW" spanning cols 1-2 and "USED" spanning cols 3-4.
            */
           <div
@@ -232,14 +232,16 @@ export function PartPriceGuide({ partNumber, colorId }: PartPriceGuideProps) {
           >
             {/* Small: column headers */}
             <GridHeader className="col-[1] row-[1] lg:hidden"> </GridHeader>
-            <GridHeader className="col-[2] row-[1] lg:hidden bg-muted/60 rounded">Stock</GridHeader>
-            <GridHeader className="col-[3] row-[1] lg:hidden bg-muted/60 rounded">Sold</GridHeader>
+            <GridHeader className="col-[2] row-[1] lg:hidden bg-muted/60 border-r border-muted-foreground/20">
+              For Sale
+            </GridHeader>
+            <GridHeader className="col-[3] row-[1] lg:hidden bg-muted/60">Sold</GridHeader>
 
             {/* Small: row header 'New' */}
-            <GridHeader className="col-[1] row-[2] lg:hidden bg-emerald-100/40 rounded dark:bg-emerald-900/20">
+            <GridHeader className="col-[1] row-[2] lg:hidden bg-emerald-100/40 dark:bg-emerald-900/20">
               New
             </GridHeader>
-            {/* New: Stock / Sold */}
+            {/* New: For Sale / Sold */}
             <PriceCell
               data={priceGuide?.newStock}
               className="col-[2] row-[2] lg:col-[1] lg:row-[3]"
@@ -250,10 +252,10 @@ export function PartPriceGuide({ partNumber, colorId }: PartPriceGuideProps) {
             />
 
             {/* Small: row header 'Used' */}
-            <GridHeader className="col-[1] row-[3] lg:hidden bg-amber-100/40 rounded dark:bg-amber-900/20">
+            <GridHeader className="col-[1] row-[3] lg:hidden bg-amber-100/40 dark:bg-amber-900/20">
               Used
             </GridHeader>
-            {/* Used: Stock / Sold */}
+            {/* Used: For Sale / Sold */}
             <PriceCell
               data={priceGuide?.usedStock}
               className="col-[2] row-[3] lg:col-[3] lg:row-[3]"
@@ -263,25 +265,25 @@ export function PartPriceGuide({ partNumber, colorId }: PartPriceGuideProps) {
               className="col-[3] row-[3] lg:col-[4] lg:row-[3]"
             />
 
-            {/* Large: top condition headers spanning columns */}
-            <GridHeader className="hidden lg:block lg:col-[1/3] lg:row-[1] lg:text-center lg:uppercase lg:bg-emerald-100/40 lg:rounded-md dark:lg:bg-emerald-900/20">
+            {/* Large: top condition headers spanning columns - no gaps */}
+            <GridHeader className="hidden lg:block lg:col-[1/3] lg:row-[1] lg:text-center lg:uppercase lg:bg-emerald-100/40 dark:lg:bg-emerald-900/20 lg:border-r lg:border-emerald-200 dark:lg:border-emerald-800">
               New
             </GridHeader>
-            <GridHeader className="hidden lg:block lg:col-[3/5] lg:row-[1] lg:text-center lg:uppercase lg:bg-amber-100/40 lg:rounded-md dark:lg:bg-amber-900/20">
+            <GridHeader className="hidden lg:block lg:col-[3/5] lg:row-[1] lg:text-center lg:uppercase lg:bg-amber-100/40 dark:lg:bg-amber-900/20">
               Used
             </GridHeader>
 
-            {/* Large: market sub-headers */}
-            <GridHeader className="hidden lg:block lg:col-[1] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
-              Stock
+            {/* Large: market sub-headers - connected with borders, no rounded corners */}
+            <GridHeader className="hidden lg:block lg:col-[1] lg:row-[2] lg:text-center lg:bg-muted/60 lg:border-r lg:border-muted-foreground/20">
+              For Sale
             </GridHeader>
-            <GridHeader className="hidden lg:block lg:col-[2] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
+            <GridHeader className="hidden lg:block lg:col-[2] lg:row-[2] lg:text-center lg:bg-muted/60 lg:border-r lg:border-muted-foreground/20">
               Sold
             </GridHeader>
-            <GridHeader className="hidden lg:block lg:col-[3] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
-              Stock
+            <GridHeader className="hidden lg:block lg:col-[3] lg:row-[2] lg:text-center lg:bg-muted/60 lg:border-r lg:border-muted-foreground/20">
+              For Sale
             </GridHeader>
-            <GridHeader className="hidden lg:block lg:col-[4] lg:row-[2] lg:text-center lg:bg-muted/60 lg:rounded">
+            <GridHeader className="hidden lg:block lg:col-[4] lg:row-[2] lg:text-center lg:bg-muted/60">
               Sold
             </GridHeader>
           </div>

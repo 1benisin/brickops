@@ -5,6 +5,7 @@ import {
   QueryCtx,
   internalMutation,
   internalQuery,
+  query,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
@@ -471,7 +472,7 @@ export const getConfiguredProviders = internalQuery({
       )
       .first();
 
-    if (bricklinkCreds?.isActive) {
+    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
       providers.push("bricklink");
     }
 
@@ -483,10 +484,62 @@ export const getConfiguredProviders = internalQuery({
       )
       .first();
 
-    if (brickowlCreds?.isActive) {
+    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
       providers.push("brickowl");
     }
 
     return providers; // Returns: [], ["bricklink"], ["brickowl"], or ["bricklink", "brickowl"]
+  },
+});
+
+/**
+ * Update sync settings for a marketplace provider
+ */
+export const updateSyncSettings = mutation({
+  args: {
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    syncEnabled: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const { businessAccountId } = await requireOwner(ctx);
+
+    const credentials = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", businessAccountId).eq("provider", args.provider),
+      )
+      .first();
+
+    if (!credentials) {
+      throw new ConvexError("Marketplace credentials not found");
+    }
+
+    await ctx.db.patch(credentials._id, {
+      syncEnabled: args.syncEnabled,
+      updatedAt: Date.now(),
+    });
+
+    return null;
+  },
+});
+
+/**
+ * Get sync settings for all configured providers
+ */
+export const getSyncSettings = query({
+  args: {},
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireOwner(ctx);
+
+    const credentials = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
+      .collect();
+
+    return credentials.map((cred) => ({
+      provider: cred.provider,
+      syncEnabled: cred.syncEnabled ?? true, // Default to true
+      isActive: cred.isActive,
+    }));
   },
 });

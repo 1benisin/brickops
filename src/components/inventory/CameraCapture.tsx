@@ -23,7 +23,6 @@ type CaptureStage =
 interface CameraCaptureProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  businessAccountId: Id<"businessAccounts">;
   onResults: (results: PartIdentificationResult) => void;
   onError: (error: string) => void;
 }
@@ -48,13 +47,7 @@ const toBlob = (canvas: HTMLCanvasElement): Promise<Blob> =>
     );
   });
 
-export function CameraCapture({
-  open,
-  onOpenChange,
-  businessAccountId,
-  onResults,
-  onError,
-}: CameraCaptureProps) {
+export function CameraCapture({ open, onOpenChange, onResults, onError }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const service = useMemo(() => new PartIdentificationService(), []);
@@ -226,7 +219,6 @@ export function CameraCapture({
 
       const identification = await service.identifyPartFromImage({
         storageId: payload.storageId as Id<"_storage">,
-        businessAccountId,
       });
 
       setProgress(100);
@@ -241,7 +233,7 @@ export function CameraCapture({
       setStage("error");
       onError(errorMessage);
     }
-  }, [businessAccountId, cleanupStream, onError, onResults, service]);
+  }, [cleanupStream, onError, onResults, service]);
 
   const isProcessing = ["capturing", "uploading", "identifying"].includes(stage);
   const canCapture = stage === "ready";

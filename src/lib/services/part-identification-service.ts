@@ -6,7 +6,6 @@ import { getConvexClient } from "@/lib/convexClient";
 
 export interface PartIdentificationRequest {
   storageId: Id<"_storage">;
-  businessAccountId: Id<"businessAccounts">;
 }
 
 export interface PartIdentificationExternalLink {

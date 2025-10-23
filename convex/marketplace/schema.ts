@@ -15,6 +15,7 @@ export const marketplaceTables = {
     brickowlApiKey: v.optional(v.string()), // encrypted
     // Metadata
     isActive: v.boolean(),
+    syncEnabled: v.optional(v.boolean()), // Default: true for backward compatibility
     lastValidatedAt: v.optional(v.number()),
     validationStatus: v.optional(
       v.union(v.literal("success"), v.literal("pending"), v.literal("failed")),

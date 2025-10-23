@@ -10,7 +10,7 @@
  * 1. CREATE ROLLBACK:
  *    - Original: createInventory(payload) → returns { inventory_id: 123, ... }
  *    - Compensating: deleteInventory(123)
- *    - Required data: bricklinkInventoryId from create response
+ *    - Required data: bricklinkLotId from create response
  *
  * 2. UPDATE ROLLBACK:
  *    - Original: updateInventory(123, { quantity: "+5", unit_price: "2.00" })
@@ -219,7 +219,7 @@ export interface BulkOperationOptions {
  */
 export interface BulkOperationItemResult {
   success: boolean;
-  bricklinkInventoryId?: number;
+  bricklinkLotId?: number;
   error?: {
     code: string;
     message: string;
@@ -807,7 +807,7 @@ export class BricklinkStoreClient {
       this.validateCreatePayload(payload);
       return {
         success: true,
-        bricklinkInventoryId: 0, // Mock ID
+        bricklinkLotId: 0, // Mock ID
         correlationId,
       };
     }
@@ -832,7 +832,7 @@ export class BricklinkStoreClient {
       const inventoryData = response.data.data;
       return {
         success: true,
-        bricklinkInventoryId: inventoryData.inventory_id,
+        bricklinkLotId: inventoryData.inventory_id,
         correlationId,
         rollbackData: {
           originalPayload: payload,
@@ -879,7 +879,7 @@ export class BricklinkStoreClient {
     if (options?.dryRun) {
       return {
         success: true,
-        bricklinkInventoryId: inventoryId,
+        bricklinkLotId: inventoryId,
         correlationId,
       };
     }
@@ -903,7 +903,7 @@ export class BricklinkStoreClient {
       const inventoryData = response.data.data;
       return {
         success: true,
-        bricklinkInventoryId: inventoryData.inventory_id,
+        bricklinkLotId: inventoryData.inventory_id,
         correlationId,
         rollbackData: {
           previousQuantity: payload.quantity ? inventoryData.quantity : undefined,
@@ -947,7 +947,7 @@ export class BricklinkStoreClient {
     if (options?.dryRun) {
       return {
         success: true,
-        bricklinkInventoryId: inventoryId,
+        bricklinkLotId: inventoryId,
         correlationId,
       };
     }
@@ -960,7 +960,7 @@ export class BricklinkStoreClient {
 
       return {
         success: true,
-        bricklinkInventoryId: inventoryId,
+        bricklinkLotId: inventoryId,
         correlationId,
       };
     } catch (error) {
@@ -1127,7 +1127,7 @@ export class BricklinkStoreClient {
 
         results.push({
           success: result.success,
-          bricklinkInventoryId: result.bricklinkInventoryId,
+          bricklinkLotId: result.bricklinkLotId,
           error: result.error,
           correlationId: result.correlationId,
         });
@@ -1227,7 +1227,7 @@ export class BricklinkStoreClient {
 
         results.push({
           success: result.success,
-          bricklinkInventoryId: result.bricklinkInventoryId,
+          bricklinkLotId: result.bricklinkLotId,
           error: result.error,
           correlationId: result.correlationId,
         });

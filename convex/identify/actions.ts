@@ -27,7 +27,6 @@ type CurrentUserResponse = {
 export const identifyPartFromImage = action({
   args: {
     storageId: v.id("_storage"),
-    businessAccountId: v.id("businessAccounts"),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -44,8 +43,9 @@ export const identifyPartFromImage = action({
       throw new ConvexError("User context unavailable");
     }
 
-    if (currentUser.businessAccount._id !== args.businessAccountId) {
-      throw new ConvexError("User cannot access another business account");
+    const businessAccountId = currentUser.businessAccount._id;
+    if (!businessAccountId) {
+      throw new ConvexError("User does not have an associated business account");
     }
 
     // TODO: Implement rate limiting for identification requests

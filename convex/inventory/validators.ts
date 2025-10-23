@@ -31,6 +31,46 @@ export const syncStatus = v.union(
 
 export const marketplaceProvider = v.union(v.literal("bricklink"), v.literal("brickowl"));
 
+// Partial inventory item data for sync operations (represents Partial<Doc<"inventoryItems">>)
+export const partialInventoryItemData = v.optional(
+  v.object({
+    _id: v.optional(inventoryItemId),
+    _creationTime: v.optional(v.number()),
+    businessAccountId: v.optional(businessAccountId),
+    name: v.optional(v.string()),
+    partNumber: v.optional(v.string()),
+    colorId: v.optional(v.string()),
+    location: v.optional(v.string()),
+    quantityAvailable: v.optional(v.number()),
+    quantityReserved: v.optional(v.number()),
+    quantitySold: v.optional(v.number()),
+    status: v.optional(itemStatus),
+    condition: v.optional(itemCondition),
+    price: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    createdBy: v.optional(userId),
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    isArchived: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+    bricklinkLotId: v.optional(v.number()),
+    brickowlLotId: v.optional(v.string()),
+    lastSyncedAt: v.optional(v.number()),
+    syncErrors: v.optional(
+      v.array(
+        v.object({
+          provider: marketplaceProvider,
+          error: v.string(),
+          occurredAt: v.number(),
+        }),
+      ),
+    ),
+    fileId: v.optional(v.id("inventoryFiles")),
+    bricklinkSyncStatus: v.optional(syncStatus),
+    brickowlSyncStatus: v.optional(syncStatus),
+  }),
+);
+
 // ============================================================================
 // MUTATION ARGS
 // ============================================================================
@@ -225,7 +265,7 @@ export const listInventoryItemsReturns = v.array(
     updatedAt: v.optional(v.number()),
     isArchived: v.optional(v.boolean()), // Matches schema - optional field
     deletedAt: v.optional(v.number()),
-    bricklinkInventoryId: v.optional(v.number()),
+    bricklinkLotId: v.optional(v.number()),
     brickowlLotId: v.optional(v.string()),
     lastSyncedAt: v.optional(v.number()),
     syncErrors: v.optional(
@@ -297,7 +337,7 @@ export const getChangeSyncStatusReturns = v.object({
   syncStatus,
   bricklinkSyncedAt: v.optional(v.number()),
   bricklinkSyncError: v.optional(v.string()),
-  bricklinkInventoryId: v.optional(v.number()),
+  bricklinkLotId: v.optional(v.number()),
   brickowlSyncedAt: v.optional(v.number()),
   brickowlSyncError: v.optional(v.string()),
   brickowlLotId: v.optional(v.string()),
@@ -354,8 +394,8 @@ export const getPendingChangesReturns = v.array(
     businessAccountId,
     inventoryItemId,
     changeType,
-    previousData: v.optional(v.any()),
-    newData: v.optional(v.any()),
+    previousData: partialInventoryItemData,
+    newData: partialInventoryItemData,
     reason: v.optional(v.string()),
     syncStatus,
     correlationId: v.string(),
@@ -374,8 +414,8 @@ export const getChangeReturns = v.object({
   businessAccountId,
   inventoryItemId,
   changeType,
-  previousData: v.optional(v.any()),
-  newData: v.optional(v.any()),
+  previousData: partialInventoryItemData,
+  newData: partialInventoryItemData,
   reason: v.optional(v.string()),
   syncStatus,
   correlationId: v.string(),
@@ -407,7 +447,7 @@ export const getInventoryItemReturns = v.object({
   updatedAt: v.optional(v.number()),
   isArchived: v.optional(v.boolean()), // Matches schema - optional field
   deletedAt: v.optional(v.number()),
-  bricklinkInventoryId: v.optional(v.number()),
+  bricklinkLotId: v.optional(v.number()),
   brickowlLotId: v.optional(v.string()),
   lastSyncedAt: v.optional(v.number()),
   syncErrors: v.optional(
@@ -457,3 +497,6 @@ export type DeleteInventoryItemArgs = Infer<typeof deleteInventoryItemArgs>;
 export type ListInventoryItemsArgs = Infer<typeof listInventoryItemsArgs>;
 export type GetInventoryTotalsArgs = Infer<typeof getInventoryTotalsArgs>;
 export type ListInventoryHistoryArgs = Infer<typeof listInventoryHistoryArgs>;
+
+// Partial inventory item data type (equivalent to Partial<Doc<"inventoryItems">>)
+export type PartialInventoryItemData = Infer<typeof partialInventoryItemData>;

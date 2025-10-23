@@ -30,8 +30,6 @@ export const inventoryTables = {
     condition: v.union(v.literal("new"), v.literal("used")),
     price: v.optional(v.number()), // Unit price for marketplace sync
     notes: v.optional(v.string()), // Description/remarks from marketplace
-    bricklinkInventoryId: v.optional(v.number()), // BrickLink inventory_id for sync tracking
-    brickowlLotId: v.optional(v.string()), // BrickOwl lot_id for sync tracking (Story 3.3)
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
@@ -51,6 +49,8 @@ export const inventoryTables = {
     ),
     // Inventory file association (Story 3.5)
     fileId: v.optional(v.id("inventoryFiles")),
+    bricklinkLotId: v.optional(v.number()), // BrickLink inventory_id for sync tracking
+    brickowlLotId: v.optional(v.string()), // BrickOwl lot_id for sync tracking (Story 3.3)
     // Per-marketplace sync status tracking (Story 3.5)
     bricklinkSyncStatus: v.optional(
       v.union(v.literal("pending"), v.literal("syncing"), v.literal("synced"), v.literal("failed")),
@@ -58,9 +58,12 @@ export const inventoryTables = {
     brickowlSyncStatus: v.optional(
       v.union(v.literal("pending"), v.literal("syncing"), v.literal("synced"), v.literal("failed")),
     ),
+    // Sync error details for hover states
+    bricklinkSyncError: v.optional(v.string()),
+    brickowlSyncError: v.optional(v.string()),
   })
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_bricklinkInventoryId", ["businessAccountId", "bricklinkInventoryId"])
+    .index("by_bricklinkLotId", ["businessAccountId", "bricklinkLotId"])
     .index("by_brickowlLotId", ["businessAccountId", "brickowlLotId"])
     .index("by_fileId", ["fileId"]),
 
@@ -132,6 +135,8 @@ export const inventoryTables = {
     correlationId: v.string(),
     createdBy: v.id("users"),
     createdAt: v.number(),
+    // File context for tracking
+    fileId: v.optional(v.id("inventoryFiles")), // Track if change originated from file
   })
     .index("by_business_pending", ["businessAccountId", "syncStatus"])
     .index("by_inventory_item", ["inventoryItemId", "createdAt"])

@@ -166,7 +166,7 @@ export const recordBatchSyncResults = internalMutation({
         const updates: {
           bricklinkSyncStatus?: "synced";
           brickowlSyncStatus?: "synced";
-          bricklinkInventoryId?: number;
+          bricklinkLotId?: number;
           brickowlLotId?: string;
           lastSyncedAt: number;
           updatedAt: number;
@@ -179,7 +179,7 @@ export const recordBatchSyncResults = internalMutation({
         if (result.provider === "bricklink") {
           updates.bricklinkSyncStatus = "synced";
           if (typeof result.marketplaceLotId === "number") {
-            updates.bricklinkInventoryId = result.marketplaceLotId;
+            updates.bricklinkLotId = result.marketplaceLotId;
           }
         } else if (result.provider === "brickowl") {
           updates.brickowlSyncStatus = "synced";

@@ -35,17 +35,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/AlertDialog";
-import { ArrowLeft, Plus, Upload, ArrowUpDown, Trash2 } from "lucide-react";
-import { CameraCapture } from "./CameraCapture";
-import { IdentificationResultsList } from "./IdentificationResultsList";
-import { AddPartToInventoryDialog } from "./AddPartToInventoryDialog";
+import { ArrowLeft, Upload, ArrowUpDown, Trash2 } from "lucide-react";
+import { AddInventoryItemButton } from "./AddInventoryItemButton";
 import { BatchSyncDialog } from "./BatchSyncDialog";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { bestTextOn } from "@/lib/utils";
-import type {
-  PartIdentificationResult,
-  PartIdentificationItem,
-} from "@/lib/services/part-identification-service";
 
 // Color badge component that properly uses hooks
 function PartColorBadge({ partNumber, colorId }: { partNumber: string; colorId: string }) {
@@ -81,7 +75,6 @@ type SyncStatus = "pending" | "syncing" | "synced" | "failed" | undefined;
 type Condition = "new" | "used" | "all";
 type SortField = "quantity" | "price" | "date";
 type SortDirection = "asc" | "desc";
-type AddItemWorkflowStage = "idle" | "capturing" | "viewing_results" | "adding_to_inventory";
 
 export function InventoryFileDetail({ businessAccountId, fileId }: InventoryFileDetailProps) {
   const router = useRouter();
@@ -97,12 +90,6 @@ export function InventoryFileDetail({ businessAccountId, fileId }: InventoryFile
   // Dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
-
-  // Camera workflow state
-  const [addItemStage, setAddItemStage] = useState<AddItemWorkflowStage>("idle");
-  const [identificationResults, setIdentificationResults] =
-    useState<PartIdentificationResult | null>(null);
-  const [partNumberForAdd, setPartNumberForAdd] = useState<string | null>(null);
 
   // Queries
   const file = useQuery(api.inventory.files.queries.getFile, { fileId });
@@ -300,33 +287,6 @@ export function InventoryFileDetail({ businessAccountId, fileId }: InventoryFile
     return `$${price.toFixed(2)}`;
   };
 
-  // Camera workflow handlers
-  const handleAddItemsClick = () => {
-    setAddItemStage("capturing");
-  };
-
-  const handleIdentificationComplete = (results: PartIdentificationResult) => {
-    setIdentificationResults(results);
-    setAddItemStage("viewing_results");
-  };
-
-  const handleResultSelected = (item: PartIdentificationItem) => {
-    // Store the part number and proceed to add dialog
-    setPartNumberForAdd(item.id); // Brickognize returns part number as 'id'
-    setAddItemStage("adding_to_inventory");
-  };
-
-  const handleAddDialogClose = () => {
-    setAddItemStage("idle");
-    setIdentificationResults(null);
-    setPartNumberForAdd(null);
-  };
-
-  const handleRetakePhoto = () => {
-    setIdentificationResults(null);
-    setAddItemStage("capturing");
-  };
-
   if (!file || !items) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -383,15 +343,11 @@ export function InventoryFileDetail({ businessAccountId, fileId }: InventoryFile
             <Trash2 className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Delete ({selectedItems.size})</span>
           </Button>
-          <Button
-            data-testid="add-items-button"
+          <AddInventoryItemButton
+            fileId={fileId}
             variant="default"
-            onClick={handleAddItemsClick}
             className="bg-green-600 hover:bg-green-700 sm:w-auto"
-          >
-            <Plus className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Add Items</span>
-          </Button>
+          />
         </div>
       </div>
 
@@ -572,45 +528,6 @@ export function InventoryFileDetail({ businessAccountId, fileId }: InventoryFile
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Camera Capture Sheet */}
-      {businessAccountId && (
-        <CameraCapture
-          open={addItemStage === "capturing"}
-          onOpenChange={(open) => {
-            if (!open) setAddItemStage("idle");
-          }}
-          businessAccountId={businessAccountId}
-          onResults={handleIdentificationComplete}
-          onError={(error) => {
-            console.error("Camera error:", error);
-            setAddItemStage("idle");
-          }}
-        />
-      )}
-
-      {/* Identification Results Sheet */}
-      {identificationResults && (
-        <IdentificationResultsList
-          open={addItemStage === "viewing_results"}
-          onOpenChange={(open) => {
-            if (!open) setAddItemStage("idle");
-          }}
-          results={identificationResults}
-          onSelectResult={handleResultSelected}
-          onRetake={handleRetakePhoto}
-        />
-      )}
-
-      {/* Add Part to Inventory Sheet */}
-      <AddPartToInventoryDialog
-        open={addItemStage === "adding_to_inventory"}
-        onOpenChange={(open) => {
-          if (!open) handleAddDialogClose();
-        }}
-        partNumber={partNumberForAdd}
-        defaultFileId={fileId}
-      />
 
       {/* Batch Sync Dialog */}
       <BatchSyncDialog
