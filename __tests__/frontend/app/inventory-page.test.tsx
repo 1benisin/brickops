@@ -20,19 +20,21 @@ jest.mock("convex/react", () => {
   return {
     __esModule: true,
     ...actual,
-    useQuery: jest.fn((queryFn: unknown, _args: unknown) => {
+    useQuery: jest.fn((queryFn: unknown) => {
       switch (queryFn) {
-        case api.users.getCurrentUser:
+        case api.users.queries.getCurrentUser:
           return { businessAccount: { _id: "ba_1" } } as unknown;
-        case api.inventory.listInventoryItems:
+        case api.inventory.queries.listInventoryItems:
           return [] as unknown;
-        case api.inventory.getInventoryTotals:
+        case api.inventory.queries.getInventoryTotals:
           return {
             counts: { items: 0 },
             totals: { available: 0, reserved: 0, sold: 0 },
           } as unknown;
-        case api.inventory.listInventoryHistory:
+        case api.inventory.queries.listInventoryHistory:
           return [] as unknown;
+        case api.marketplace.mutations.getSyncSettings:
+          return undefined;
         default:
           return undefined;
       }

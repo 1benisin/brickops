@@ -11,10 +11,13 @@ type Ctx = QueryCtx | MutationCtx;
 export const now = () => Date.now();
 
 /**
- * Require authenticated and active user
+ * Require authenticated and active user with business account
  * Helper function - not a Convex function
+ * Returns user with guaranteed businessAccountId
  */
-export async function requireUser(ctx: Ctx): Promise<{ userId: Id<"users">; user: Doc<"users"> }> {
+export async function requireUser(
+  ctx: Ctx,
+): Promise<{ userId: Id<"users">; user: Doc<"users">; businessAccountId: Id<"businessAccounts"> }> {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new ConvexError("Authentication required");
@@ -33,7 +36,7 @@ export async function requireUser(ctx: Ctx): Promise<{ userId: Id<"users">; user
     throw new ConvexError("User is not linked to a business account");
   }
 
-  return { userId, user };
+  return { userId, user, businessAccountId: user.businessAccountId };
 }
 
 /**

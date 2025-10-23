@@ -26,5 +26,5 @@ export default function InventoryFileDetailPage({
     );
   }
 
-  return <InventoryFileDetail businessAccountId={businessAccountId} fileId={params.fileId} />;
+  return <InventoryFileDetail fileId={params.fileId} />;
 }

@@ -26,13 +26,12 @@ import {
 export const listInventoryItems = query({
   args: listInventoryItemsArgs,
   returns: listInventoryItemsReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    assertBusinessMembership(user, args.businessAccountId);
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireUser(ctx);
 
     const items = await ctx.db
       .query("inventoryItems")
-      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", args.businessAccountId))
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
     // Exclude archived items from standard listings
@@ -47,7 +46,13 @@ export const listInventoryItemsByFile = query({
   returns: listInventoryItemsByFileReturns,
   handler: async (ctx, args) => {
     const { user } = await requireUser(ctx);
-    assertBusinessMembership(user, args.businessAccountId);
+
+    // Verify the file belongs to the user's business account
+    const file = await ctx.db.get(args.fileId);
+    if (!file) {
+      throw new Error("File not found");
+    }
+    assertBusinessMembership(user, file.businessAccountId);
 
     const items = await ctx.db
       .query("inventoryItems")
@@ -64,13 +69,12 @@ export const listInventoryItemsByFile = query({
 export const getInventoryTotals = query({
   args: getInventoryTotalsArgs,
   returns: getInventoryTotalsReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    assertBusinessMembership(user, args.businessAccountId);
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireUser(ctx);
 
     const items = await ctx.db
       .query("inventoryItems")
-      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", args.businessAccountId))
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
     const activeItems = items.filter((item) => !item.isArchived);
@@ -103,12 +107,17 @@ export const listInventoryHistory = query({
   returns: listInventoryHistoryReturns,
   handler: async (ctx, args) => {
     const { user } = await requireUser(ctx);
-    assertBusinessMembership(user, args.businessAccountId);
+    const businessAccountId = user.businessAccountId!;
 
     const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
 
     let logs: Doc<"inventoryHistory">[] = [];
     if (args.itemId) {
+      // Verify the item belongs to the user's business account
+      const item = await ctx.db.get(args.itemId);
+      if (item) {
+        assertBusinessMembership(user, item.businessAccountId);
+      }
       logs = await ctx.db
         .query("inventoryHistory")
         .withIndex("by_item", (q) => q.eq("itemId", args.itemId!))
@@ -116,7 +125,7 @@ export const listInventoryHistory = query({
     } else {
       logs = await ctx.db
         .query("inventoryHistory")
-        .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", args.businessAccountId))
+        .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
         .collect();
     }
 
@@ -273,14 +282,13 @@ export const getChangeHistory = query({
 export const getPendingChangesCount = query({
   args: getPendingChangesCountArgs,
   returns: getPendingChangesCountReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    assertBusinessMembership(user, args.businessAccountId);
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireUser(ctx);
 
     const pendingChanges = await ctx.db
       .query("inventorySyncQueue")
       .withIndex("by_business_pending", (q) =>
-        q.eq("businessAccountId", args.businessAccountId).eq("syncStatus", "pending"),
+        q.eq("businessAccountId", businessAccountId).eq("syncStatus", "pending"),
       )
       .collect();
 
@@ -297,14 +305,13 @@ export const getPendingChangesCount = query({
 export const getSyncMetrics = query({
   args: getSyncMetricsArgs,
   returns: getSyncMetricsReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    assertBusinessMembership(user, args.businessAccountId);
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireUser(ctx);
 
     // Get all sync queue entries for this business account
     const allChanges = await ctx.db
       .query("inventorySyncQueue")
-      .withIndex("by_business_pending", (q) => q.eq("businessAccountId", args.businessAccountId))
+      .withIndex("by_business_pending", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
     const now = Date.now();
@@ -358,7 +365,7 @@ export const getSyncMetrics = query({
  * AC: 3.4.5 - Query unresolved conflicts
  */
 export const getConflicts = query({
-  args: { businessAccountId: v.id("businessAccounts") },
+  args: {},
   returns: v.array(
     v.object({
       changeId: v.id("inventorySyncQueue"),
@@ -376,14 +383,13 @@ export const getConflicts = query({
       ),
     }),
   ),
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    assertBusinessMembership(user, args.businessAccountId);
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireUser(ctx);
 
     // Query all changes with unresolved conflicts
     const allChanges = await ctx.db
       .query("inventorySyncQueue")
-      .withIndex("by_business_pending", (q) => q.eq("businessAccountId", args.businessAccountId))
+      .withIndex("by_business_pending", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
     const conflicts = allChanges.filter((c) => c.conflictStatus === "detected");

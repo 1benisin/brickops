@@ -5,19 +5,14 @@ import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import type { Id } from "@/convex/_generated/dataModel";
 import { TotalsCardSkeleton } from "./TotalsCardSkeleton";
 
 interface TotalsCardProps {
-  businessAccountId?: Id<"businessAccounts">;
   isLoading?: boolean;
 }
 
-export function TotalsCard({ businessAccountId, isLoading }: TotalsCardProps) {
-  const totals = useQuery(
-    api.inventory.queries.getInventoryTotals,
-    businessAccountId ? { businessAccountId } : "skip",
-  );
+export function TotalsCard({ isLoading }: TotalsCardProps) {
+  const totals = useQuery(api.inventory.queries.getInventoryTotals);
 
   const values = useMemo(() => {
     return {

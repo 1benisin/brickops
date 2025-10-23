@@ -7,7 +7,7 @@ import { TotalsCard } from "@/components/dashboard/TotalsCard";
 
 export default function DashboardPage() {
   const currentUser = useQuery(api.users.queries.getCurrentUser);
-  const businessAccountId = currentUser?.businessAccount?._id;
+  const _businessAccountId = currentUser?.businessAccount?._id;
   const isLoading = currentUser === undefined;
 
   return (
@@ -22,7 +22,7 @@ export default function DashboardPage() {
 
       <section>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <TotalsCard businessAccountId={businessAccountId} isLoading={isLoading} />
+          <TotalsCard isLoading={isLoading} />
         </div>
       </section>
     </div>

@@ -135,21 +135,15 @@ export const removeItemFromFileArgs = v.object({
 // QUERY ARGS
 // ============================================================================
 
-export const listInventoryItemsArgs = v.object({
-  businessAccountId,
-});
+export const listInventoryItemsArgs = v.object({});
 
 export const listInventoryItemsByFileArgs = v.object({
-  businessAccountId,
   fileId: v.id("inventoryFiles"),
 });
 
-export const getInventoryTotalsArgs = v.object({
-  businessAccountId,
-});
+export const getInventoryTotalsArgs = v.object({});
 
 export const listInventoryHistoryArgs = v.object({
-  businessAccountId,
   itemId: v.optional(inventoryItemId),
   limit: v.optional(v.number()),
 });
@@ -167,13 +161,9 @@ export const getChangeHistoryArgs = v.object({
   limit: v.optional(v.number()),
 });
 
-export const getPendingChangesCountArgs = v.object({
-  businessAccountId,
-});
+export const getPendingChangesCountArgs = v.object({});
 
-export const getSyncMetricsArgs = v.object({
-  businessAccountId,
-});
+export const getSyncMetricsArgs = v.object({});
 
 // ============================================================================
 // INTERNAL QUERY/MUTATION ARGS
