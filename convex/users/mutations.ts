@@ -222,39 +222,3 @@ export const removeUser = mutation({
     });
   },
 });
-
-/**
- * Simple sliding window rate limiter using the `rateLimitEvents` table.
- * Internal mutation for rate limiting sensitive operations
- */
-export const checkAndConsumeRateLimit = mutation({
-  args: {
-    key: v.string(), // unique dimension (e.g., business account id, email, token)
-    kind: v.string(), // bucket name (e.g., "invite_create", "invite_redeem")
-    limit: v.number(),
-    windowMs: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const since = now - args.windowMs;
-
-    // Count existing events in window for this (key, kind)
-    const events = await ctx.db
-      .query("rateLimitEvents")
-      .withIndex("by_key_kind", (q) => q.eq("key", args.key).eq("kind", args.kind))
-      .collect();
-
-    const inWindow = events.filter((e) => e.createdAt >= since);
-    if (inWindow.length >= args.limit) {
-      return { allowed: false, remaining: 0 } as const;
-    }
-
-    await ctx.db.insert("rateLimitEvents", {
-      key: args.key,
-      kind: args.kind,
-      createdAt: now,
-    });
-
-    return { allowed: true, remaining: Math.max(0, args.limit - (inWindow.length + 1)) } as const;
-  },
-});

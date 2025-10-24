@@ -1,7 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { ConvexError, v } from "convex/values";
+import { ConvexError } from "convex/values";
 import { requireActiveUser } from "./helpers";
 
 export const getCurrentUser = query({
@@ -95,21 +95,5 @@ export const listMembers = query({
       status: member.status,
       isCurrentUser: member._id === userId,
     }));
-  },
-});
-
-/**
- * Fetch a business account by invite code.
- * Internal-only query for server-side composition
- */
-export const getBusinessAccountByInviteCode = query({
-  args: {
-    inviteCode: v.string(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("businessAccounts")
-      .withIndex("by_inviteCode", (q) => q.eq("inviteCode", args.inviteCode))
-      .first();
   },
 });

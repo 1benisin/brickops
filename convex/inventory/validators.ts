@@ -90,11 +90,6 @@ export const addInventoryItemArgs = v.object({
   fileId: v.optional(v.id("inventoryFiles")), // AC: 3.5.3 - Associate items with files
 });
 
-export const updateInventoryQuantityArgs = v.object({
-  itemId: inventoryItemId,
-  quantityAvailable: v.number(),
-});
-
 export const updateInventoryItemArgs = v.object({
   itemId: inventoryItemId,
   name: v.optional(v.string()),
@@ -143,27 +138,11 @@ export const listInventoryItemsByFileArgs = v.object({
 
 export const getInventoryTotalsArgs = v.object({});
 
-export const listInventoryHistoryArgs = v.object({
-  itemId: v.optional(inventoryItemId),
-  limit: v.optional(v.number()),
-});
-
 export const getItemSyncStatusArgs = v.object({
   itemId: inventoryItemId,
 });
 
-export const getChangeSyncStatusArgs = v.object({
-  changeId: v.id("inventorySyncQueue"),
-});
-
-export const getChangeHistoryArgs = v.object({
-  itemId: inventoryItemId,
-  limit: v.optional(v.number()),
-});
-
 export const getPendingChangesCountArgs = v.object({});
-
-export const getSyncMetricsArgs = v.object({});
 
 // ============================================================================
 // INTERNAL QUERY/MUTATION ARGS
@@ -206,11 +185,6 @@ export const recordSyncErrorArgs = v.object({
 
 // Mutations
 export const addInventoryItemReturns = inventoryItemId;
-
-export const updateInventoryQuantityReturns = v.object({
-  itemId: inventoryItemId,
-  quantityAvailable: v.number(),
-});
 
 export const updateInventoryItemReturns = v.object({
   itemId: inventoryItemId,
@@ -290,24 +264,6 @@ export const getInventoryTotalsReturns = v.object({
   }),
 });
 
-export const listInventoryHistoryReturns = v.array(
-  v.object({
-    _id: v.id("inventoryHistory"),
-    _creationTime: v.number(),
-    businessAccountId,
-    itemId: inventoryItemId,
-    changeType,
-    deltaAvailable: v.optional(v.number()),
-    deltaReserved: v.optional(v.number()),
-    deltaSold: v.optional(v.number()),
-    fromStatus: v.optional(itemStatus),
-    toStatus: v.optional(itemStatus),
-    actorUserId: userId,
-    reason: v.optional(v.string()),
-    createdAt: v.number(),
-  }),
-);
-
 export const getItemSyncStatusReturns = v.object({
   itemId: inventoryItemId,
   lastSyncedAt: v.optional(v.number()),
@@ -325,58 +281,8 @@ export const getItemSyncStatusReturns = v.object({
   pendingChangesCount: v.number(),
 });
 
-export const getChangeSyncStatusReturns = v.object({
-  changeId: v.id("inventorySyncQueue"),
-  syncStatus,
-  bricklinkSyncedAt: v.optional(v.number()),
-  bricklinkSyncError: v.optional(v.string()),
-  bricklinkLotId: v.optional(v.number()),
-  brickowlSyncedAt: v.optional(v.number()),
-  brickowlSyncError: v.optional(v.string()),
-  brickowlLotId: v.optional(v.string()),
-  correlationId: v.string(),
-  createdAt: v.number(),
-});
-
-export const getChangeHistoryReturns = v.array(
-  v.object({
-    _id: v.id("inventorySyncQueue"),
-    _creationTime: v.number(),
-    changeType,
-    syncStatus,
-    bricklinkSyncedAt: v.optional(v.number()),
-    bricklinkSyncError: v.optional(v.string()),
-    brickowlSyncedAt: v.optional(v.number()),
-    brickowlSyncError: v.optional(v.string()),
-    correlationId: v.string(),
-    reason: v.optional(v.string()),
-    createdBy: userId,
-    createdAt: v.number(),
-  }),
-);
-
 export const getPendingChangesCountReturns = v.object({
   count: v.number(),
-});
-
-export const getSyncMetricsReturns = v.object({
-  pending: v.number(),
-  syncing: v.number(),
-  synced: v.number(),
-  failed: v.number(),
-  totalChanges: v.number(),
-  bricklinkSynced: v.number(),
-  brickowlSynced: v.number(),
-  oldestPendingAge: v.optional(v.number()),
-  recentFailures: v.array(
-    v.object({
-      changeId: v.id("inventorySyncQueue"),
-      changeType,
-      bricklinkSyncError: v.optional(v.string()),
-      brickowlSyncError: v.optional(v.string()),
-      createdAt: v.number(),
-    }),
-  ),
 });
 
 // Internal query returns
@@ -484,12 +390,10 @@ export const processPendingChangesReturns = v.object({
 // ============================================================================
 
 export type AddInventoryItemArgs = Infer<typeof addInventoryItemArgs>;
-export type UpdateInventoryQuantityArgs = Infer<typeof updateInventoryQuantityArgs>;
 export type UpdateInventoryItemArgs = Infer<typeof updateInventoryItemArgs>;
 export type DeleteInventoryItemArgs = Infer<typeof deleteInventoryItemArgs>;
 export type ListInventoryItemsArgs = Infer<typeof listInventoryItemsArgs>;
 export type GetInventoryTotalsArgs = Infer<typeof getInventoryTotalsArgs>;
-export type ListInventoryHistoryArgs = Infer<typeof listInventoryHistoryArgs>;
 
 // Partial inventory item data type (equivalent to Partial<Doc<"inventoryItems">>)
 export type PartialInventoryItemData = Infer<typeof partialInventoryItemData>;

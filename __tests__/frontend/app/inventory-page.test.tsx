@@ -31,8 +31,6 @@ jest.mock("convex/react", () => {
             counts: { items: 0 },
             totals: { available: 0, reserved: 0, sold: 0 },
           } as unknown;
-        case api.inventory.queries.listInventoryHistory:
-          return [] as unknown;
         case api.marketplace.mutations.getSyncSettings:
           return undefined;
         default:

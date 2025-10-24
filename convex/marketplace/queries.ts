@@ -89,29 +89,3 @@ export const getCredentialStatus = query({
     };
   },
 });
-
-/**
- * Get all credential statuses for a business
- */
-export const getAllCredentialStatuses = query({
-  args: {},
-  handler: async (ctx) => {
-    const { businessAccountId } = await requireOwner(ctx);
-
-    const credentials = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
-      .collect();
-
-    return credentials.map((cred) => ({
-      provider: cred.provider,
-      configured: true,
-      isActive: cred.isActive,
-      lastValidatedAt: cred.lastValidatedAt,
-      validationStatus: cred.validationStatus,
-      validationMessage: cred.validationMessage,
-      createdAt: cred.createdAt,
-      updatedAt: cred.updatedAt,
-    }));
-  },
-});

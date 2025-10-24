@@ -6,8 +6,6 @@ import { now, requireUser, assertBusinessMembership, requireOwnerRole } from "./
 import {
   addInventoryItemArgs,
   addInventoryItemReturns,
-  updateInventoryQuantityArgs,
-  updateInventoryQuantityReturns,
   updateInventoryItemArgs,
   updateInventoryItemReturns,
   deleteInventoryItemArgs,
@@ -138,41 +136,6 @@ export const addInventoryItem = mutation({
     );
 
     return id;
-  },
-});
-
-export const updateInventoryQuantity = mutation({
-  args: updateInventoryQuantityArgs,
-  returns: updateInventoryQuantityReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-
-    const item = await ctx.db.get(args.itemId);
-    if (!item) {
-      throw new ConvexError("Inventory item not found");
-    }
-
-    assertBusinessMembership(user, item.businessAccountId);
-
-    if (args.quantityAvailable < 0) {
-      throw new ConvexError("Quantity available cannot be negative");
-    }
-
-    await ctx.db.patch(args.itemId, {
-      quantityAvailable: args.quantityAvailable,
-      updatedAt: now(),
-    });
-
-    await ctx.db.insert("inventoryHistory", {
-      businessAccountId: item.businessAccountId,
-      itemId: args.itemId,
-      changeType: "adjust",
-      deltaAvailable: args.quantityAvailable - item.quantityAvailable,
-      actorUserId: user._id,
-      createdAt: now(),
-    });
-
-    return { itemId: args.itemId, quantityAvailable: args.quantityAvailable };
   },
 });
 
@@ -932,95 +895,6 @@ export const recordConflict = internalMutation({
       });
 
       await ctx.db.patch(change.inventoryItemId, { syncErrors });
-    }
-  },
-});
-
-/**
- * Resolve a detected conflict
- * AC: 3.4.5 - Conflict resolution with re-enqueue
- */
-export const resolveConflict = mutation({
-  args: {
-    changeId: v.id("inventorySyncQueue"),
-    resolution: v.union(
-      v.literal("accept_local"),
-      v.literal("accept_remote"),
-      v.literal("manual_merge"),
-    ),
-    mergedData: v.optional(v.any()), // Required for manual_merge
-  },
-  returns: v.object({
-    changeId: v.id("inventorySyncQueue"),
-    newChangeId: v.optional(v.id("inventorySyncQueue")),
-    resolution: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-
-    const change = await ctx.db.get(args.changeId);
-    if (!change) {
-      throw new ConvexError("Change not found");
-    }
-
-    assertBusinessMembership(user, change.businessAccountId);
-    requireOwnerRole(user);
-
-    if (change.conflictStatus !== "detected") {
-      throw new ConvexError("No unresolved conflict on this change");
-    }
-
-    // Mark conflict as resolved
-    await ctx.db.patch(args.changeId, {
-      conflictStatus: "resolved",
-      conflictDetails: {
-        ...change.conflictDetails,
-        resolvedAt: Date.now(),
-        resolvedBy: user._id,
-        resolution: args.resolution,
-      },
-    });
-
-    // Handle different resolution strategies
-    if (args.resolution === "accept_local") {
-      // Re-enqueue the original local change for sync
-      const newChangeId = await ctx.db.insert("inventorySyncQueue", {
-        businessAccountId: change.businessAccountId,
-        inventoryItemId: change.inventoryItemId,
-        changeType: change.changeType,
-        newData: change.newData,
-        previousData: change.previousData,
-        reason: `Conflict resolved: accept local (original change ${args.changeId})`,
-        syncStatus: "pending",
-        correlationId: crypto.randomUUID(),
-        createdBy: user._id,
-        createdAt: Date.now(),
-      });
-
-      return { changeId: args.changeId, newChangeId, resolution: args.resolution };
-    } else if (args.resolution === "accept_remote") {
-      // Don't re-enqueue - remote wins, local change is discarded
-      return { changeId: args.changeId, resolution: args.resolution };
-    } else {
-      // manual_merge - re-enqueue with merged data
-      if (!args.mergedData) {
-        throw new ConvexError("mergedData required for manual_merge resolution");
-      }
-
-      const newChangeId = await ctx.db.insert("inventorySyncQueue", {
-        businessAccountId: change.businessAccountId,
-        inventoryItemId: change.inventoryItemId,
-        changeType: change.changeType,
-        newData: args.mergedData,
-        previousData: change.previousData,
-        reason: `Conflict resolved: manual merge (original change ${args.changeId})`,
-        syncStatus: "pending",
-        correlationId: crypto.randomUUID(),
-        createdBy: user._id,
-        createdAt: Date.now(),
-      });
-
-      return { changeId: args.changeId, newChangeId, resolution: args.resolution };
     }
   },
 });
