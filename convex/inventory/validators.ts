@@ -271,6 +271,9 @@ export const listInventoryItemsReturns = v.array(
     fileId: v.optional(v.id("inventoryFiles")),
     bricklinkSyncStatus: v.optional(syncStatus),
     brickowlSyncStatus: v.optional(syncStatus),
+    // Sync error details for hover states
+    bricklinkSyncError: v.optional(v.string()),
+    brickowlSyncError: v.optional(v.string()),
   }),
 );
 

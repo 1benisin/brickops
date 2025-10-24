@@ -251,7 +251,6 @@ export function CameraIdentificationPanel() {
 
       const identification = await service.identifyPartFromImage({
         storageId: storageId as Id<"_storage">,
-        businessAccountId: businessAccountId!,
       });
 
       setResult(identification);

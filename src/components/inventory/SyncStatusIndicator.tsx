@@ -75,10 +75,12 @@ export const SyncStatusIndicator = ({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant={getStatusVariant(status)} className="cursor-help">
-            <span className="mr-1">{getStatusIcon(status)}</span>
-            {getStatusText(status)}
-          </Badge>
+          <div>
+            <Badge variant={getStatusVariant(status)} className="cursor-help">
+              <span className="mr-1">{getStatusIcon(status)}</span>
+              {getStatusText(status)}
+            </Badge>
+          </div>
         </TooltipTrigger>
         <TooltipContent>
           <div className="text-sm">

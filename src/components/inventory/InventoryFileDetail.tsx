@@ -67,7 +67,6 @@ function PartColorBadge({ partNumber, colorId }: { partNumber: string; colorId: 
 }
 
 export interface InventoryFileDetailProps {
-  businessAccountId: Id<"businessAccounts">;
   fileId: Id<"inventoryFiles">;
 }
 
@@ -76,7 +75,7 @@ type Condition = "new" | "used" | "all";
 type SortField = "quantity" | "price" | "date";
 type SortDirection = "asc" | "desc";
 
-export function InventoryFileDetail({ businessAccountId, fileId }: InventoryFileDetailProps) {
+export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
   const router = useRouter();
   const [isSubmitting, startTransition] = useTransition();
 
@@ -94,7 +93,6 @@ export function InventoryFileDetail({ businessAccountId, fileId }: InventoryFile
   // Queries
   const file = useQuery(api.inventory.files.queries.getFile, { fileId });
   const items = useQuery(api.inventory.queries.listInventoryItemsByFile, {
-    businessAccountId,
     fileId,
   });
 
