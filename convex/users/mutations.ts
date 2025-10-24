@@ -29,6 +29,29 @@ export const updateProfile = mutation({
   },
 });
 
+export const updatePreferences = mutation({
+  args: {
+    useSortLocations: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { userId } = await requireActiveUser(ctx);
+
+    // Build the update object with only provided fields
+    const updates: Partial<{
+      useSortLocations: boolean;
+      updatedAt: number;
+    }> = {
+      updatedAt: Date.now(),
+    };
+
+    if (args.useSortLocations !== undefined) {
+      updates.useSortLocations = args.useSortLocations;
+    }
+
+    await ctx.db.patch(userId, updates);
+  },
+});
+
 export const regenerateInviteCode = mutation({
   args: {},
   handler: async (ctx) => {

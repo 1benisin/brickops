@@ -29,6 +29,10 @@ export const usersTables = {
     ),
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
+
+    // User preferences
+    useSortLocations: v.optional(v.boolean()),
+
     createdAt: v.number(),
     updatedAt: v.number(),
     status: v.union(v.literal("active"), v.literal("invited")),

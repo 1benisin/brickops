@@ -103,3 +103,26 @@ export function bestTextOn(bg: string): { color: "#000000" | "#FFFFFF"; ratio: n
  */
 export const lowContrastShadow =
   "0 1px 1px rgba(0,0,0,.6), 0 -1px 1px rgba(0,0,0,.6), 1px 0 1px rgba(0,0,0,.6), -1px 0 1px rgba(0,0,0,.6)";
+
+// -------------------- Date utilities --------------------
+
+/**
+ * Formats a timestamp as relative time (e.g., "5m ago", "2h ago", "3d ago")
+ * @param timestamp - Unix timestamp in milliseconds
+ * @returns Formatted relative time string
+ */
+export function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  } else if (hours < 24) {
+    return `${hours}h ago`;
+  } else {
+    return `${days}d ago`;
+  }
+}

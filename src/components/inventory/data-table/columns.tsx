@@ -16,6 +16,7 @@ import {
 import { SyncStatusIndicator } from "@/components/inventory/SyncStatusIndicator";
 import type { Infer } from "convex/values";
 import type { listInventoryItemsReturns } from "@/convex/inventory/validators";
+import { formatRelativeTime } from "@/lib/utils";
 
 // Type for inventory item based on the Convex validator
 export type InventoryItem = Infer<typeof listInventoryItemsReturns>[0];
@@ -26,23 +27,6 @@ const formatCurrency = (amount: number) => {
     style: "currency",
     currency: "USD",
   }).format(amount);
-};
-
-// Helper function to format relative time
-const formatRelativeTime = (timestamp: number) => {
-  const now = Date.now();
-  const diff = now - timestamp;
-  const minutes = Math.floor(diff / (1000 * 60));
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  } else if (hours < 24) {
-    return `${hours}h ago`;
-  } else {
-    return `${days}d ago`;
-  }
 };
 
 // Status badge component
@@ -142,6 +126,15 @@ export const columns: ColumnDef<InventoryItem>[] = [
     cell: ({ row }) => {
       const quantity = row.getValue("quantityAvailable") as number;
       return <div className="text-right font-mono font-medium">{quantity.toLocaleString()}</div>;
+    },
+  },
+  // Date Created column
+  {
+    accessorKey: "createdAt",
+    header: "Date Created",
+    cell: ({ row }) => {
+      const timestamp = row.getValue("createdAt") as number;
+      return <div className="text-sm text-muted-foreground">{formatRelativeTime(timestamp)}</div>;
     },
   },
   // Reserved Quantity column (only show if > 0)

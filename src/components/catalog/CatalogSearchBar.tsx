@@ -15,6 +15,7 @@ export type CatalogSearchBarProps = {
   onSubmit?: () => void;
   onClear?: () => void;
   isLoading?: boolean;
+  showLocationSearch?: boolean;
 };
 
 export function CatalogSearchBar({
@@ -27,6 +28,7 @@ export function CatalogSearchBar({
   onSubmit,
   onClear,
   isLoading: _isLoading = false,
+  showLocationSearch = false,
 }: CatalogSearchBarProps) {
   const [localSortLocation, setLocalSortLocation] = useState(sortLocation);
   const [localPartTitle, setLocalPartTitle] = useState(partTitle);
@@ -83,14 +85,18 @@ export function CatalogSearchBar({
     onClear?.();
   };
 
+  // Conditional grid columns based on location visibility
+  const gridColsClass = showLocationSearch ? "sm:grid-cols-12" : "sm:grid-cols-10";
+  const partNameSpan = showLocationSearch ? "sm:col-span-6" : "sm:col-span-7";
+
   return (
     <form
       className="flex flex-col gap-3 rounded-lg border border-border bg-card/60 p-4 shadow-sm transition"
       onSubmit={handleSubmit}
       data-testid="catalog-search-form"
     >
-      <div className="flex flex-col gap-3 sm:grid sm:grid-cols-12 sm:gap-3">
-        <div className="flex flex-col gap-1 sm:col-span-6">
+      <div className={`flex flex-col gap-3 sm:grid ${gridColsClass} sm:gap-3`}>
+        <div className={`flex flex-col gap-1 ${partNameSpan}`}>
           <label
             htmlFor="catalog-search-title"
             className="text-xs font-medium text-muted-foreground"
@@ -123,23 +129,25 @@ export function CatalogSearchBar({
           />
         </div>
 
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <label
-            htmlFor="catalog-search-location"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            By Location
-          </label>
-          <Input
-            id="catalog-search-location"
-            data-testid="catalog-search-location"
-            placeholder="e.g. A-99 or 2456"
-            className={`w-full ${activeField && activeField !== "location" ? "opacity-50" : ""}`}
-            disabled={activeField !== null && activeField !== "location"}
-            value={localSortLocation}
-            onChange={(event) => setLocalSortLocation(event.target.value)}
-          />
-        </div>
+        {showLocationSearch && (
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label
+              htmlFor="catalog-search-location"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              By Location
+            </label>
+            <Input
+              id="catalog-search-location"
+              data-testid="catalog-search-location"
+              placeholder="e.g. A-99 or 2456"
+              className={`w-full ${activeField && activeField !== "location" ? "opacity-50" : ""}`}
+              disabled={activeField !== null && activeField !== "location"}
+              value={localSortLocation}
+              onChange={(event) => setLocalSortLocation(event.target.value)}
+            />
+          </div>
+        )}
 
         <div className="flex items-end justify-end sm:col-span-1">
           <Button

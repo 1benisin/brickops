@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { ButtonProps } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
-import { CameraCapture } from "./CameraCapture";
+import { SearchOrCaptureDialog } from "./SearchOrCaptureDialog";
 import { IdentificationResultsList } from "./IdentificationResultsList";
 import { AddPartToInventoryDialog } from "./AddPartToInventoryDialog";
 import { useAddItemWorkflow } from "@/hooks/useAddItemWorkflow";
@@ -21,8 +21,8 @@ export interface AddInventoryItemButtonProps {
 }
 
 /**
- * All-in-one button for adding inventory items through camera capture.
- * Encapsulates the entire workflow: camera → identification → add to inventory
+ * All-in-one button for adding inventory items through camera capture OR catalog search.
+ * Encapsulates the entire workflow: camera/search → results → add to inventory
  *
  * Usage:
  * - General inventory: <AddInventoryItemButton onItemAdded={() => refetch()} />
@@ -54,15 +54,15 @@ export function AddInventoryItemButton({
         Add Item
       </Button>
 
-      {/* Camera Capture Sheet */}
-      <CameraCapture
+      {/* Search or Capture Dialog (replaces CameraCapture) */}
+      <SearchOrCaptureDialog
         open={addItemStage === "capturing"}
         onOpenChange={(open) => {
           if (!open) setAddItemStage("idle");
         }}
         onResults={handleIdentificationComplete}
         onError={(error) => {
-          console.error("Camera error:", error);
+          console.error("Search/capture error:", error);
           setAddItemStage("idle");
         }}
       />

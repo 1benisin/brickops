@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const updateUserRole = useMutation(api.users.mutations.updateUserRole);
   const removeUser = useMutation(api.users.mutations.removeUser);
   const createUserInvite = useMutation(api.users.mutations.createUserInvite);
+  const updatePreferences = useMutation(api.users.mutations.updatePreferences);
   const updateSyncSettings = useMutation(api.marketplace.mutations.updateSyncSettings);
   const syncSettings = useQuery(api.marketplace.mutations.getSyncSettings);
 
@@ -54,6 +55,8 @@ export default function SettingsPage() {
   const [inviteFeedback, setInviteFeedback] = useState<string | null>(null);
   const [isUpdatingProfile, startProfileTransition] = useTransition();
   const [isRegenerating, startInviteTransition] = useTransition();
+  const [useSortLocations, setUseSortLocations] = useState(false);
+  const [isUpdatingPreferences, startPreferencesTransition] = useTransition();
   const [isMarketplaceExpanded, setIsMarketplaceExpanded] = useState(false);
   const [isUsersExpanded, setIsUsersExpanded] = useState(false);
 
@@ -71,6 +74,7 @@ export default function SettingsPage() {
     if (currentUser?.user) {
       setFirstName(currentUser.user.firstName ?? "");
       setLastName(currentUser.user.lastName ?? "");
+      setUseSortLocations(currentUser.user.useSortLocations ?? false);
     }
   }, [currentUser?.user]);
 
@@ -133,6 +137,21 @@ export default function SettingsPage() {
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to regenerate invite code";
         setInviteFeedback(message);
+      }
+    });
+  };
+
+  const handleSortLocationsToggle = (checked: boolean) => {
+    setUseSortLocations(checked);
+
+    startPreferencesTransition(async () => {
+      try {
+        await updatePreferences({ useSortLocations: checked });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to update preferences";
+        console.error(message);
+        // Revert on error
+        setUseSortLocations(!checked);
       }
     });
   };
@@ -382,6 +401,42 @@ export default function SettingsPage() {
                 Invite code rotation is limited to business owners.
               </p>
             ) : null}
+          </div>
+        </div>
+      </section>
+
+      {/* Catalog Preferences Section */}
+      <section className="space-y-4 rounded-lg border border-border bg-card p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Catalog Preferences</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Customize how you search and view your catalog
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4 pt-4">
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex-1">
+              <label
+                htmlFor="use-sort-locations"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                Enable Sort Locations
+              </label>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                Show location-based search in the catalog. When enabled, you can search parts by
+                their physical storage location.
+              </p>
+            </div>
+            <Switch
+              id="use-sort-locations"
+              checked={useSortLocations}
+              onCheckedChange={handleSortLocationsToggle}
+              disabled={isUpdatingPreferences}
+              className="ml-4"
+            />
           </div>
         </div>
       </section>

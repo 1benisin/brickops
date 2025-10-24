@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatRelativeTime } from "@/lib/utils";
 
 export interface FileSelectorProps {
   value: Id<"inventoryFiles"> | "none" | "create-new" | undefined;
@@ -38,14 +39,6 @@ export function FileSelector({
   });
 
   const createFile = useMutation(api.inventory.files.mutations.createFile);
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      year: "2-digit",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  };
 
   const handleSelectChange = (newValue: string) => {
     if (newValue === "create-new") {
@@ -153,7 +146,7 @@ export function FileSelector({
               </SelectItem>
               {files.map((file) => (
                 <SelectItem key={file._id} value={file._id}>
-                  {formatDate(file.createdAt)} - {file.name} - {file.itemCount} items
+                  {formatRelativeTime(file.createdAt)} - {file.name} - {file.itemCount} items
                 </SelectItem>
               ))}
             </>

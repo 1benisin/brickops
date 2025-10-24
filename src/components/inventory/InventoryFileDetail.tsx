@@ -10,6 +10,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { formatRelativeTime } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -272,14 +273,6 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
     );
   };
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
   const formatPrice = (price: number | undefined) => {
     if (price === undefined) return "-";
     return `$${price.toFixed(2)}`;
@@ -314,7 +307,7 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
           {file.name}
         </h1>
         <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {formatDate(file.createdAt)}
+          {formatRelativeTime(file.createdAt)}
         </span>
       </div>
 

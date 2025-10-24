@@ -8,6 +8,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { formatRelativeTime } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -105,24 +106,6 @@ export function InventoryFilesList() {
 
   const handleView = (fileId: Id<"inventoryFiles">) => {
     router.push(`/inventory/files/${encodeURIComponent(fileId as unknown as string)}` as Route);
-  };
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const formatDateTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   // Empty state
@@ -288,14 +271,13 @@ export function InventoryFilesList() {
                     <Badge variant="secondary">{file.itemCount}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm" data-testid="file-created">
-                    {formatDate(file.createdAt)}
+                    {formatRelativeTime(file.createdAt)}
                   </TableCell>
                   <TableCell
                     className="text-muted-foreground text-sm"
                     data-testid="file-last-modified"
-                    title={formatDateTime(file.updatedAt)}
                   >
-                    {formatDate(file.updatedAt)}
+                    {formatRelativeTime(file.updatedAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">

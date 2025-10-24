@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { DataTable } from "./data-table/data-table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -13,13 +13,11 @@ const TableSkeleton = () => (
   <div className="space-y-4">
     <div className="grid gap-4 md:grid-cols-3">
       {[1, 2, 3].map((i) => (
-        <Card key={i}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <Skeleton className="h-4 w-20" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-8 w-16" />
-          </CardContent>
+        <Card key={i} className="py-3 px-4">
+          <div className="flex flex-col gap-1">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-5 w-12" />
+          </div>
         </Card>
       ))}
     </div>
@@ -71,17 +69,15 @@ const StatCard = ({
   value: number | undefined;
   isLoading: boolean;
 }) => (
-  <Card>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{label}</CardTitle>
-    </CardHeader>
-    <CardContent>
+  <Card className="py-3 px-4">
+    <div className="flex flex-col gap-1">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
       {isLoading ? (
-        <Skeleton className="h-8 w-16" />
+        <Skeleton className="h-5 w-12" />
       ) : (
-        <div className="text-xl font-bold">{value?.toLocaleString() || 0}</div>
+        <div className="text-base font-bold">{value?.toLocaleString() || 0}</div>
       )}
-    </CardContent>
+    </div>
   </Card>
 );
 
@@ -114,16 +110,18 @@ export function InventoryTable() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4 flex-1 min-h-0">
       {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 flex-shrink-0">
         <StatCard label="Available" value={totals?.totals.available} isLoading={false} />
         <StatCard label="Reserved" value={totals?.totals.reserved} isLoading={false} />
         <StatCard label="Sold" value={totals?.totals.sold} isLoading={false} />
       </div>
 
-      {/* Data Table */}
-      <DataTable data={items} />
+      {/* Data Table - Scrollable Area */}
+      <div className="flex-1 min-h-0">
+        <DataTable data={items} />
+      </div>
     </div>
   );
 }

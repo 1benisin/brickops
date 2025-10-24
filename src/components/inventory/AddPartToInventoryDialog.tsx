@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useTransition } from "react";
+import { useEffect, useMemo, useRef, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -39,6 +39,7 @@ import { ColorSelect } from "@/components/catalog/ColorSelect";
 import { PartPriceGuide } from "@/components/catalog/PartPriceGuide";
 import { UnitPriceInputGroup } from "./UnitPriceInputGroup";
 import { useGetPart } from "@/hooks/useGetPart";
+import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { useGetPriceGuide } from "@/hooks/useGetPriceGuide";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import type { PriceGuide } from "@/types/catalog";
@@ -128,7 +129,7 @@ function useAutoPriceFromGuide(opts: {
     form.setValue("price", computed, {
       shouldDirty: false,
       shouldTouch: false,
-      shouldValidate: false,
+      shouldValidate: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [priceGuide, ...watched]);
@@ -144,8 +145,12 @@ export function AddPartToInventoryDialog({
   const businessAccountId = currentUser?.businessAccount?._id;
 
   const { data: part, isLoading: isLoadingPart } = useGetPart(partNumber ?? null);
+  const { data: availableColors } = useGetPartColors(partNumber ?? null);
   const addInventoryItem = useMutation(api.inventory.mutations.addInventoryItem);
   const [isSubmitting, startTransition] = useTransition();
+
+  // Track if form has been initialized for the current part to prevent re-initialization
+  const initializedForPartRef = useRef<string | null>(null);
 
   // Persist last-used UI choices
   const [lastUsed, setLastUsed] = useLocalStorage<LastUsedInventorySettings>(
@@ -163,14 +168,14 @@ export function AddPartToInventoryDialog({
   const form = useForm<AddInventoryFormData>({
     resolver: zodResolver(addInventorySchema),
     defaultValues: {
-      location: lastUsed.location || "",
+      location: "",
       quantityAvailable: 1,
-      condition: lastUsed.condition || "new",
-      colorId: lastUsed.colorId || "",
-      fileId: lastUsed.fileId || defaultFileId || "none",
+      condition: "new",
+      colorId: "",
+      fileId: "none",
       price: "",
-      priceHelperType: lastUsed.priceHelperType || "stock",
-      priceHelperStat: lastUsed.priceHelperStat || "avg",
+      priceHelperType: "stock",
+      priceHelperStat: "avg",
     },
     mode: "onChange",
   });
@@ -181,29 +186,101 @@ export function AddPartToInventoryDialog({
     return colorId ? parseInt(colorId, 10) : null;
   }, [colorId]);
 
+  // Helper: validate colorId against available colors, return first color if invalid
+  const getValidColorId = useMemo(() => {
+    if (!availableColors || availableColors.length === 0) return null;
+
+    const colorIds = availableColors.map((c) => String(c.colorId));
+    const savedColorId = lastUsed.colorId;
+
+    // If saved color exists for this part, use it
+    if (savedColorId && colorIds.includes(savedColorId)) {
+      return savedColorId;
+    }
+
+    // Otherwise, default to first available color
+    return colorIds[0] || null;
+  }, [availableColors, lastUsed.colorId]);
+
   const { data: priceGuide } = useGetPriceGuide(partNumber, colorIdNumber);
 
-  // auto-fill price from guide unless user typed something else
-  useAutoPriceFromGuide({ form, priceGuide });
-
-  // reset form when the sheet opens with a different part, seeding from lastUsed
+  // Reset initialization flag when dialog closes or part changes
   useEffect(() => {
+    if (!open) {
+      initializedForPartRef.current = null;
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (partNumber && initializedForPartRef.current !== partNumber) {
+      initializedForPartRef.current = null;
+    }
+  }, [partNumber]);
+
+  // Coordinated initialization: wait for all data, then populate form in sequence
+  useEffect(() => {
+    // Step 1: Check if dialog is open and part is loaded
     if (!open || !part) return;
+
+    // Skip if already initialized for this part
+    if (initializedForPartRef.current === part.partNumber) return;
+
+    // Step 2: Wait for colors to load
+    if (!availableColors || availableColors.length === 0) return;
+
+    // Step 3: Determine valid colorId (from localStorage or first color)
+    const validColorId = getValidColorId;
+    if (!validColorId) return;
+
+    // Step 4: Wait for price guide to load for the selected color
+    // (priceGuide loads based on colorIdNumber which is derived from form.watch("colorId"))
+    // On first load, we need to set the color first, then wait for price guide
+    const currentColorId = form.getValues("colorId");
+
+    // If color hasn't been set yet, set it and wait for next render cycle
+    if (currentColorId !== validColorId) {
+      form.setValue("colorId", validColorId, { shouldValidate: false });
+      return;
+    }
+
+    // Step 5: Now that color is set, wait for price guide
+    if (!priceGuide) return;
+
+    // Step 6: All data is ready - populate all form fields
+    const condition = lastUsed.condition || "new";
+    const priceHelperType = lastUsed.priceHelperType || "stock";
+    const priceHelperStat = lastUsed.priceHelperStat || "avg";
+
+    // Calculate price from guide
+    const priceValue = getPriceFromGuide(priceGuide, condition, priceHelperType, priceHelperStat);
+    const priceString = priceValue != null ? priceValue.toFixed(2) : "";
+
+    // Set all fields at once
     form.reset(
       {
         location: lastUsed.location || "",
         quantityAvailable: 1,
-        condition: lastUsed.condition || "new",
-        colorId: lastUsed.colorId || "",
+        condition,
+        colorId: validColorId,
         fileId: lastUsed.fileId || defaultFileId || "none",
-        price: "",
-        priceHelperType: lastUsed.priceHelperType || "stock",
-        priceHelperStat: lastUsed.priceHelperStat || "avg",
+        price: priceString,
+        priceHelperType,
+        priceHelperStat,
       },
       { keepDirty: false },
     );
+
+    // Step 7: Trigger validation to enable button
+    setTimeout(() => form.trigger(), 0);
+
+    // Mark as initialized for this part
+    initializedForPartRef.current = part.partNumber;
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, part]);
+  }, [open, part, availableColors, getValidColorId, priceGuide, form]);
+
+  // Keep price synced when user changes condition/type/stat after initialization
+  useAutoPriceFromGuide({ form, priceGuide });
 
   // keep lastUsed in sync anytime relevant fields change while sheet is open
   useEffect(() => {

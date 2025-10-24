@@ -37,7 +37,8 @@ export const listInventoryItems = query({
     // Exclude archived items from standard listings
     const activeItems = items.filter((item) => !item.isArchived);
 
-    return activeItems.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort by createdAt descending (newest first)
+    return activeItems.sort((a, b) => b.createdAt - a.createdAt);
   },
 });
 

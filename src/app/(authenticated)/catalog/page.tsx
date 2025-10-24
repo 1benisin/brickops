@@ -94,6 +94,18 @@ export default function CatalogPage() {
     resetFilters: state.resetFilters,
   }));
 
+  // Clear location search when preference is disabled
+  useEffect(() => {
+    const useLocations =
+      currentUser?.user && "useSortLocations" in currentUser.user
+        ? (currentUser.user as { useSortLocations?: boolean }).useSortLocations ?? false
+        : false;
+    if (!useLocations && sortLocation) {
+      // User disabled locations but has active location search - clear it
+      setSortLocation("");
+    }
+  }, [currentUser?.user, sortLocation, setSortLocation]);
+
   const searchArgs = useMemo(() => {
     if (!businessAccountId) return "skip";
     return {
@@ -174,6 +186,11 @@ export default function CatalogPage() {
             // Pagination state is now managed by usePaginatedQuery and resets automatically when searchArgs change
           }}
           isLoading={searchLoading}
+          showLocationSearch={
+            currentUser?.user && "useSortLocations" in currentUser.user
+              ? (currentUser.user as { useSortLocations?: boolean }).useSortLocations ?? false
+              : false
+          }
         />
 
         <div className="grid gap-6 lg:grid-cols-1">

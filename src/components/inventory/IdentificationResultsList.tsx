@@ -2,22 +2,19 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import type {
-  PartIdentificationResult,
-  PartIdentificationItem,
-} from "@/lib/services/part-identification-service";
+import type { UnifiedSearchResult, UnifiedResultItem } from "./SearchOrCaptureDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { Camera, AlertTriangle } from "lucide-react";
+import { Camera, Search, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface IdentificationResultsListProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  results: PartIdentificationResult;
-  onSelectResult: (item: PartIdentificationItem) => void;
+  results: UnifiedSearchResult;
+  onSelectResult: (item: UnifiedResultItem) => void;
   onRetake: () => void;
 }
 
@@ -38,13 +35,15 @@ const getConfidenceColor = (score: number): string => {
 function IdentificationResultItem({
   item,
   index,
+  source,
   isLoading,
   onSelect,
 }: {
-  item: PartIdentificationItem;
+  item: UnifiedResultItem;
   index: number;
+  source: "camera" | "search";
   isLoading: boolean;
-  onSelect: (item: PartIdentificationItem) => void;
+  onSelect: (item: UnifiedResultItem) => void;
 }) {
   const [imageError, setImageError] = useState(false);
 
@@ -97,15 +96,23 @@ function IdentificationResultItem({
               )}
             </div>
 
-            {/* Confidence Badge */}
+            {/* Confidence Badge or Source Badge */}
             <div className="flex items-center gap-2">
-              <Badge
-                variant={getConfidenceBadgeVariant(item.score)}
-                className={cn("text-xs font-semibold", getConfidenceColor(item.score))}
-              >
-                {formatConfidence(item.score)} Confidence
-              </Badge>
-              {index === 0 && <span className="text-xs text-muted-foreground">Top match</span>}
+              {source === "camera" && item.score !== undefined ? (
+                <>
+                  <Badge
+                    variant={getConfidenceBadgeVariant(item.score)}
+                    className={cn("text-xs font-semibold", getConfidenceColor(item.score))}
+                  >
+                    {formatConfidence(item.score)} Confidence
+                  </Badge>
+                  {index === 0 && <span className="text-xs text-muted-foreground">Top match</span>}
+                </>
+              ) : (
+                <Badge variant="outline" className="text-xs">
+                  Catalog Match
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -126,32 +133,44 @@ export function IdentificationResultsList({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom">
-        <div className="h-full w-full sm:mx-auto sm:w-[75vw] space-y-4">
-          <SheetTitle>Identification Results</SheetTitle>
-          <SheetDescription>
-            Review identified parts and select one to add to inventory
-          </SheetDescription>
+        <div className="flex flex-col max-h-[85vh]">
+          <div className="flex-shrink-0">
+            <SheetTitle>
+              {results.source === "camera"
+                ? "Camera Identification Results"
+                : "Catalog Search Results"}
+            </SheetTitle>
+            <SheetDescription>
+              {results.source === "camera"
+                ? "Review identified parts and select one to add to inventory"
+                : "Select a part from the catalog to add to inventory"}
+            </SheetDescription>
+          </div>
 
           {/* Results List */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto min-h-0 mt-4">
             {!hasResults ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-6">
+              <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 text-center p-6">
                 <AlertTriangle className="h-12 w-12 text-muted-foreground" />
                 <div className="space-y-2">
-                  <h3 className="text-lg font-semibold">No Parts Identified</h3>
+                  <h3 className="text-lg font-semibold">
+                    {results.source === "camera" ? "No Parts Identified" : "No Results Found"}
+                  </h3>
                   <p className="text-sm text-muted-foreground max-w-md">
-                    We couldn&apos;t identify any LEGO parts in the image. Try retaking the photo
-                    with better lighting or a different angle.
+                    {results.source === "camera"
+                      ? "We couldn't identify any LEGO parts in the image. Try retaking the photo with better lighting or a different angle."
+                      : "No parts found matching your search. Try a different search term."}
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 pb-4">
                 {results.items.map((item, index) => (
                   <IdentificationResultItem
                     key={`${item.id}-${index}`}
                     item={item}
                     index={index}
+                    source={results.source}
                     isLoading={false}
                     onSelect={onSelectResult}
                   />
@@ -161,10 +180,19 @@ export function IdentificationResultsList({
           </div>
 
           {/* Actions */}
-          <div className="p-4 border-t bg-background space-y-2">
+          <div className="flex-shrink-0 pt-4 border-t">
             <Button variant="outline" onClick={onRetake} className="w-full" size="lg">
-              <Camera className="h-4 w-4 mr-2" />
-              Retake Photo
+              {results.source === "camera" ? (
+                <>
+                  <Camera className="h-4 w-4 mr-2" />
+                  Retake Photo
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" />
+                  Search Again
+                </>
+              )}
             </Button>
           </div>
         </div>

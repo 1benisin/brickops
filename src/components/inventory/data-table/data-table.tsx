@@ -25,10 +25,10 @@ export function DataTable<TData>({ data }: DataTableProps<TData>) {
   });
 
   return (
-    <div className="w-full">
-      <div className="overflow-hidden rounded-md border">
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-1 overflow-auto rounded-md border">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-background z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
