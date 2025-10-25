@@ -23,6 +23,7 @@ export const getCurrentUser = query({
         name: user.name,
         role: user.role,
         status: user.status,
+        useSortLocations: user.useSortLocations,
       },
       businessAccount: {
         _id: businessAccount._id,

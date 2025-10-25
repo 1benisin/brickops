@@ -84,9 +84,10 @@ const StatCard = ({
 export function InventoryTable() {
   const items = useQuery(api.inventory.queries.listInventoryItems);
   const totals = useQuery(api.inventory.queries.getInventoryTotals);
+  const syncConfig = useQuery(api.marketplace.queries.getMarketplaceSyncConfig);
 
   // Loading state
-  if (items === undefined || totals === undefined) {
+  if (items === undefined || totals === undefined || syncConfig === undefined) {
     return <TableSkeleton />;
   }
 
@@ -120,7 +121,7 @@ export function InventoryTable() {
 
       {/* Data Table - Scrollable Area */}
       <div className="flex-1 min-h-0">
-        <DataTable data={items} />
+        <DataTable data={items} syncConfig={syncConfig} />
       </div>
     </div>
   );

@@ -89,3 +89,44 @@ export const getCredentialStatus = query({
     };
   },
 });
+
+/**
+ * Get marketplace sync configuration for inventory display
+ * Returns whether each marketplace should show sync status columns
+ * Available to all authenticated users (not just owners)
+ */
+export const getMarketplaceSyncConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Authentication required");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || !user.businessAccountId) {
+      throw new ConvexError("User not found or not linked to business account");
+    }
+
+    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+
+    // Get all marketplace credentials for this business account
+    const credentials = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
+      .collect();
+
+    // Determine if each marketplace should show sync column
+    const bricklinkCred = credentials.find((c) => c.provider === "bricklink");
+    const brickowlCred = credentials.find((c) => c.provider === "brickowl");
+
+    return {
+      showBricklinkSync:
+        bricklinkCred !== undefined &&
+        bricklinkCred.isActive &&
+        (bricklinkCred.syncEnabled ?? true), // Default to true for backward compatibility
+      showBrickowlSync:
+        brickowlCred !== undefined && brickowlCred.isActive && (brickowlCred.syncEnabled ?? true), // Default to true for backward compatibility
+    };
+  },
+});
