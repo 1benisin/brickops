@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useTransition } from "react";
+import { useEffect, useMemo, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 
 import {
   Sheet,
@@ -17,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Form,
   FormControl,
@@ -34,21 +34,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { FileSelector } from "./FileSelector";
 import { ColorSelect } from "@/components/catalog/ColorSelect";
 import { PartPriceGuide } from "@/components/catalog/PartPriceGuide";
 import { UnitPriceInputGroup } from "./UnitPriceInputGroup";
 import { useGetPart } from "@/hooks/useGetPart";
-import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { useGetPriceGuide } from "@/hooks/useGetPriceGuide";
-import { useLocalStorage } from "@/hooks/use-local-storage";
+import type { InventoryItem, ItemCondition } from "@/types/inventory";
 import type { PriceGuide } from "@/types/catalog";
-import type { ItemCondition } from "@/types/inventory";
 
-const addInventorySchema = z.object({
+const editInventorySchema = z.object({
   colorId: z.string().min(1, "Color is required"),
   location: z.string().min(1, "Location is required"),
-  quantityAvailable: z.number().min(1, "Quantity must be at least 1"),
+  quantityAvailable: z.number().min(0, "Quantity must be at least 0"),
+  quantityReserved: z.number().min(0, "Quantity must be at least 0"),
   condition: z.enum(["new", "used"]),
   price: z
     .string()
@@ -56,28 +54,18 @@ const addInventorySchema = z.object({
     .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
       message: "Price must be a valid number",
     }),
-  fileId: z.union([z.string(), z.literal("none")]),
+  notes: z.string().optional(),
 
   // price helper controls (ui-only)
   priceHelperType: z.enum(["stock", "sold"]),
   priceHelperStat: z.enum(["min", "max", "avg", "qty_avg"]),
 });
-type AddInventoryFormData = z.infer<typeof addInventorySchema>;
+type EditInventoryFormData = z.infer<typeof editInventorySchema>;
 
-type LastUsedInventorySettings = {
-  condition: ItemCondition;
-  location: string;
-  colorId: string;
-  fileId: Id<"inventoryFiles"> | "none";
-  priceHelperType: "stock" | "sold";
-  priceHelperStat: "min" | "max" | "avg" | "qty_avg";
-};
-
-export type AddPartToInventoryDialogProps = {
+export type EditInventoryItemDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  partNumber: string | null;
-  defaultFileId?: Id<"inventoryFiles"> | "none";
+  item: InventoryItem | null;
 };
 
 /** map guide -> value */
@@ -108,8 +96,8 @@ function getPriceFromGuide(
 
 /** tiny hook: keeps price synced from guide whenever condition/type/stat change */
 function useAutoPriceFromGuide(opts: {
-  form: ReturnType<typeof useForm<AddInventoryFormData>>;
-  priceGuide: PriceGuide | undefined | null;
+  form: ReturnType<typeof useForm<EditInventoryFormData>>;
+  priceGuide: PriceGuide | null | undefined;
 }) {
   const { form, priceGuide } = opts;
   const watched = form.watch(["colorId", "condition", "priceHelperType", "priceHelperStat"]);
@@ -136,45 +124,26 @@ function useAutoPriceFromGuide(opts: {
   }, [priceGuide, ...watched]);
 }
 
-export function AddPartToInventoryDialog({
+export function EditInventoryItemDialog({
   open,
   onOpenChange,
-  partNumber,
-  defaultFileId,
-}: AddPartToInventoryDialogProps) {
-  const currentUser = useQuery(api.users.queries.getCurrentUser);
-  const businessAccountId = currentUser?.businessAccount?._id;
-
-  const { data: part, isLoading: isLoadingPart } = useGetPart(partNumber ?? null);
-  const { data: availableColors } = useGetPartColors(partNumber ?? null);
-  const addInventoryItem = useMutation(api.inventory.mutations.addInventoryItem);
+  item,
+}: EditInventoryItemDialogProps) {
+  const updateInventoryItem = useMutation(api.inventory.mutations.updateInventoryItem);
   const [isSubmitting, startTransition] = useTransition();
 
-  // Track if form has been initialized for the current part to prevent re-initialization
-  const initializedForPartRef = useRef<string | null>(null);
+  const { data: part, isLoading: isLoadingPart } = useGetPart(item?.partNumber ?? null);
 
-  // Persist last-used UI choices
-  const [lastUsed, setLastUsed] = useLocalStorage<LastUsedInventorySettings>(
-    "brickops:inventory:lastUsed",
-    {
-      condition: "new",
-      location: "",
-      colorId: "",
-      fileId: "none",
-      priceHelperType: "stock",
-      priceHelperStat: "avg",
-    },
-  );
-
-  const form = useForm<AddInventoryFormData>({
-    resolver: zodResolver(addInventorySchema),
+  const form = useForm<EditInventoryFormData>({
+    resolver: zodResolver(editInventorySchema),
     defaultValues: {
       location: "",
-      quantityAvailable: 1,
+      quantityAvailable: 0,
+      quantityReserved: 0,
       condition: "new",
       colorId: "",
-      fileId: "none",
       price: "",
+      notes: "",
       priceHelperType: "stock",
       priceHelperStat: "avg",
     },
@@ -187,134 +156,45 @@ export function AddPartToInventoryDialog({
     return colorId ? parseInt(colorId, 10) : null;
   }, [colorId]);
 
-  // Helper: validate colorId against available colors, return first color if invalid
-  const getValidColorId = useMemo(() => {
-    if (!availableColors || availableColors.length === 0) return null;
+  const { data: priceGuide } = useGetPriceGuide(item?.partNumber ?? null, colorIdNumber);
 
-    const colorIds = availableColors.map((c) => String(c.colorId));
-    const savedColorId = lastUsed.colorId;
-
-    // If saved color exists for this part, use it
-    if (savedColorId && colorIds.includes(savedColorId)) {
-      return savedColorId;
-    }
-
-    // Otherwise, default to first available color
-    return colorIds[0] || null;
-  }, [availableColors, lastUsed.colorId]);
-
-  const { data: priceGuide } = useGetPriceGuide(partNumber, colorIdNumber);
-
-  // Reset initialization flag when dialog closes or part changes
+  // Initialize form when item changes
   useEffect(() => {
-    if (!open) {
-      initializedForPartRef.current = null;
+    if (item && open) {
+      form.reset({
+        colorId: item.colorId,
+        location: item.location,
+        quantityAvailable: item.quantityAvailable,
+        quantityReserved: item.quantityReserved || 0,
+        condition: item.condition,
+        price: item.price?.toString() || "",
+        notes: item.notes || "",
+        priceHelperType: "stock",
+        priceHelperStat: "avg",
+      });
     }
-  }, [open]);
-
-  useEffect(() => {
-    if (partNumber && initializedForPartRef.current !== partNumber) {
-      initializedForPartRef.current = null;
-    }
-  }, [partNumber]);
-
-  // Coordinated initialization: wait for all data, then populate form in sequence
-  useEffect(() => {
-    // Step 1: Check if dialog is open and part is loaded
-    if (!open || !part) return;
-
-    // Skip if already initialized for this part
-    if (initializedForPartRef.current === part.partNumber) return;
-
-    // Step 2: Wait for colors to load
-    if (!availableColors || availableColors.length === 0) return;
-
-    // Step 3: Determine valid colorId (from localStorage or first color)
-    const validColorId = getValidColorId;
-    if (!validColorId) return;
-
-    // Step 4: Wait for price guide to load for the selected color
-    // (priceGuide loads based on colorIdNumber which is derived from form.watch("colorId"))
-    // On first load, we need to set the color first, then wait for price guide
-    const currentColorId = form.getValues("colorId");
-
-    // If color hasn't been set yet, set it and wait for next render cycle
-    if (currentColorId !== validColorId) {
-      form.setValue("colorId", validColorId, { shouldValidate: false });
-      return;
-    }
-
-    // Step 5: Now that color is set, wait for price guide
-    if (!priceGuide) return;
-
-    // Step 6: All data is ready - populate all form fields
-    const condition = lastUsed.condition || "new";
-    const priceHelperType = lastUsed.priceHelperType || "stock";
-    const priceHelperStat = lastUsed.priceHelperStat || "avg";
-
-    // Calculate price from guide
-    const priceValue = getPriceFromGuide(priceGuide, condition, priceHelperType, priceHelperStat);
-    const priceString = priceValue != null ? priceValue.toFixed(2) : "";
-
-    // Set all fields at once
-    form.reset(
-      {
-        location: lastUsed.location || "",
-        quantityAvailable: 1,
-        condition,
-        colorId: validColorId,
-        fileId: lastUsed.fileId || defaultFileId || "none",
-        price: priceString,
-        priceHelperType,
-        priceHelperStat,
-      },
-      { keepDirty: false },
-    );
-
-    // Step 7: Trigger validation to enable button
-    setTimeout(() => form.trigger(), 0);
-
-    // Mark as initialized for this part
-    initializedForPartRef.current = part.partNumber;
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, part, availableColors, getValidColorId, priceGuide, form]);
+  }, [item, open, form]);
 
   // Keep price synced when user changes condition/type/stat after initialization
   useAutoPriceFromGuide({ form, priceGuide });
 
-  // keep lastUsed in sync anytime relevant fields change while sheet is open
-  useEffect(() => {
-    if (!open) return;
-    const subscription = form.watch((vals) => {
-      setLastUsed({
-        condition: (vals.condition as "new" | "used") ?? "new",
-        location: vals.location ?? "",
-        colorId: vals.colorId ?? "",
-        fileId: (vals.fileId as Id<"inventoryFiles"> | "none") ?? "none",
-        priceHelperType: (vals.priceHelperType as "stock" | "sold") ?? "stock",
-        priceHelperStat: (vals.priceHelperStat as "min" | "max" | "avg" | "qty_avg") ?? "avg",
-      });
-    });
-    return () => subscription.unsubscribe();
-  }, [form, open, setLastUsed]);
+  const onSubmit = (data: EditInventoryFormData) => {
+    if (!item) return;
 
-  const onSubmit = (data: AddInventoryFormData) => {
-    if (!part) return;
-
-    startTransition(async () => {
-      await addInventoryItem({
-        name: part.name,
-        partNumber: part.partNumber,
+    startTransition(() => {
+      updateInventoryItem({
+        itemId: item._id,
         colorId: data.colorId,
         location: data.location,
         quantityAvailable: data.quantityAvailable,
+        quantityReserved: data.quantityReserved,
         condition: data.condition,
         price: Number(data.price),
-        fileId:
-          data.fileId && data.fileId !== "none" ? (data.fileId as Id<"inventoryFiles">) : undefined,
+        notes: data.notes || undefined,
+        reason: "Manual edit",
+      }).then(() => {
+        onOpenChange(false);
       });
-      onOpenChange(false);
     });
   };
 
@@ -322,9 +202,9 @@ export function AddPartToInventoryDialog({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="overflow-y-auto  h-[90vh]">
+      <SheetContent side="bottom" className="overflow-y-auto h-[90vh]">
         <SheetHeader className="pb-4">
-          <SheetTitle className="sr-only">Add Part to Inventory</SheetTitle>
+          <SheetTitle className="sr-only">Edit Inventory Item</SheetTitle>
           <SheetDescription>
             {loading
               ? "Loading part details…"
@@ -349,7 +229,7 @@ export function AddPartToInventoryDialog({
               <div className="flex-1 space-y-3">
                 {/* Core fields */}
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  <FormField<AddInventoryFormData, "colorId">
+                  <FormField<EditInventoryFormData, "colorId">
                     control={form.control}
                     name="colorId"
                     render={({ field }) => (
@@ -357,7 +237,7 @@ export function AddPartToInventoryDialog({
                         <FormLabel className="text-xs">Color</FormLabel>
                         <FormControl>
                           <ColorSelect
-                            partNumber={partNumber}
+                            partNumber={item?.partNumber ?? null}
                             value={field.value}
                             onChange={field.onChange}
                             placeholder="Select color..."
@@ -368,7 +248,7 @@ export function AddPartToInventoryDialog({
                     )}
                   />
 
-                  <FormField<AddInventoryFormData, "location">
+                  <FormField<EditInventoryFormData, "location">
                     control={form.control}
                     name="location"
                     render={({ field }) => (
@@ -386,27 +266,7 @@ export function AddPartToInventoryDialog({
                     )}
                   />
 
-                  <FormField<AddInventoryFormData, "quantityAvailable">
-                    control={form.control}
-                    name="quantityAvailable"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Quantity</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={field.value}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                            onFocus={(e) => e.target.select()}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField<AddInventoryFormData, "condition">
+                  <FormField<EditInventoryFormData, "condition">
                     control={form.control}
                     name="condition"
                     render={({ field }) => (
@@ -428,7 +288,47 @@ export function AddPartToInventoryDialog({
                     )}
                   />
 
-                  <FormField<AddInventoryFormData, "price">
+                  <FormField<EditInventoryFormData, "quantityAvailable">
+                    control={form.control}
+                    name="quantityAvailable"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Available Quantity</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={field.value}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField<EditInventoryFormData, "quantityReserved">
+                    control={form.control}
+                    name="quantityReserved"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Reserved Quantity</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={field.value}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField<EditInventoryFormData, "price">
                     control={form.control}
                     name="price"
                     render={({ field }) => (
@@ -455,27 +355,28 @@ export function AddPartToInventoryDialog({
                   />
                 </div>
 
-                {/* File selection */}
-                {businessAccountId && (
-                  <FormField<AddInventoryFormData, "fileId">
-                    control={form.control}
-                    name="fileId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <FileSelector
-                            value={field.value as Id<"inventoryFiles"> | "none" | undefined}
-                            onChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                )}
+                {/* Notes field */}
+                <FormField<EditInventoryFormData, "notes">
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Notes</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Optional notes about this inventory item..."
+                          className="min-h-[80px]"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {/* Inline price guide to cross-check visually */}
                 <PartPriceGuide
-                  partNumber={partNumber}
+                  partNumber={item?.partNumber ?? null}
                   colorId={form.getValues("colorId") || null}
                 />
               </div>
@@ -495,7 +396,7 @@ export function AddPartToInventoryDialog({
                   disabled={!form.formState.isValid || isSubmitting}
                   className="flex-1"
                 >
-                  {isSubmitting ? "Adding…" : "Add to Inventory"}
+                  {isSubmitting ? "Saving…" : "Save Changes"}
                 </Button>
               </div>
             </form>

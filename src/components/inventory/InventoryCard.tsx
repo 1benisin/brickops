@@ -1,20 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-export type InventoryCardItem = {
-  id: string;
-  partNumber: string;
-  colorId: string;
-  location: string;
-  quantityAvailable: number;
-  condition: "new" | "used";
-};
+import type { InventoryItem, ItemCondition } from "@/types/inventory";
 
 export interface InventoryCardProps {
-  item: InventoryCardItem;
+  item: InventoryItem;
   onSelect?: (itemId: string) => void;
 }
 
-const conditionLabel: Record<InventoryCardItem["condition"], string> = {
+const conditionLabel: Record<ItemCondition, string> = {
   new: "New",
   used: "Used",
 };
@@ -25,7 +17,7 @@ export const InventoryCard = ({ item, onSelect }: InventoryCardProps) => {
       data-testid="inventory-card"
       role="button"
       className="cursor-pointer space-y-3"
-      onClick={() => onSelect?.(item.id)}
+      onClick={() => onSelect?.(item._id)}
     >
       <CardHeader className="space-y-1">
         <CardTitle data-testid="inventory-part-number" className="text-xl font-semibold">

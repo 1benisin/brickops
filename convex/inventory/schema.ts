@@ -25,8 +25,6 @@ export const inventoryTables = {
     quantityAvailable: v.number(),
     // Quantity splits to support status tracking
     quantityReserved: v.number(),
-    quantitySold: v.number(),
-    status: v.union(v.literal("available"), v.literal("reserved"), v.literal("sold")),
     condition: v.union(v.literal("new"), v.literal("used")),
     price: v.optional(v.number()), // Unit price for marketplace sync
     notes: v.optional(v.string()), // Description/remarks from marketplace
@@ -36,68 +34,61 @@ export const inventoryTables = {
     // Soft delete support
     isArchived: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
-    // Sync status tracking (Story 3.4)
-    lastSyncedAt: v.optional(v.number()),
-    syncErrors: v.optional(
-      v.array(
-        v.object({
-          provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
-          error: v.string(),
-          occurredAt: v.number(),
-        }),
-      ),
-    ),
     // Inventory file association (Story 3.5)
     fileId: v.optional(v.id("inventoryFiles")),
-    bricklinkLotId: v.optional(v.number()), // BrickLink inventory_id for sync tracking
-    brickowlLotId: v.optional(v.string()), // BrickOwl lot_id for sync tracking (Story 3.3)
-    // Per-marketplace sync status tracking (Story 3.5)
-    bricklinkSyncStatus: v.optional(
-      v.union(v.literal("pending"), v.literal("syncing"), v.literal("synced"), v.literal("failed")),
+    // Consolidated marketplace sync tracking (refactored from individual fields)
+    marketplaceSync: v.optional(
+      v.object({
+        bricklink: v.optional(
+          v.object({
+            lotId: v.optional(v.number()),
+            status: v.union(
+              v.literal("pending"),
+              v.literal("syncing"),
+              v.literal("synced"),
+              v.literal("failed"),
+            ),
+            lastSyncAttempt: v.number(),
+            error: v.optional(v.string()),
+          }),
+        ),
+        brickowl: v.optional(
+          v.object({
+            lotId: v.optional(v.string()),
+            status: v.union(
+              v.literal("pending"),
+              v.literal("syncing"),
+              v.literal("synced"),
+              v.literal("failed"),
+            ),
+            lastSyncAttempt: v.number(),
+            error: v.optional(v.string()),
+          }),
+        ),
+      }),
     ),
-    brickowlSyncStatus: v.optional(
-      v.union(v.literal("pending"), v.literal("syncing"), v.literal("synced"), v.literal("failed")),
-    ),
-    // Sync error details for hover states
-    bricklinkSyncError: v.optional(v.string()),
-    brickowlSyncError: v.optional(v.string()),
   })
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_bricklinkLotId", ["businessAccountId", "bricklinkLotId"])
-    .index("by_brickowlLotId", ["businessAccountId", "brickowlLotId"])
     .index("by_fileId", ["fileId"]),
 
   // Historical audit trail for all inventory changes (local tracking)
   inventoryHistory: defineTable({
     businessAccountId: v.id("businessAccounts"),
     itemId: v.id("inventoryItems"),
-    changeType: v.union(
-      v.literal("create"),
-      v.literal("update"),
-      v.literal("adjust"),
-      v.literal("delete"),
-      v.literal("batch_sync"), // Story 3.5 - batch sync success
-      v.literal("batch_sync_failed"), // Story 3.5 - batch sync failure
-    ),
-    // Deltas for quantities (optional per event)
-    deltaAvailable: v.optional(v.number()),
-    deltaReserved: v.optional(v.number()),
-    deltaSold: v.optional(v.number()),
-    fromStatus: v.optional(
-      v.union(v.literal("available"), v.literal("reserved"), v.literal("sold")),
-    ),
-    toStatus: v.optional(v.union(v.literal("available"), v.literal("reserved"), v.literal("sold"))),
-    actorUserId: v.id("users"),
-    reason: v.optional(v.string()),
-    createdAt: v.number(),
-    // Batch sync specific fields (Story 3.5)
-    marketplace: v.optional(v.union(v.literal("bricklink"), v.literal("brickowl"))),
-    marketplaceLotId: v.optional(v.union(v.number(), v.string())),
-    syncError: v.optional(v.string()),
+    timestamp: v.number(), // Renamed from createdAt
+    userId: v.optional(v.id("users")), // Renamed from actorUserId, optional for automation
+    action: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
+    // Change snapshots - ONLY store changed fields
+    oldData: v.optional(v.any()), // Partial<InventoryItem> - before state
+    newData: v.optional(v.any()), // Partial<InventoryItem> - after state
+    // Context / metadata
+    source: v.union(v.literal("user"), v.literal("bricklink"), v.literal("order")),
+    reason: v.optional(v.string()), // User-provided explanation
+    relatedOrderId: v.optional(v.string()), // For order-triggered changes
   })
-    .index("by_item", ["itemId"]) // fetch logs per item
-    .index("by_businessAccount", ["businessAccountId"]) // fetch logs per tenant
-    .index("by_createdAt", ["businessAccountId", "createdAt"]),
+    .index("by_item", ["itemId"])
+    .index("by_businessAccount", ["businessAccountId"])
+    .index("by_timestamp", ["businessAccountId", "timestamp"]),
 
   // Sync queue for marketplace orchestration (Story 3.4)
   inventorySyncQueue: defineTable({
@@ -119,17 +110,10 @@ export const inventoryTables = {
     ),
     bricklinkSyncedAt: v.optional(v.number()),
     brickowlSyncedAt: v.optional(v.number()),
-    bricklinkSyncError: v.optional(v.string()),
-    brickowlSyncError: v.optional(v.string()),
 
     // Conflict tracking
     conflictStatus: v.optional(v.union(v.literal("detected"), v.literal("resolved"))),
     conflictDetails: v.optional(v.any()),
-
-    // Undo tracking (for Story 3.5)
-    isUndo: v.optional(v.boolean()),
-    undoesChangeId: v.optional(v.id("inventorySyncQueue")),
-    undoneByChangeId: v.optional(v.id("inventorySyncQueue")),
 
     // Metadata
     correlationId: v.string(),
@@ -139,6 +123,7 @@ export const inventoryTables = {
     fileId: v.optional(v.id("inventoryFiles")), // Track if change originated from file
   })
     .index("by_business_pending", ["businessAccountId", "syncStatus"])
+    .index("by_business_createdAt", ["businessAccountId", "createdAt"]) // Story 3.6 - paginate history by createdAt DESC
     .index("by_inventory_item", ["inventoryItemId", "createdAt"])
     .index("by_correlation", ["correlationId"]),
 };

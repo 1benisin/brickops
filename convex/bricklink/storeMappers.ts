@@ -40,12 +40,9 @@ export function mapBricklinkToConvexInventory(
     location,
     quantityAvailable: bricklinkInventory.quantity,
     quantityReserved: 0, // BrickLink doesn't track reserved separately
-    quantitySold: 0, // BrickLink doesn't track sold separately
-    status: "available", // Default status for imported inventory
     condition,
     price,
     notes,
-    bricklinkLotId: bricklinkInventory.inventory_id,
   };
 }
 

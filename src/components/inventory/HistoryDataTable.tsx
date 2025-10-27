@@ -10,10 +10,9 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { createColumns, type MarketplaceSyncConfig } from "./columns";
-import type { InventoryItem } from "@/types/inventory";
+import { createHistoryColumns, type InventoryHistoryEntry } from "./data-table/history-columns";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { DataTableColumnManager } from "./data-table-column-manager";
+import { DataTableColumnManager } from "./data-table/data-table-column-manager";
 
 import {
   Table,
@@ -23,11 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { EditInventoryItemDialog } from "@/components/inventory/EditInventoryItemDialog";
 
-interface DataTableProps<TData> {
-  data: TData[];
-  syncConfig: MarketplaceSyncConfig;
+interface HistoryDataTableProps {
+  data: InventoryHistoryEntry[];
 }
 
 interface TableState {
@@ -36,38 +33,42 @@ interface TableState {
   columnOrder: ColumnOrderState;
 }
 
-export function DataTable<TData>({ data, syncConfig }: DataTableProps<TData>) {
-  const [editingItem, setEditingItem] = React.useState<InventoryItem | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+export function HistoryDataTable({ data }: HistoryDataTableProps) {
+  const columns = React.useMemo(() => createHistoryColumns(), []);
 
-  const handleEditItem = React.useCallback((item: InventoryItem) => {
-    setEditingItem(item);
-    setIsEditDialogOpen(true);
-  }, []);
+  // Transform data to include paired rows (new and old state)
+  const pairedData = React.useMemo(() => {
+    const paired: InventoryHistoryEntry[] = [];
+    data.forEach((entry) => {
+      // New state row
+      paired.push({
+        ...entry,
+        _id: `${entry._id}-new`,
+        stateType: "new",
+      });
+      // Old state row
+      paired.push({
+        ...entry,
+        _id: `${entry._id}-old`,
+        stateType: "old",
+      });
+    });
+    return paired;
+  }, [data]);
 
-  const handleEditDialogClose = React.useCallback(() => {
-    setIsEditDialogOpen(false);
-    setEditingItem(null);
-  }, []);
-
-  const columns = React.useMemo(
-    () => createColumns(syncConfig, handleEditItem),
-    [syncConfig, handleEditItem],
-  );
-
-  // Use localStorage hook for persistent state - initialize with empty columnOrder
+  // Use localStorage hook for persistent state
   const [tableState, setTableState, removeTableState] = useLocalStorage<TableState>(
-    "inventory-table-state",
+    "inventory-history-table-state",
     {
       columnVisibility: {},
       columnSizing: {},
-      columnOrder: [], // Start empty; we will initialize from leaf columns below
+      columnOrder: [],
     },
   );
 
   // Column pin policy
-  const pinnedStart = React.useMemo(() => ["select"], []);
-  const pinnedEnd = React.useMemo(() => ["actions"], []);
+  const pinnedStart = React.useMemo(() => [] as string[], []);
+  const pinnedEnd = React.useMemo(() => [] as string[], []);
 
   // Helper: sanitize order against canonical leaf IDs and pin policy
   const sanitizeOrder = React.useCallback(
@@ -128,8 +129,8 @@ export function DataTable<TData>({ data, syncConfig }: DataTableProps<TData>) {
   );
 
   const table = useReactTable({
-    data,
-    columns: columns as ColumnDef<TData>[],
+    data: pairedData,
+    columns: columns as ColumnDef<InventoryHistoryEntry>[],
     getCoreRowModel: getCoreRowModel(),
 
     // Column visibility, sizing, and ordering
@@ -143,7 +144,7 @@ export function DataTable<TData>({ data, syncConfig }: DataTableProps<TData>) {
     onColumnOrderChange: setColumnOrder,
 
     // Column sizing configuration
-    enableColumnResizing: false, // We'll control this manually in the dropdown
+    enableColumnResizing: false,
     columnResizeMode: "onChange",
   });
 
@@ -169,7 +170,7 @@ export function DataTable<TData>({ data, syncConfig }: DataTableProps<TData>) {
     <>
       <div className="w-full h-full flex flex-col">
         {/* Column Management Dropdown */}
-        <div className="flex justify-end">
+        <div className="flex justify-end mb-2">
           <DataTableColumnManager table={table} onResetAll={removeTableState} />
         </div>
 
@@ -228,13 +229,6 @@ export function DataTable<TData>({ data, syncConfig }: DataTableProps<TData>) {
           </Table>
         </div>
       </div>
-
-      {/* Edit Dialog */}
-      <EditInventoryItemDialog
-        open={isEditDialogOpen}
-        onOpenChange={handleEditDialogClose}
-        item={editingItem}
-      />
     </>
   );
 }

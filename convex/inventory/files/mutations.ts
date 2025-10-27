@@ -164,28 +164,48 @@ export const recordBatchSyncResults = internalMutation({
 
         // Update inventoryItems with sync status and marketplace IDs
         const updates: {
-          bricklinkSyncStatus?: "synced";
-          brickowlSyncStatus?: "synced";
-          bricklinkLotId?: number;
-          brickowlLotId?: string;
-          lastSyncedAt: number;
+          marketplaceSync?: {
+            bricklink?: {
+              lotId?: number;
+              status: "pending" | "syncing" | "synced" | "failed";
+              lastSyncAttempt: number;
+              error?: string;
+            };
+            brickowl?: {
+              lotId?: string;
+              status: "pending" | "syncing" | "synced" | "failed";
+              lastSyncAttempt: number;
+              error?: string;
+            };
+          };
           updatedAt: number;
         } = {
-          lastSyncedAt: timestamp,
           updatedAt: timestamp,
         };
 
         // Set provider-specific sync status and marketplace ID
         if (result.provider === "bricklink") {
-          updates.bricklinkSyncStatus = "synced";
-          if (typeof result.marketplaceLotId === "number") {
-            updates.bricklinkLotId = result.marketplaceLotId;
-          }
+          updates.marketplaceSync = {
+            ...item.marketplaceSync,
+            bricklink: {
+              lotId:
+                typeof result.marketplaceLotId === "number" ? result.marketplaceLotId : undefined,
+              status: "synced",
+              lastSyncAttempt: timestamp,
+              error: undefined,
+            },
+          };
         } else if (result.provider === "brickowl") {
-          updates.brickowlSyncStatus = "synced";
-          if (typeof result.marketplaceLotId === "string") {
-            updates.brickowlLotId = result.marketplaceLotId;
-          }
+          updates.marketplaceSync = {
+            ...item.marketplaceSync,
+            brickowl: {
+              lotId:
+                typeof result.marketplaceLotId === "string" ? result.marketplaceLotId : undefined,
+              status: "synced",
+              lastSyncAttempt: timestamp,
+              error: undefined,
+            },
+          };
         }
 
         await ctx.db.patch(result.itemId, updates);
@@ -206,29 +226,48 @@ export const recordBatchSyncResults = internalMutation({
         // FAILED SYNC
         // ========================================
 
-        // Update inventoryItems with failed status and add to syncErrors
-        const syncErrors = item.syncErrors || [];
-        syncErrors.push({
-          provider: result.provider,
-          error: result.error || "Unknown error",
-          occurredAt: timestamp,
-        });
-
-        // Set provider-specific failed status
+        // Update inventoryItems with failed status
         const failedUpdates: {
-          bricklinkSyncStatus?: "failed";
-          brickowlSyncStatus?: "failed";
-          syncErrors: typeof syncErrors;
+          marketplaceSync?: {
+            bricklink?: {
+              lotId?: number;
+              status: "pending" | "syncing" | "synced" | "failed";
+              lastSyncAttempt: number;
+              error?: string;
+            };
+            brickowl?: {
+              lotId?: string;
+              status: "pending" | "syncing" | "synced" | "failed";
+              lastSyncAttempt: number;
+              error?: string;
+            };
+          };
           updatedAt: number;
         } = {
-          syncErrors,
           updatedAt: timestamp,
         };
 
+        // Set provider-specific failed status
         if (result.provider === "bricklink") {
-          failedUpdates.bricklinkSyncStatus = "failed";
+          failedUpdates.marketplaceSync = {
+            ...item.marketplaceSync,
+            bricklink: {
+              ...item.marketplaceSync?.bricklink,
+              status: "failed",
+              lastSyncAttempt: timestamp,
+              error: result.error || "Unknown error",
+            },
+          };
         } else if (result.provider === "brickowl") {
-          failedUpdates.brickowlSyncStatus = "failed";
+          failedUpdates.marketplaceSync = {
+            ...item.marketplaceSync,
+            brickowl: {
+              ...item.marketplaceSync?.brickowl,
+              status: "failed",
+              lastSyncAttempt: timestamp,
+              error: result.error || "Unknown error",
+            },
+          };
         }
 
         await ctx.db.patch(result.itemId, failedUpdates);

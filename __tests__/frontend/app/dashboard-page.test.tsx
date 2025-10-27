@@ -40,7 +40,7 @@ describe("DashboardPage", () => {
     // Arrange: Sequentially return user then totals
     mockedUseQuery.mockReturnValueOnce({ businessAccount: { _id: "ba_1" } }).mockReturnValueOnce({
       counts: { items: 3 },
-      totals: { available: 10, reserved: 2, sold: 1 },
+      totals: { available: 10, reserved: 2 },
     });
 
     // Act
@@ -53,6 +53,5 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("totals-items")).toHaveTextContent("3");
     expect(screen.getByTestId("totals-available")).toHaveTextContent("10");
     expect(screen.getByTestId("totals-reserved")).toHaveTextContent("2");
-    expect(screen.getByTestId("totals-sold")).toHaveTextContent("1");
   });
 });

@@ -447,8 +447,8 @@ async function syncCreate(
 
   const result = await client.createInventory(payload, { idempotencyKey });
 
-  // Extract marketplace ID from provider-specific field
-  const marketplaceId = provider === "bricklink" ? result.bricklinkLotId : result.brickowlLotId;
+  // Extract marketplace ID from result
+  const marketplaceId = result.marketplaceId;
 
   return {
     success: result.success,
@@ -477,7 +477,9 @@ async function syncUpdate(
     itemId: item.inventoryItemId,
   });
   const marketplaceId =
-    provider === "bricklink" ? inventoryItem?.bricklinkLotId : inventoryItem?.brickowlLotId;
+    provider === "bricklink"
+      ? inventoryItem?.marketplaceSync?.bricklink?.lotId
+      : inventoryItem?.marketplaceSync?.brickowl?.lotId;
 
   if (!marketplaceId) {
     // Item not yet synced to this provider - treat as create
@@ -489,9 +491,8 @@ async function syncUpdate(
 
   const result = await client.updateInventory(marketplaceId, payload, { idempotencyKey });
 
-  // Extract marketplace ID from provider-specific field
-  const updatedMarketplaceId =
-    provider === "bricklink" ? result.bricklinkLotId : result.brickowlLotId;
+  // Extract marketplace ID from result
+  const updatedMarketplaceId = result.marketplaceId;
 
   return {
     success: result.success,
@@ -514,8 +515,8 @@ async function syncDelete(
   // Get marketplace ID from previous data
   const marketplaceId =
     provider === "bricklink"
-      ? change.previousData?.bricklinkLotId
-      : change.previousData?.brickowlLotId;
+      ? change.previousData?.marketplaceSync?.bricklink?.lotId
+      : change.previousData?.marketplaceSync?.brickowl?.lotId;
 
   if (!marketplaceId) {
     // Item was never synced to this provider - mark as success (nothing to delete)

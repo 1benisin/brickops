@@ -41,6 +41,7 @@ import { AddInventoryItemButton } from "./AddInventoryItemButton";
 import { BatchSyncDialog } from "./BatchSyncDialog";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { bestTextOn } from "@/lib/utils";
+import type { SyncStatus, ItemCondition } from "@/types/inventory";
 
 // Color badge component that properly uses hooks
 function PartColorBadge({ partNumber, colorId }: { partNumber: string; colorId: string }) {
@@ -71,8 +72,7 @@ export interface InventoryFileDetailProps {
   fileId: Id<"inventoryFiles">;
 }
 
-type SyncStatus = "pending" | "syncing" | "synced" | "failed" | undefined;
-type Condition = "new" | "used" | "all";
+type Condition = ItemCondition | "all";
 type SortField = "quantity" | "price" | "date";
 type SortDirection = "asc" | "desc";
 
@@ -115,8 +115,8 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
     if (syncStatusFilter !== "all") {
       filtered = filtered.filter(
         (item) =>
-          item.bricklinkSyncStatus === syncStatusFilter ||
-          item.brickowlSyncStatus === syncStatusFilter,
+          item.marketplaceSync?.bricklink?.status === syncStatusFilter ||
+          item.marketplaceSync?.brickowl?.status === syncStatusFilter,
       );
     }
 
@@ -194,7 +194,10 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
     }
   };
 
-  const getSyncStatusBadges = (bricklinkStatus?: SyncStatus, brickowlStatus?: SyncStatus) => {
+  const getSyncStatusBadges = (marketplaceSync?: {
+    bricklink?: { status: SyncStatus };
+    brickowl?: { status: SyncStatus };
+  }) => {
     const variants = {
       pending: { variant: "secondary" as const, className: "bg-yellow-100 text-yellow-800" },
       syncing: { variant: "default" as const, className: "bg-blue-100 text-blue-800" },
@@ -204,8 +207,8 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
 
     const badges: React.JSX.Element[] = [];
 
-    if (bricklinkStatus) {
-      const config = variants[bricklinkStatus];
+    if (marketplaceSync?.bricklink?.status) {
+      const config = variants[marketplaceSync.bricklink.status];
       badges.push(
         <Badge
           key="bricklink"
@@ -213,13 +216,13 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
           className={`${config.className} text-xs`}
           title="BrickLink sync status"
         >
-          BL: {bricklinkStatus}
+          BL: {marketplaceSync.bricklink.status}
         </Badge>,
       );
     }
 
-    if (brickowlStatus) {
-      const config = variants[brickowlStatus];
+    if (marketplaceSync?.brickowl?.status) {
+      const config = variants[marketplaceSync.brickowl.status];
       badges.push(
         <Badge
           key="brickowl"
@@ -227,7 +230,7 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
           className={`${config.className} text-xs`}
           title="BrickOwl sync status"
         >
-          BO: {brickowlStatus}
+          BO: {marketplaceSync.brickowl.status}
         </Badge>,
       );
     }
@@ -471,7 +474,7 @@ export function InventoryFileDetail({ fileId }: InventoryFileDetailProps) {
                       : "-"}
                   </TableCell>
                   <TableCell data-testid="item-sync-status" className="hidden md:table-cell">
-                    {getSyncStatusBadges(item.bricklinkSyncStatus, item.brickowlSyncStatus)}
+                    {getSyncStatusBadges(item.marketplaceSync)}
                   </TableCell>
                 </TableRow>
               ))

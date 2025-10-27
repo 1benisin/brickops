@@ -44,12 +44,9 @@ export function mapBrickOwlToConvexInventory(
     location,
     quantityAvailable: brickowlInventory.quantity,
     quantityReserved: 0, // BrickOwl doesn't track reserved separately
-    quantitySold: 0, // BrickOwl doesn't track sold separately
-    status: brickowlInventory.for_sale === 1 ? "available" : "reserved", // Map for_sale flag
     condition,
     price,
     notes,
-    brickowlLotId: brickowlInventory.lot_id,
   };
 }
 
@@ -130,8 +127,8 @@ export function mapConvexToBrickOwlUpdate(
   // Map notes to public_note (public-facing description visible to customers)
   const public_note = convexInventory.notes || undefined;
 
-  // Map for_sale based on status
-  const for_sale = convexInventory.status === "available" ? (1 as const) : (0 as const);
+  // Map for_sale based on availability (default to available)
+  const for_sale = 1 as const;
 
   // Map condition back to BrickOwl format
   const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedc" as const);

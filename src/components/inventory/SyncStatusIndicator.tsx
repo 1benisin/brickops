@@ -1,18 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
-export type SyncStatus = "pending" | "syncing" | "synced" | "failed" | undefined;
-
-export interface SyncStatusIndicatorProps {
-  item: {
-    bricklinkSyncStatus?: SyncStatus;
-    brickowlSyncStatus?: SyncStatus;
-    bricklinkSyncError?: string;
-    brickowlSyncError?: string;
-  };
-  marketplace: "bricklink" | "brickowl";
-  syncEnabled?: boolean;
-}
+import type { SyncStatus, SyncStatusIndicatorProps } from "@/types/inventory";
 
 const getStatusVariant = (
   status: SyncStatus,
@@ -68,8 +56,11 @@ export const SyncStatusIndicator = ({
 }: SyncStatusIndicatorProps) => {
   if (!syncEnabled) return null; // Don't show status if sync disabled
 
-  const status = marketplace === "bricklink" ? item.bricklinkSyncStatus : item.brickowlSyncStatus;
-  const error = marketplace === "bricklink" ? item.bricklinkSyncError : item.brickowlSyncError;
+  const marketplaceData =
+    marketplace === "bricklink" ? item.marketplaceSync?.bricklink : item.marketplaceSync?.brickowl;
+
+  const status = marketplaceData?.status;
+  const error = marketplaceData?.error;
 
   return (
     <TooltipProvider>

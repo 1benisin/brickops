@@ -4,10 +4,11 @@ import { screen } from "@testing-library/react";
 import { InventoryCard } from "@/components/inventory/InventoryCard";
 import { renderWithProviders } from "@/test-utils/render-with-providers";
 import { setMockPathname } from "@/test-utils/next-navigation";
+import type { Id } from "@convex/_generated/dataModel";
 
 describe("InventoryCard", () => {
   const mockItem = {
-    id: "item-123",
+    _id: "item-123" as Id<"inventoryItems">,
     partNumber: "3001",
     colorId: "5",
     location: "A1-B2",

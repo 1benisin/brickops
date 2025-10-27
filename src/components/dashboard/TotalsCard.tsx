@@ -19,7 +19,6 @@ export function TotalsCard({ isLoading }: TotalsCardProps) {
       items: totals?.counts.items ?? 0,
       available: totals?.totals.available ?? 0,
       reserved: totals?.totals.reserved ?? 0,
-      sold: totals?.totals.sold ?? 0,
     };
   }, [totals]);
 
@@ -49,12 +48,6 @@ export function TotalsCard({ isLoading }: TotalsCardProps) {
           <div className="text-muted-foreground">Reserved</div>
           <div className="font-medium" data-testid="totals-reserved">
             {values.reserved}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Sold</div>
-          <div className="font-medium" data-testid="totals-sold">
-            {values.sold}
           </div>
         </div>
       </CardContent>
