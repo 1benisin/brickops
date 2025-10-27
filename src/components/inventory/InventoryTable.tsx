@@ -113,10 +113,9 @@ export function InventoryTable() {
   return (
     <div className="flex flex-col gap-4 flex-1 min-h-0">
       {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-3 flex-shrink-0">
+      <div className="grid gap-4 md:grid-cols-2 flex-shrink-0">
         <StatCard label="Available" value={totals?.totals.available} isLoading={false} />
         <StatCard label="Reserved" value={totals?.totals.reserved} isLoading={false} />
-        <StatCard label="Sold" value={totals?.totals.sold} isLoading={false} />
       </div>
 
       {/* Data Table - Scrollable Area */}

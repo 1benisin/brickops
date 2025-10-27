@@ -4,9 +4,6 @@ export type StoreIdentifier = {
   locationId: string;
 };
 
-export type InventoryItem = {
-  id: string;
-  name: string;
-  quantityOnHand: number;
-  reorderPoint: number;
-};
+// NOTE: InventoryItem type has been moved to src/types/inventory.ts
+// and is now derived from backend validators for type safety.
+// Use: import type { InventoryItem } from "@/types/inventory";

@@ -112,10 +112,10 @@ export const batchSyncFile = action({
           itemsToSync = items.filter((item) => {
             if (provider === "bricklink") {
               // Skip if already synced to BrickLink
-              return !(item.bricklinkSyncStatus === "synced" || item.bricklinkLotId);
+              return !(item.marketplaceSync?.bricklink?.status === "synced");
             } else if (provider === "brickowl") {
               // Skip if already synced to BrickOwl
-              return !(item.brickowlSyncStatus === "synced" && item.brickowlLotId);
+              return !(item.marketplaceSync?.brickowl?.status === "synced");
             }
             return true;
           });
@@ -133,12 +133,16 @@ export const batchSyncFile = action({
 
             // Mark skipped items as already synced in results
             for (const item of items) {
+              const lotId =
+                provider === "bricklink"
+                  ? item.marketplaceSync?.bricklink?.lotId
+                  : item.marketplaceSync?.brickowl?.lotId;
+
               allResults.push({
                 itemId: item._id,
                 provider,
                 success: true,
-                marketplaceLotId:
-                  provider === "bricklink" ? item.bricklinkLotId : item.brickowlLotId,
+                marketplaceLotId: lotId,
               });
             }
 
@@ -204,11 +208,16 @@ export const batchSyncFile = action({
           // First, add already-synced items to results
           const alreadySyncedItems = items.filter((item) => !itemsToSync.includes(item));
           for (const item of alreadySyncedItems) {
+            const lotId =
+              provider === "bricklink"
+                ? item.marketplaceSync?.bricklink?.lotId
+                : item.marketplaceSync?.brickowl?.lotId;
+
             allResults.push({
               itemId: item._id,
               provider,
               success: true,
-              marketplaceLotId: provider === "bricklink" ? item.bricklinkLotId : item.brickowlLotId,
+              marketplaceLotId: lotId,
             });
           }
 
@@ -222,7 +231,7 @@ export const batchSyncFile = action({
                 itemId: item._id,
                 provider,
                 success: true,
-                marketplaceLotId: result.bricklinkLotId, // BrickLink doesn't return IDs
+                marketplaceLotId: result.marketplaceId, // BrickLink doesn't return IDs
               });
             } else {
               allResults.push({

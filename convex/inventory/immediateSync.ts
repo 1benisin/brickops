@@ -47,6 +47,7 @@ export const syncInventoryChangeImmediately = internalAction({
       provider: providers[index],
       success: result.status === "fulfilled" && result.value?.success === true,
       error: result.status === "rejected" ? result.reason : result.value?.error,
+      marketplaceId: result.status === "fulfilled" ? result.value?.marketplaceId : undefined,
     }));
 
     // Update inventory item sync status
@@ -155,7 +156,7 @@ async function syncCreateImmediately(
       : mapConvexToBrickOwlCreate(args.newData as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const result = await (client as any).createInventory(payload, { idempotencyKey }); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const marketplaceId = provider === "bricklink" ? result.bricklinkLotId : result.brickowlLotId;
+  const marketplaceId = result.marketplaceId;
 
   return {
     success: result.success,
@@ -168,7 +169,11 @@ async function syncUpdateImmediately(
   ctx: ActionCtx,
   client: unknown,
   provider: string,
-  args: { inventoryItemId: Id<"inventoryItems">; newData?: Partial<Doc<"inventoryItems">> },
+  args: {
+    inventoryItemId: Id<"inventoryItems">;
+    newData?: Partial<Doc<"inventoryItems">>;
+    previousData?: Partial<Doc<"inventoryItems">>;
+  },
   idempotencyKey: string,
 ) {
   // Get current inventory item to find marketplace ID
@@ -177,19 +182,32 @@ async function syncUpdateImmediately(
   });
 
   const marketplaceId =
-    provider === "bricklink" ? inventoryItem?.bricklinkLotId : inventoryItem?.brickowlLotId;
+    provider === "bricklink"
+      ? inventoryItem?.marketplaceSync?.bricklink?.lotId
+      : inventoryItem?.marketplaceSync?.brickowl?.lotId;
 
   if (!marketplaceId) {
     // Item not yet synced to this provider - treat as create
     return await syncCreateImmediately(ctx, client, provider, args, idempotencyKey);
   }
 
-  const payload = args.newData;
+  // CRITICAL: Use the mapper to generate proper delta for BrickLink
+  // The mapper expects previousQuantity to calculate the +/- delta correctly
+  const { mapConvexToBricklinkUpdate } = await import("../bricklink/storeMappers");
+
+  const argsWithPreviousData = args as { previousData?: Partial<Doc<"inventoryItems">> };
+  const previousQuantity =
+    (argsWithPreviousData.previousData?.quantityAvailable as number) || undefined;
+  const payload =
+    provider === "bricklink"
+      ? mapConvexToBricklinkUpdate(args.newData as Doc<"inventoryItems">, previousQuantity)
+      : (args.newData as Record<string, unknown>);
+
   const result = await (client as any).updateInventory(marketplaceId, payload, { idempotencyKey }); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   return {
     success: result.success,
-    marketplaceId: result.bricklinkLotId || result.brickowlLotId || marketplaceId,
+    marketplaceId: result.marketplaceId || marketplaceId,
     error: result.error,
   };
 }
@@ -202,7 +220,9 @@ async function syncDeleteImmediately(
   idempotencyKey: string,
 ) {
   const marketplaceId =
-    provider === "bricklink" ? args.previousData?.bricklinkLotId : args.previousData?.brickowlLotId;
+    provider === "bricklink"
+      ? args.previousData?.marketplaceSync?.bricklink?.lotId
+      : args.previousData?.marketplaceSync?.brickowl?.lotId;
 
   if (!marketplaceId) {
     // Item was never synced to this provider - mark as success

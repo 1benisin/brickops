@@ -12,6 +12,11 @@ import {
   getItemSyncStatusReturns,
   getPendingChangesCountArgs,
   getPendingChangesCountReturns,
+  // New history-based validators (refactor requirement)
+  listInventoryHistoryArgs,
+  listInventoryHistoryReturns,
+  getInventoryHistoryArgs,
+  getInventoryHistoryReturns,
 } from "./validators";
 
 export const listInventoryItems = query({
@@ -73,12 +78,10 @@ export const getInventoryTotals = query({
 
     let available = 0;
     let reserved = 0;
-    let sold = 0;
 
     for (const it of activeItems) {
       available += it.quantityAvailable ?? 0;
       reserved += it.quantityReserved ?? 0;
-      sold += it.quantitySold ?? 0;
     }
 
     return {
@@ -88,7 +91,6 @@ export const getInventoryTotals = query({
       totals: {
         available,
         reserved,
-        sold,
       },
     };
   },
@@ -140,10 +142,7 @@ export const getItemSyncStatus = query({
 
     return {
       itemId: args.itemId,
-      lastSyncedAt: item.lastSyncedAt,
-      bricklinkSyncedAt,
-      brickowlSyncedAt,
-      syncErrors: item.syncErrors,
+      marketplaceSync: item.marketplaceSync,
       pendingChangesCount,
     };
   },
@@ -231,5 +230,94 @@ export const getConflicts = query({
 
     // Sort by creation time (newest first)
     return enrichedConflicts.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+// ============================================================================
+// New History-Based Queries (Refactor Requirement)
+// ============================================================================
+
+/**
+ * List inventory history entries with filtering and pagination
+ * Replaces sync queue based history queries
+ */
+export const listInventoryHistory = query({
+  args: listInventoryHistoryArgs,
+  returns: listInventoryHistoryReturns,
+  handler: async (ctx, args) => {
+    const { businessAccountId } = await requireUser(ctx);
+
+    const PAGE_SIZE = Math.min(Math.max(args.limit ?? 25, 1), 100);
+    const cursorTs = args.cursor ? Number(args.cursor) : undefined;
+
+    // Query inventory history with business account scope
+    const q = ctx.db
+      .query("inventoryHistory")
+      .withIndex("by_timestamp", (q) => q.eq("businessAccountId", businessAccountId));
+
+    const rows = await q.collect();
+
+    // Sort newest first
+    rows.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Apply filters
+    let filteredRows = rows.filter((r) => (cursorTs ? r.timestamp < cursorTs : true));
+
+    if (args.dateFrom) filteredRows = filteredRows.filter((r) => r.timestamp >= args.dateFrom!);
+    if (args.dateTo) filteredRows = filteredRows.filter((r) => r.timestamp <= args.dateTo!);
+    if (args.action) filteredRows = filteredRows.filter((r) => r.action === args.action);
+    if (args.userId) filteredRows = filteredRows.filter((r) => r.userId === args.userId);
+    if (args.itemId) filteredRows = filteredRows.filter((r) => r.itemId === args.itemId);
+    if (args.source) filteredRows = filteredRows.filter((r) => r.source === args.source);
+
+    // Text search
+    if (args.query) {
+      const qLower = args.query.toLowerCase();
+      filteredRows = filteredRows.filter((r) => {
+        const reasonMatch = (r.reason ?? "").toLowerCase().includes(qLower);
+        const itemIdMatch = String(r.itemId).toLowerCase().includes(qLower);
+        return reasonMatch || itemIdMatch;
+      });
+    }
+
+    const page = filteredRows.slice(0, PAGE_SIZE);
+
+    // Fetch actor details (names)
+    const userIds = Array.from(new Set(page.map((r) => r.userId).filter(Boolean) as string[]));
+    const actors = await Promise.all(userIds.map((id) => ctx.db.get(id)));
+    const idToActor = new Map(userIds.map((id, i) => [id, actors[i] ?? null]));
+
+    const entries = page.map((r) => ({
+      ...r,
+      actorFirstName: idToActor.get(r.userId!)?.firstName,
+      actorLastName: idToActor.get(r.userId!)?.lastName,
+    }));
+
+    const nextCursor =
+      page.length === PAGE_SIZE ? String(page[page.length - 1].timestamp) : undefined;
+
+    return { entries, nextCursor };
+  },
+});
+
+/**
+ * Get a specific inventory history entry with full details
+ */
+export const getInventoryHistory = query({
+  args: getInventoryHistoryArgs,
+  returns: getInventoryHistoryReturns,
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const historyEntry = await ctx.db.get(args.historyId);
+    if (!historyEntry) throw new Error("History entry not found");
+    assertBusinessMembership(user, historyEntry.businessAccountId);
+
+    // Include actor info
+    const actor = historyEntry.userId ? await ctx.db.get(historyEntry.userId) : null;
+    return {
+      ...historyEntry,
+      actorFirstName: actor?.firstName,
+      actorLastName: actor?.lastName,
+    };
   },
 });

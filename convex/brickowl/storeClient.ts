@@ -10,7 +10,7 @@
  * 1. CREATE ROLLBACK:
  *    - Original: createInventory(payload) → returns { lot_id: "ABC123", ... }
  *    - Compensating: deleteInventory("ABC123")
- *    - Required data: brickowlLotId from create response
+ *    - Required data: marketplaceId from create response
  *
  * 2. UPDATE ROLLBACK:
  *    - Original: updateInventory("ABC123", { relative_quantity: 5, price: 2.00 })
@@ -31,10 +31,10 @@
  * - Use for rollback preview: "What would happen if I reversed this change?"
  *
  * STORY 3.4 INTEGRATION:
- * - inventoryHistory table tracks all changes with changeType
- * - Each log entry stores data needed for compensating operation
- * - UI presents change history with "Undo" button
- * - Undo triggers compensating operation via this client
+ * - inventoryHistory table tracks all changes with action type
+ * - Each log entry stores oldData and newData for audit trail
+ * - UI presents change history for searching and filtering
+ * - No undo operations supported (history is read-only audit trail)
  */
 
 import type { ActionCtx } from "../_generated/server";
@@ -603,7 +603,7 @@ export class BrickOwlStoreClient {
       this.validateCreatePayload(payload);
       return {
         success: true,
-        brickowlInventoryId: "dry-run-lot-id",
+        marketplaceId: "dry-run-lot-id",
         correlationId,
       };
     }
@@ -620,8 +620,7 @@ export class BrickOwlStoreClient {
 
       return {
         success: true,
-        brickowlLotId: result.lot_id,
-        brickowlInventoryId: result.lot_id, // Alias for compatibility
+        marketplaceId: result.lot_id,
         correlationId,
         rollbackData: {
           originalPayload: payload,
@@ -652,8 +651,7 @@ export class BrickOwlStoreClient {
       this.validateUpdatePayload(payload);
       return {
         success: true,
-        brickowlLotId: identifier,
-        brickowlInventoryId: identifier, // Alias for compatibility
+        marketplaceId: identifier,
         correlationId,
       };
     }
@@ -678,8 +676,7 @@ export class BrickOwlStoreClient {
 
       return {
         success: true,
-        brickowlLotId: result.lot_id,
-        brickowlInventoryId: result.lot_id, // Alias for compatibility
+        marketplaceId: result.lot_id,
         correlationId,
         rollbackData: {
           previousQuantity: current.quantity,
@@ -710,8 +707,7 @@ export class BrickOwlStoreClient {
     if (options?.dryRun) {
       return {
         success: true,
-        brickowlLotId: identifier,
-        brickowlInventoryId: identifier, // Alias for compatibility
+        marketplaceId: identifier,
         correlationId,
       };
     }
@@ -733,8 +729,7 @@ export class BrickOwlStoreClient {
 
       return {
         success: true,
-        brickowlLotId: identifier,
-        brickowlInventoryId: identifier, // Alias for compatibility
+        marketplaceId: identifier,
         correlationId,
         rollbackData: {
           originalPayload: current,
@@ -794,8 +789,7 @@ export class BrickOwlStoreClient {
           const lotId = success ? (result as BrickOwlInventoryResponse).lot_id : undefined;
           results.push({
             success,
-            brickowlLotId: lotId,
-            brickowlInventoryId: lotId, // Alias for compatibility
+            marketplaceId: lotId,
             error: success ? undefined : this.normalizeError(result),
             correlationId,
           });

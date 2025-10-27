@@ -10,7 +10,7 @@
  * 1. CREATE ROLLBACK:
  *    - Original: createInventory(payload) → returns { inventory_id: 123, ... }
  *    - Compensating: deleteInventory(123)
- *    - Required data: bricklinkLotId from create response
+ *    - Required data: marketplaceId from create response
  *
  * 2. UPDATE ROLLBACK:
  *    - Original: updateInventory(123, { quantity: "+5", unit_price: "2.00" })
@@ -31,10 +31,10 @@
  * - Use for rollback preview: "What would happen if I reversed this change?"
  *
  * STORY 3.4 INTEGRATION:
- * - inventoryHistory table tracks all changes with changeType
- * - Each log entry stores data needed for compensating operation
- * - UI presents change history with "Undo" button
- * - Undo triggers compensating operation via this client
+ * - inventoryHistory table tracks all changes with action type
+ * - Each log entry stores oldData and newData for audit trail
+ * - UI presents change history for searching and filtering
+ * - No undo operations supported (history is read-only audit trail)
  */
 
 import type { ActionCtx } from "../_generated/server";
@@ -219,7 +219,7 @@ export interface BulkOperationOptions {
  */
 export interface BulkOperationItemResult {
   success: boolean;
-  bricklinkLotId?: number;
+  marketplaceId?: number;
   error?: {
     code: string;
     message: string;
@@ -593,6 +593,8 @@ export class BricklinkStoreClient {
     let response: Response;
 
     try {
+      const requestBody = options.body ? JSON.stringify(options.body) : undefined;
+
       response = await fetch(url.href, {
         method,
         headers: {
@@ -602,7 +604,7 @@ export class BricklinkStoreClient {
           ...(options.headers ?? {}),
           Authorization: authorization,
         },
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        body: requestBody,
       });
     } catch (error) {
       const duration = Date.now() - started;
@@ -807,7 +809,7 @@ export class BricklinkStoreClient {
       this.validateCreatePayload(payload);
       return {
         success: true,
-        bricklinkLotId: 0, // Mock ID
+        marketplaceId: 0, // Mock ID
         correlationId,
       };
     }
@@ -832,7 +834,7 @@ export class BricklinkStoreClient {
       const inventoryData = response.data.data;
       return {
         success: true,
-        bricklinkLotId: inventoryData.inventory_id,
+        marketplaceId: inventoryData.inventory_id,
         correlationId,
         rollbackData: {
           originalPayload: payload,
@@ -879,7 +881,7 @@ export class BricklinkStoreClient {
     if (options?.dryRun) {
       return {
         success: true,
-        bricklinkLotId: inventoryId,
+        marketplaceId: inventoryId,
         correlationId,
       };
     }
@@ -903,7 +905,7 @@ export class BricklinkStoreClient {
       const inventoryData = response.data.data;
       return {
         success: true,
-        bricklinkLotId: inventoryData.inventory_id,
+        marketplaceId: inventoryData.inventory_id,
         correlationId,
         rollbackData: {
           previousQuantity: payload.quantity ? inventoryData.quantity : undefined,
@@ -947,7 +949,7 @@ export class BricklinkStoreClient {
     if (options?.dryRun) {
       return {
         success: true,
-        bricklinkLotId: inventoryId,
+        marketplaceId: inventoryId,
         correlationId,
       };
     }
@@ -960,7 +962,7 @@ export class BricklinkStoreClient {
 
       return {
         success: true,
-        bricklinkLotId: inventoryId,
+        marketplaceId: inventoryId,
         correlationId,
       };
     } catch (error) {
@@ -1127,7 +1129,7 @@ export class BricklinkStoreClient {
 
         results.push({
           success: result.success,
-          bricklinkLotId: result.bricklinkLotId,
+          marketplaceId: result.marketplaceId as number,
           error: result.error,
           correlationId: result.correlationId,
         });
@@ -1227,7 +1229,7 @@ export class BricklinkStoreClient {
 
         results.push({
           success: result.success,
-          bricklinkLotId: result.bricklinkLotId,
+          marketplaceId: result.marketplaceId as number,
           error: result.error,
           correlationId: result.correlationId,
         });

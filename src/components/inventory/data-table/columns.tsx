@@ -14,12 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SyncStatusIndicator } from "@/components/inventory/SyncStatusIndicator";
-import type { Infer } from "convex/values";
-import type { listInventoryItemsReturns } from "@/convex/inventory/validators";
+import type { InventoryItem } from "@/types/inventory";
 import { formatRelativeTime } from "@/lib/utils";
-
-// Type for inventory item based on the Convex validator
-export type InventoryItem = Infer<typeof listInventoryItemsReturns>[0];
 
 // Type for marketplace sync configuration
 export type MarketplaceSyncConfig = {
@@ -33,21 +29,6 @@ const formatCurrency = (amount: number) => {
     style: "currency",
     currency: "USD",
   }).format(amount);
-};
-
-// Status badge component
-const StatusBadge = ({ status }: { status: InventoryItem["status"] }) => {
-  const variants = {
-    available: "bg-green-500/10 text-green-700 border-green-200",
-    reserved: "bg-yellow-500/10 text-yellow-700 border-yellow-200",
-    sold: "bg-gray-500/10 text-gray-700 border-gray-200",
-  };
-
-  return (
-    <Badge variant="outline" className={variants[status]}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </Badge>
-  );
 };
 
 // Condition badge component
@@ -64,7 +45,10 @@ const ConditionBadge = ({ condition }: { condition: InventoryItem["condition"] }
   );
 };
 
-export const createColumns = (syncConfig: MarketplaceSyncConfig): ColumnDef<InventoryItem>[] => {
+export const createColumns = (
+  syncConfig: MarketplaceSyncConfig,
+  onEditItem?: (item: InventoryItem) => void,
+): ColumnDef<InventoryItem>[] => {
   const baseColumns: ColumnDef<InventoryItem>[] = [
     // Selection column
     {
@@ -202,17 +186,6 @@ export const createColumns = (syncConfig: MarketplaceSyncConfig): ColumnDef<Inve
         );
       },
     },
-    // Status column
-    {
-      id: "status",
-      accessorKey: "status",
-      meta: { label: "Status" },
-      header: "Status",
-      size: 100,
-      minSize: 80,
-      maxSize: 150,
-      cell: ({ row }) => <StatusBadge status={row.getValue("status")} />,
-    },
     // Unit Price column (only show if set)
     {
       id: "price",
@@ -267,7 +240,7 @@ export const createColumns = (syncConfig: MarketplaceSyncConfig): ColumnDef<Inve
 
   if (syncConfig.showBricklinkSync) {
     syncColumns.push({
-      id: "bricklinkSyncStatus",
+      id: "marketplaceSync.bricklink",
       header: "BrickLink Sync",
       size: 130,
       minSize: 100,
@@ -275,24 +248,14 @@ export const createColumns = (syncConfig: MarketplaceSyncConfig): ColumnDef<Inve
       enableSorting: false,
       cell: ({ row }) => {
         const item = row.original;
-        return (
-          <SyncStatusIndicator
-            item={{
-              bricklinkSyncStatus: item.bricklinkSyncStatus,
-              brickowlSyncStatus: item.brickowlSyncStatus,
-              bricklinkSyncError: item.bricklinkSyncError,
-              brickowlSyncError: item.brickowlSyncError,
-            }}
-            marketplace="bricklink"
-          />
-        );
+        return <SyncStatusIndicator item={item} marketplace="bricklink" />;
       },
     });
   }
 
   if (syncConfig.showBrickowlSync) {
     syncColumns.push({
-      id: "brickowlSyncStatus",
+      id: "marketplaceSync.brickowl",
       header: "BrickOwl Sync",
       size: 130,
       minSize: 100,
@@ -300,17 +263,7 @@ export const createColumns = (syncConfig: MarketplaceSyncConfig): ColumnDef<Inve
       enableSorting: false,
       cell: ({ row }) => {
         const item = row.original;
-        return (
-          <SyncStatusIndicator
-            item={{
-              bricklinkSyncStatus: item.bricklinkSyncStatus,
-              brickowlSyncStatus: item.brickowlSyncStatus,
-              bricklinkSyncError: item.bricklinkSyncError,
-              brickowlSyncError: item.brickowlSyncError,
-            }}
-            marketplace="brickowl"
-          />
-        );
+        return <SyncStatusIndicator item={item} marketplace="brickowl" />;
       },
     });
   }
@@ -342,7 +295,7 @@ export const createColumns = (syncConfig: MarketplaceSyncConfig): ColumnDef<Inve
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>View details</DropdownMenuItem>
-            <DropdownMenuItem>Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEditItem?.(item)}>Edit</DropdownMenuItem>
             <DropdownMenuItem>Duplicate</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Sync to BrickLink</DropdownMenuItem>

@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
+import type { DatabaseReader } from "../_generated/server";
 import { now, requireUser, assertBusinessMembership, requireOwnerRole } from "./helpers";
 import {
   addInventoryItemArgs,
@@ -10,8 +11,6 @@ import {
   updateInventoryItemReturns,
   deleteInventoryItemArgs,
   deleteInventoryItemReturns,
-  undoChangeArgs,
-  undoChangeReturns,
   getPendingChangesArgs,
   getPendingChangesReturns,
   getChangeArgs,
@@ -25,6 +24,96 @@ import {
   recordSyncErrorArgs,
   recordSyncErrorReturns,
 } from "./validators";
+
+/**
+ * Helper function to build marketplaceSync updates for syncing status
+ */
+async function buildMarketplaceSyncUpdates(
+  ctx: { db: DatabaseReader },
+  businessAccountId: Id<"businessAccounts">,
+  timestamp: number,
+  status: "syncing" | "synced" | "failed" = "syncing",
+): Promise<{
+  marketplaceSync?: {
+    bricklink?: {
+      status: "syncing" | "synced" | "failed";
+      lastSyncAttempt: number;
+      lotId?: number;
+      error?: string;
+    };
+    brickowl?: {
+      status: "syncing" | "synced" | "failed";
+      lastSyncAttempt: number;
+      lotId?: string;
+      error?: string;
+    };
+  };
+}> {
+  const marketplaceSyncUpdates: {
+    marketplaceSync?: {
+      bricklink?: {
+        status: "syncing" | "synced" | "failed";
+        lastSyncAttempt: number;
+        lotId?: number;
+        error?: string;
+      };
+      brickowl?: {
+        status: "syncing" | "synced" | "failed";
+        lastSyncAttempt: number;
+        lotId?: string;
+        error?: string;
+      };
+    };
+  } = {};
+
+  // Get configured providers
+  const providers: Array<"bricklink" | "brickowl"> = [];
+
+  // Check BrickLink credentials
+  const bricklinkCreds = await ctx.db
+    .query("marketplaceCredentials")
+    .withIndex("by_business_provider", (q) =>
+      q.eq("businessAccountId", businessAccountId).eq("provider", "bricklink"),
+    )
+    .first();
+
+  if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
+    providers.push("bricklink");
+  }
+
+  // Check BrickOwl credentials
+  const brickowlCreds = await ctx.db
+    .query("marketplaceCredentials")
+    .withIndex("by_business_provider", (q) =>
+      q.eq("businessAccountId", businessAccountId).eq("provider", "brickowl"),
+    )
+    .first();
+
+  if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
+    providers.push("brickowl");
+  }
+
+  // Build marketplaceSync updates
+  if (providers.length > 0) {
+    marketplaceSyncUpdates.marketplaceSync = {};
+
+    if (providers.includes("bricklink")) {
+      marketplaceSyncUpdates.marketplaceSync.bricklink = {
+        status,
+        lastSyncAttempt: timestamp,
+      };
+    }
+
+    if (providers.includes("brickowl")) {
+      marketplaceSyncUpdates.marketplaceSync.brickowl = {
+        status,
+        lastSyncAttempt: timestamp,
+      };
+    }
+  }
+
+  return marketplaceSyncUpdates;
+}
 
 export const addInventoryItem = mutation({
   args: addInventoryItemArgs,
@@ -48,8 +137,6 @@ export const addInventoryItem = mutation({
       location: args.location,
       quantityAvailable: args.quantityAvailable,
       quantityReserved: args.quantityReserved ?? 0,
-      quantitySold: args.quantitySold ?? 0,
-      status: args.status ?? "available",
       condition: args.condition,
       price: args.price,
       notes: args.notes,
@@ -61,62 +148,29 @@ export const addInventoryItem = mutation({
 
     const id = await ctx.db.insert("inventoryItems", document);
 
-    // Write to inventory history (lightweight audit)
+    // Write to inventory history with full newData for create action
     await ctx.db.insert("inventoryHistory", {
       businessAccountId,
       itemId: id,
-      changeType: "create",
-      deltaAvailable: args.quantityAvailable,
-      deltaReserved: document.quantityReserved,
-      deltaSold: document.quantitySold,
-      toStatus: document.status,
-      actorUserId: user._id,
-      createdAt: timestamp,
+      timestamp,
+      userId: user._id,
+      action: "create",
+      oldData: undefined,
+      newData: document, // Full created state
+      source: "user",
+      reason: args.reason,
     });
 
     // Set initial sync status to "syncing" for enabled marketplaces
-    const syncStatusUpdates: {
-      bricklinkSyncStatus?: "syncing" | "synced" | "failed";
-      brickowlSyncStatus?: "syncing" | "synced" | "failed";
-    } = {};
-
-    // Get configured providers
-    const providers: Array<"bricklink" | "brickowl"> = [];
-
-    // Check BrickLink credentials
-    const bricklinkCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", businessAccountId).eq("provider", "bricklink"),
-      )
-      .first();
-
-    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
-      providers.push("bricklink");
-    }
-
-    // Check BrickOwl credentials
-    const brickowlCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", businessAccountId).eq("provider", "brickowl"),
-      )
-      .first();
-
-    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
-      providers.push("brickowl");
-    }
-
-    if (providers.includes("bricklink")) {
-      syncStatusUpdates.bricklinkSyncStatus = "syncing";
-    }
-    if (providers.includes("brickowl")) {
-      syncStatusUpdates.brickowlSyncStatus = "syncing";
-    }
+    const marketplaceSyncUpdates = await buildMarketplaceSyncUpdates(
+      ctx,
+      businessAccountId,
+      timestamp,
+    );
 
     // Update inventory item with syncing status
-    if (Object.keys(syncStatusUpdates).length > 0) {
-      await ctx.db.patch(id, syncStatusUpdates);
+    if (Object.keys(marketplaceSyncUpdates).length > 0) {
+      await ctx.db.patch(id, marketplaceSyncUpdates);
     }
 
     // Trigger immediate sync instead of adding to sync queue
@@ -151,12 +205,11 @@ export const updateInventoryItem = mutation({
 
     const nextAvailable = args.quantityAvailable ?? item.quantityAvailable;
     const nextReserved = args.quantityReserved ?? item.quantityReserved ?? 0;
-    const nextSold = args.quantitySold ?? item.quantitySold ?? 0;
-    if (nextAvailable < 0 || nextReserved < 0 || nextSold < 0) {
+    if (nextAvailable < 0 || nextReserved < 0) {
       throw new ConvexError("Quantities cannot be negative");
     }
 
-    const total = nextAvailable + nextReserved + nextSold;
+    const total = nextAvailable + nextReserved;
     if (!Number.isFinite(total)) {
       throw new ConvexError("Invalid quantity values");
     }
@@ -168,90 +221,81 @@ export const updateInventoryItem = mutation({
     const updates: Partial<Doc<"inventoryItems">> & { updatedAt: number } = {
       updatedAt: timestamp,
     };
-    (
-      [
-        "name",
-        "partNumber",
-        "colorId",
-        "location",
-        "condition",
-        "status",
-        "price",
-        "notes",
-      ] as const
-    ).forEach((key) => {
-      if (args[key] !== undefined) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (updates as any)[key] = args[key] as unknown;
-      }
-    });
+    (["name", "partNumber", "colorId", "location", "condition", "price", "notes"] as const).forEach(
+      (key) => {
+        if (args[key] !== undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (updates as any)[key] = args[key] as unknown;
+        }
+      },
+    );
     if (args.quantityAvailable !== undefined) updates.quantityAvailable = nextAvailable;
     if (args.quantityReserved !== undefined) updates.quantityReserved = nextReserved;
-    if (args.quantitySold !== undefined) updates.quantitySold = nextSold;
 
     await ctx.db.patch(args.itemId, updates);
 
-    // Build new data (merged state)
-    const newData = { ...item, ...updates };
+    // Capture only changed fields for history
+    const changedFields: Record<string, unknown> = {};
+    for (const [key, newValue] of Object.entries(updates)) {
+      if (key === "updatedAt") continue; // Skip timestamp
+      const oldValue = item[key as keyof typeof item];
+      if (oldValue !== newValue) {
+        changedFields[key] = true; // Mark as changed
+      }
+    }
 
-    // Write to inventory history (lightweight audit)
+    // Build oldData and newData with only changed fields
+    const oldData: Record<string, unknown> = {};
+    const newDataForHistory: Record<string, unknown> = {};
+
+    for (const key of Object.keys(changedFields)) {
+      oldData[key] = item[key as keyof typeof item];
+      newDataForHistory[key] = updates[key as keyof typeof updates];
+    }
+
+    // Write to inventory history with only changed fields
     await ctx.db.insert("inventoryHistory", {
       businessAccountId: item.businessAccountId,
       itemId: args.itemId,
-      changeType: "update",
-      deltaAvailable: nextAvailable - item.quantityAvailable,
-      deltaReserved: nextReserved - (item.quantityReserved ?? 0),
-      deltaSold: nextSold - (item.quantitySold ?? 0),
-      fromStatus: item.status ?? "available",
-      toStatus: updates.status ?? item.status ?? "available",
-      actorUserId: user._id,
+      timestamp,
+      userId: user._id,
+      action: "update",
+      oldData: Object.keys(oldData).length > 0 ? oldData : undefined,
+      newData: Object.keys(newDataForHistory).length > 0 ? newDataForHistory : undefined,
+      source: "user",
       reason: args.reason,
-      createdAt: timestamp,
     });
 
     // Set sync status to "syncing" for enabled marketplaces
-    const syncStatusUpdates: {
-      bricklinkSyncStatus?: "syncing" | "synced" | "failed";
-      brickowlSyncStatus?: "syncing" | "synced" | "failed";
-    } = {};
+    // CRITICAL: Preserve existing lotId from previous syncs
+    const currentItem = await ctx.db.get(args.itemId);
+    const marketplaceSyncUpdates = await buildMarketplaceSyncUpdates(
+      ctx,
+      item.businessAccountId,
+      timestamp,
+    );
 
-    // Get configured providers
-    const providers: Array<"bricklink" | "brickowl"> = [];
-
-    // Check BrickLink credentials
-    const bricklinkCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", item.businessAccountId).eq("provider", "bricklink"),
-      )
-      .first();
-
-    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
-      providers.push("bricklink");
-    }
-
-    // Check BrickOwl credentials
-    const brickowlCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", item.businessAccountId).eq("provider", "brickowl"),
-      )
-      .first();
-
-    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
-      providers.push("brickowl");
-    }
-
-    if (providers.includes("bricklink")) {
-      syncStatusUpdates.bricklinkSyncStatus = "syncing";
-    }
-    if (providers.includes("brickowl")) {
-      syncStatusUpdates.brickowlSyncStatus = "syncing";
+    // Merge with existing marketplace sync to preserve lotIds
+    if (Object.keys(marketplaceSyncUpdates).length > 0 && currentItem?.marketplaceSync) {
+      if (
+        marketplaceSyncUpdates.marketplaceSync?.bricklink &&
+        currentItem.marketplaceSync.bricklink?.lotId
+      ) {
+        marketplaceSyncUpdates.marketplaceSync.bricklink.lotId =
+          currentItem.marketplaceSync.bricklink.lotId;
+      }
+      if (
+        marketplaceSyncUpdates.marketplaceSync?.brickowl &&
+        currentItem.marketplaceSync.brickowl?.lotId
+      ) {
+        marketplaceSyncUpdates.marketplaceSync.brickowl.lotId =
+          currentItem.marketplaceSync.brickowl.lotId;
+      }
     }
 
     // Update inventory item with syncing status
-    if (Object.keys(syncStatusUpdates).length > 0) {
-      await ctx.db.patch(args.itemId, syncStatusUpdates);
+    if (Object.keys(marketplaceSyncUpdates).length > 0) {
+      await ctx.db.patch(args.itemId, marketplaceSyncUpdates);
     }
 
     // Trigger immediate sync instead of adding to sync queue
@@ -265,7 +309,7 @@ export const updateInventoryItem = mutation({
         businessAccountId: item.businessAccountId,
         inventoryItemId: args.itemId,
         changeType: "update",
-        newData,
+        newData: { ...item, ...updates },
         previousData,
         correlationId,
       },
@@ -295,59 +339,49 @@ export const deleteInventoryItem = mutation({
       updatedAt: timestamp,
     });
 
-    // Write to inventory history (lightweight audit)
+    // Write to inventory history with full oldData for delete action
     await ctx.db.insert("inventoryHistory", {
       businessAccountId: item.businessAccountId,
       itemId: args.itemId,
-      changeType: "delete",
-      actorUserId: user._id,
+      timestamp,
+      userId: user._id,
+      action: "delete",
+      oldData: previousData, // Full previous state before deletion
+      newData: undefined,
+      source: "user",
       reason: args.reason,
-      createdAt: timestamp,
     });
 
     // Set sync status to "syncing" for enabled marketplaces
-    const syncStatusUpdates: {
-      bricklinkSyncStatus?: "syncing" | "synced" | "failed";
-      brickowlSyncStatus?: "syncing" | "synced" | "failed";
-    } = {};
+    // CRITICAL: Preserve existing lotId from previous syncs
+    const currentItemDelete = await ctx.db.get(args.itemId);
+    const marketplaceSyncUpdates = await buildMarketplaceSyncUpdates(
+      ctx,
+      item.businessAccountId,
+      timestamp,
+    );
 
-    // Get configured providers
-    const providers: Array<"bricklink" | "brickowl"> = [];
-
-    // Check BrickLink credentials
-    const bricklinkCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", item.businessAccountId).eq("provider", "bricklink"),
-      )
-      .first();
-
-    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
-      providers.push("bricklink");
-    }
-
-    // Check BrickOwl credentials
-    const brickowlCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", item.businessAccountId).eq("provider", "brickowl"),
-      )
-      .first();
-
-    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
-      providers.push("brickowl");
-    }
-
-    if (providers.includes("bricklink")) {
-      syncStatusUpdates.bricklinkSyncStatus = "syncing";
-    }
-    if (providers.includes("brickowl")) {
-      syncStatusUpdates.brickowlSyncStatus = "syncing";
+    // Merge with existing marketplace sync to preserve lotIds
+    if (Object.keys(marketplaceSyncUpdates).length > 0 && currentItemDelete?.marketplaceSync) {
+      if (
+        marketplaceSyncUpdates.marketplaceSync?.bricklink &&
+        currentItemDelete.marketplaceSync.bricklink?.lotId
+      ) {
+        marketplaceSyncUpdates.marketplaceSync.bricklink.lotId =
+          currentItemDelete.marketplaceSync.bricklink.lotId;
+      }
+      if (
+        marketplaceSyncUpdates.marketplaceSync?.brickowl &&
+        currentItemDelete.marketplaceSync.brickowl?.lotId
+      ) {
+        marketplaceSyncUpdates.marketplaceSync.brickowl.lotId =
+          currentItemDelete.marketplaceSync.brickowl.lotId;
+      }
     }
 
     // Update inventory item with syncing status
-    if (Object.keys(syncStatusUpdates).length > 0) {
-      await ctx.db.patch(args.itemId, syncStatusUpdates);
+    if (Object.keys(marketplaceSyncUpdates).length > 0) {
+      await ctx.db.patch(args.itemId, marketplaceSyncUpdates);
     }
 
     // Trigger immediate sync instead of adding to sync queue
@@ -367,167 +401,6 @@ export const deleteInventoryItem = mutation({
     );
 
     return { itemId: args.itemId, archived: true };
-  },
-});
-
-/**
- * Undo a change by executing compensating operation
- * AC: 3.4.7 - Rollback/undo capability with RBAC
- */
-export const undoChange = mutation({
-  args: undoChangeArgs,
-  returns: undoChangeReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-
-    // 1. Get the original change
-    const originalChange = await ctx.db.get(args.changeId);
-    if (!originalChange) {
-      throw new ConvexError("Change not found");
-    }
-
-    // 2. RBAC check - owner role required
-    assertBusinessMembership(user, originalChange.businessAccountId);
-    requireOwnerRole(user);
-
-    // 3. Validate change can be undone
-    if (originalChange.undoneByChangeId) {
-      throw new ConvexError("Change has already been undone");
-    }
-
-    if (originalChange.isUndo) {
-      // This is an undo being undone (redo) - this is allowed
-      // The compensating operation will be the inverse of the undo
-    }
-
-    // 4. Get the inventory item (may not exist if original was delete or if we're undoing a create)
-    const item = await ctx.db.get(originalChange.inventoryItemId);
-
-    // 5. Determine compensating operation based on original change type
-    let compensatingAction: "create" | "update" | "delete";
-    let compensatingData: Partial<Doc<"inventoryItems">> | undefined;
-
-    const timestamp = now();
-
-    switch (originalChange.changeType) {
-      case "create":
-        // Undo CREATE → DELETE
-        compensatingAction = "delete";
-        if (!item) {
-          throw new ConvexError("Cannot undo create: item no longer exists");
-        }
-        if (item.isArchived) {
-          throw new ConvexError("Cannot undo create: item is already archived");
-        }
-
-        // Execute compensating delete (soft delete)
-        await ctx.db.patch(originalChange.inventoryItemId, {
-          isArchived: true,
-          deletedAt: timestamp,
-          updatedAt: timestamp,
-        });
-
-        compensatingData = { ...item }; // Capture state before delete
-        break;
-
-      case "update": {
-        // Undo UPDATE → UPDATE with previous values
-        compensatingAction = "update";
-        if (!item) {
-          throw new ConvexError("Cannot undo update: item no longer exists");
-        }
-        if (item.isArchived) {
-          throw new ConvexError("Cannot undo update: item is archived");
-        }
-        if (!originalChange.previousData) {
-          throw new ConvexError("Cannot undo update: no previous data stored");
-        }
-
-        // Execute compensating update (restore previous state)
-        const previousState = originalChange.previousData as Partial<Doc<"inventoryItems">>;
-        await ctx.db.patch(originalChange.inventoryItemId, {
-          ...previousState,
-          updatedAt: timestamp,
-        });
-
-        compensatingData = previousState;
-        break;
-      }
-
-      case "delete":
-        // Undo DELETE → CREATE (restore)
-        compensatingAction = "create";
-        if (!originalChange.previousData) {
-          throw new ConvexError("Cannot undo delete: no previous data stored");
-        }
-
-        // Check if item still exists (soft delete)
-        if (item && !item.isArchived) {
-          throw new ConvexError("Cannot undo delete: item is not archived");
-        }
-
-        if (item) {
-          // Item exists (soft deleted) - restore it
-          await ctx.db.patch(originalChange.inventoryItemId, {
-            isArchived: false,
-            deletedAt: undefined,
-            updatedAt: timestamp,
-          });
-        } else {
-          // Item was hard deleted (shouldn't happen) - would need to recreate
-          // For now, throw error as we only do soft deletes
-          throw new ConvexError("Cannot undo delete: item was permanently deleted");
-        }
-
-        compensatingData = originalChange.previousData;
-        break;
-
-      default: {
-        // Exhaustiveness check - TypeScript ensures all change types are handled
-        const _exhaustive: never = originalChange.changeType;
-        throw new ConvexError("Cannot undo change: unsupported change type");
-      }
-    }
-
-    // 6. Create inventory history entry for the undo
-    await ctx.db.insert("inventoryHistory", {
-      businessAccountId: originalChange.businessAccountId,
-      itemId: originalChange.inventoryItemId,
-      changeType: compensatingAction,
-      actorUserId: user._id,
-      reason: `Undo: ${args.reason}`,
-      createdAt: timestamp,
-    });
-
-    // 7. Create new sync queue entry for the compensating operation
-    const correlationId = crypto.randomUUID();
-    const undoChangeId = await ctx.db.insert("inventorySyncQueue", {
-      businessAccountId: originalChange.businessAccountId,
-      inventoryItemId: originalChange.inventoryItemId,
-      changeType: compensatingAction,
-      newData: compensatingAction === "delete" ? undefined : compensatingData,
-      previousData: compensatingAction === "delete" ? compensatingData : undefined,
-      reason: `Undo of change ${args.changeId}: ${args.reason}`,
-      syncStatus: "pending",
-      correlationId,
-      createdBy: user._id,
-      createdAt: timestamp,
-      // Mark as undo with bidirectional reference
-      isUndo: true,
-      undoesChangeId: args.changeId,
-    });
-
-    // 8. Mark original change as undone (bidirectional link)
-    await ctx.db.patch(args.changeId, {
-      undoneByChangeId: undoChangeId,
-    });
-
-    return {
-      originalChangeId: args.changeId,
-      undoChangeId,
-      itemId: originalChange.inventoryItemId,
-      compensatingAction,
-    };
   },
 });
 
@@ -679,48 +552,14 @@ export const markSyncing = internalMutation({
     });
 
     // Update inventory item sync status to syncing for enabled marketplaces
-    const syncStatusUpdates: {
-      bricklinkSyncStatus?: "syncing";
-      brickowlSyncStatus?: "syncing";
-    } = {};
+    const marketplaceSyncUpdates = await buildMarketplaceSyncUpdates(
+      ctx,
+      change.businessAccountId,
+      Date.now(),
+    );
 
-    // Get configured providers to determine which statuses to update
-    const providers: Array<"bricklink" | "brickowl"> = [];
-
-    // Check BrickLink credentials
-    const bricklinkCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", change.businessAccountId).eq("provider", "bricklink"),
-      )
-      .first();
-
-    if (bricklinkCreds?.isActive && bricklinkCreds?.syncEnabled !== false) {
-      providers.push("bricklink");
-    }
-
-    // Check BrickOwl credentials
-    const brickowlCreds = await ctx.db
-      .query("marketplaceCredentials")
-      .withIndex("by_business_provider", (q) =>
-        q.eq("businessAccountId", change.businessAccountId).eq("provider", "brickowl"),
-      )
-      .first();
-
-    if (brickowlCreds?.isActive && brickowlCreds?.syncEnabled !== false) {
-      providers.push("brickowl");
-    }
-
-    if (providers.includes("bricklink")) {
-      syncStatusUpdates.bricklinkSyncStatus = "syncing";
-    }
-    if (providers.includes("brickowl")) {
-      syncStatusUpdates.brickowlSyncStatus = "syncing";
-    }
-
-    // Update inventory item with syncing status
-    if (Object.keys(syncStatusUpdates).length > 0) {
-      await ctx.db.patch(change.inventoryItemId, syncStatusUpdates);
+    if (Object.keys(marketplaceSyncUpdates).length > 0) {
+      await ctx.db.patch(change.inventoryItemId, marketplaceSyncUpdates);
     }
   },
 });
@@ -747,48 +586,86 @@ export const updateSyncStatus = internalMutation({
         updates.bricklinkSyncedAt = timestamp;
         if (typeof args.marketplaceId === "number") {
           // Update the inventory item with bricklink ID and sync status
-          await ctx.db.patch(change.inventoryItemId, {
-            bricklinkLotId: args.marketplaceId,
-            bricklinkSyncStatus: "synced",
-            bricklinkSyncError: undefined, // Clear any previous errors
-          });
+          const item = await ctx.db.get(change.inventoryItemId);
+          if (item) {
+            await ctx.db.patch(change.inventoryItemId, {
+              marketplaceSync: {
+                ...item.marketplaceSync,
+                bricklink: {
+                  lotId: args.marketplaceId,
+                  status: "synced",
+                  lastSyncAttempt: timestamp,
+                  error: undefined,
+                },
+              },
+            });
+          }
         }
       } else {
-        updates.bricklinkSyncError = args.error;
         // Update inventory item with failed status and error
-        await ctx.db.patch(change.inventoryItemId, {
-          bricklinkSyncStatus: "failed",
-          bricklinkSyncError: args.error,
-        });
+        const item = await ctx.db.get(change.inventoryItemId);
+        if (item) {
+          await ctx.db.patch(change.inventoryItemId, {
+            marketplaceSync: {
+              ...item.marketplaceSync,
+              bricklink: {
+                ...item.marketplaceSync?.bricklink,
+                status: "failed",
+                lastSyncAttempt: timestamp,
+                error: args.error,
+              },
+            },
+          });
+        }
       }
     } else if (args.provider === "brickowl") {
       if (args.success) {
         updates.brickowlSyncedAt = timestamp;
         if (typeof args.marketplaceId === "string") {
           // Update the inventory item with brickowl ID and sync status
-          await ctx.db.patch(change.inventoryItemId, {
-            brickowlLotId: args.marketplaceId,
-            brickowlSyncStatus: "synced",
-            brickowlSyncError: undefined, // Clear any previous errors
-          });
+          const item = await ctx.db.get(change.inventoryItemId);
+          if (item) {
+            await ctx.db.patch(change.inventoryItemId, {
+              marketplaceSync: {
+                ...item.marketplaceSync,
+                brickowl: {
+                  lotId: args.marketplaceId,
+                  status: "synced",
+                  lastSyncAttempt: timestamp,
+                  error: undefined,
+                },
+              },
+            });
+          }
         }
       } else {
-        updates.brickowlSyncError = args.error;
         // Update inventory item with failed status and error
-        await ctx.db.patch(change.inventoryItemId, {
-          brickowlSyncStatus: "failed",
-          brickowlSyncError: args.error,
-        });
+        const item = await ctx.db.get(change.inventoryItemId);
+        if (item) {
+          await ctx.db.patch(change.inventoryItemId, {
+            marketplaceSync: {
+              ...item.marketplaceSync,
+              brickowl: {
+                ...item.marketplaceSync?.brickowl,
+                status: "failed",
+                lastSyncAttempt: timestamp,
+                error: args.error,
+              },
+            },
+          });
+        }
       }
     }
 
     // Determine overall sync status
     const bricklinkSynced = change.bricklinkSyncedAt || updates.bricklinkSyncedAt;
     const brickowlSynced = change.brickowlSyncedAt || updates.brickowlSyncedAt;
-    const bricklinkError = change.bricklinkSyncError || updates.bricklinkSyncError;
-    const brickowlError = change.brickowlSyncError || updates.brickowlSyncError;
 
-    const hasAnyError = bricklinkError || brickowlError;
+    // Check for errors in the new marketplaceSync structure
+    const item = await ctx.db.get(change.inventoryItemId);
+    const hasAnyError =
+      item?.marketplaceSync?.bricklink?.status === "failed" ||
+      item?.marketplaceSync?.brickowl?.status === "failed";
 
     if (hasAnyError) {
       updates.syncStatus = "failed";
@@ -798,12 +675,7 @@ export const updateSyncStatus = internalMutation({
 
     await ctx.db.patch(args.changeId, updates);
 
-    // Update inventory item's lastSyncedAt if successful
-    if (args.success) {
-      await ctx.db.patch(change.inventoryItemId, {
-        lastSyncedAt: timestamp,
-      });
-    }
+    // Sync status is updated in updateSyncStatus mutation
   },
 });
 
@@ -823,26 +695,7 @@ export const recordSyncError = internalMutation({
       syncStatus: "failed",
     };
 
-    if (args.provider === "bricklink") {
-      updates.bricklinkSyncError = args.error;
-    } else {
-      updates.brickowlSyncError = args.error;
-    }
-
     await ctx.db.patch(args.changeId, updates);
-
-    // Also add to inventory item's syncErrors array
-    const item = await ctx.db.get(change.inventoryItemId);
-    if (item) {
-      const syncErrors = item.syncErrors || [];
-      syncErrors.push({
-        provider: args.provider,
-        error: args.error,
-        occurredAt: Date.now(),
-      });
-
-      await ctx.db.patch(change.inventoryItemId, { syncErrors });
-    }
   },
 });
 
@@ -875,27 +728,7 @@ export const recordConflict = internalMutation({
       },
     };
 
-    // Also record provider-specific error
-    if (args.provider === "bricklink") {
-      updates.bricklinkSyncError = args.error;
-    } else {
-      updates.brickowlSyncError = args.error;
-    }
-
     await ctx.db.patch(args.changeId, updates);
-
-    // Also add to inventory item's syncErrors array
-    const item = await ctx.db.get(change.inventoryItemId);
-    if (item) {
-      const syncErrors = item.syncErrors || [];
-      syncErrors.push({
-        provider: args.provider,
-        error: `CONFLICT: ${args.error}`,
-        occurredAt: Date.now(),
-      });
-
-      await ctx.db.patch(change.inventoryItemId, { syncErrors });
-    }
   },
 });
 
@@ -916,23 +749,59 @@ export const updateImmediateSyncStatus = internalMutation({
   },
   handler: async (ctx, args) => {
     const updates: {
-      bricklinkSyncStatus?: "synced" | "failed";
-      brickowlSyncStatus?: "synced" | "failed";
-      bricklinkLotId?: number;
-      brickowlLotId?: string;
+      marketplaceSync?: {
+        bricklink?: {
+          status: "synced" | "failed";
+          lastSyncAttempt: number;
+          lotId?: number;
+        };
+        brickowl?: {
+          status: "synced" | "failed";
+          lastSyncAttempt: number;
+          lotId?: string;
+        };
+      };
     } = {};
 
     for (const result of args.results) {
       if (result.provider === "bricklink") {
-        updates.bricklinkSyncStatus = result.success ? "synced" : "failed";
+        const bricklinkUpdate: {
+          status: "synced" | "failed";
+          lastSyncAttempt: number;
+          lotId?: number;
+        } = {
+          status: result.success ? "synced" : "failed",
+          lastSyncAttempt: Date.now(),
+        };
+
+        // CRITICAL: Only set lotId if we have both success AND a marketplaceId
         if (result.success && result.marketplaceId) {
-          updates.bricklinkLotId = result.marketplaceId as number;
+          bricklinkUpdate.lotId = result.marketplaceId as number;
         }
+
+        updates.marketplaceSync = {
+          ...updates.marketplaceSync,
+          bricklink: bricklinkUpdate,
+        };
       } else if (result.provider === "brickowl") {
-        updates.brickowlSyncStatus = result.success ? "synced" : "failed";
+        const brickowlUpdate: {
+          status: "synced" | "failed";
+          lastSyncAttempt: number;
+          lotId?: string;
+        } = {
+          status: result.success ? "synced" : "failed",
+          lastSyncAttempt: Date.now(),
+        };
+
+        // CRITICAL: Only set lotId if we have both success AND a marketplaceId
         if (result.success && result.marketplaceId) {
-          updates.brickowlLotId = result.marketplaceId as string;
+          brickowlUpdate.lotId = result.marketplaceId as string;
         }
+
+        updates.marketplaceSync = {
+          ...updates.marketplaceSync,
+          brickowl: brickowlUpdate,
+        };
       }
     }
 

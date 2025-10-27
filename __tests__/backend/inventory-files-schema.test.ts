@@ -236,8 +236,6 @@ describe("Inventory Files Schema", () => {
         location: "Bin A1",
         quantityAvailable: 10,
         quantityReserved: 0,
-        quantitySold: 0,
-        status: "available",
         condition: "new",
         fileId,
         createdBy: "users:1",
@@ -282,23 +280,27 @@ describe("Inventory Files Schema", () => {
         location: "Bin A1",
         quantityAvailable: 10,
         quantityReserved: 0,
-        quantitySold: 0,
-        status: "available",
         condition: "new",
-        bricklinkSyncStatus: "pending",
-        brickowlSyncStatus: "synced",
-        bricklinkSyncError: undefined,
-        brickowlSyncError: undefined,
+        marketplaceSync: {
+          bricklink: {
+            status: "pending",
+            lastSyncAttempt: now,
+          },
+          brickowl: {
+            status: "synced",
+            lastSyncAttempt: now,
+          },
+        },
         createdBy: "users:1",
         createdAt: now,
       });
 
       const item = await ctx.db.get(itemId);
 
-      expect(item?.bricklinkSyncStatus).toBe("pending");
-      expect(item?.brickowlSyncStatus).toBe("synced");
-      expect(item?.bricklinkSyncError).toBeUndefined();
-      expect(item?.brickowlSyncError).toBeUndefined();
+      expect(item?.marketplaceSync?.bricklink?.status).toBe("pending");
+      expect(item?.marketplaceSync?.brickowl?.status).toBe("synced");
+      expect(item?.marketplaceSync?.bricklink?.error).toBeUndefined();
+      expect(item?.marketplaceSync?.brickowl?.error).toBeUndefined();
     });
 
     test("should create inventory item with marketplace IDs", async () => {
@@ -334,19 +336,27 @@ describe("Inventory Files Schema", () => {
         location: "Bin A1",
         quantityAvailable: 10,
         quantityReserved: 0,
-        quantitySold: 0,
-        status: "available",
         condition: "new",
-        bricklinkLotId: 123456,
-        brickowlLotId: "OWL789",
+        marketplaceSync: {
+          bricklink: {
+            lotId: 123456,
+            status: "synced",
+            lastSyncAttempt: now,
+          },
+          brickowl: {
+            lotId: "OWL789",
+            status: "synced",
+            lastSyncAttempt: now,
+          },
+        },
         createdBy: "users:1",
         createdAt: now,
       });
 
       const item = await ctx.db.get(itemId);
 
-      expect(item?.bricklinkLotId).toBe(123456);
-      expect(item?.brickowlLotId).toBe("OWL789");
+      expect(item?.marketplaceSync?.bricklink?.lotId).toBe(123456);
+      expect(item?.marketplaceSync?.brickowl?.lotId).toBe("OWL789");
     });
 
     test("should query inventory items by fileId index", async () => {
@@ -390,8 +400,6 @@ describe("Inventory Files Schema", () => {
         location: "Bin A1",
         quantityAvailable: 10,
         quantityReserved: 0,
-        quantitySold: 0,
-        status: "available",
         condition: "new",
         fileId,
         createdBy: "users:1",
@@ -405,8 +413,6 @@ describe("Inventory Files Schema", () => {
         location: "Bin A2",
         quantityAvailable: 5,
         quantityReserved: 0,
-        quantitySold: 0,
-        status: "available",
         condition: "new",
         fileId,
         createdBy: "users:1",
@@ -455,8 +461,6 @@ describe("Inventory Files Schema", () => {
         location: "Bin A1",
         quantityAvailable: 10,
         quantityReserved: 0,
-        quantitySold: 0,
-        status: "available",
         condition: "new",
         // No fileId - this is in main inventory
         createdBy: "users:1",
