@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -19,6 +18,7 @@ import { ColorSelect } from "@/components/catalog/ColorSelect";
 import { PartPriceGuide } from "@/components/catalog/PartPriceGuide";
 import { useGetPart } from "@/hooks/useGetPart";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
+import { ColorPartImage } from "@/components/common/ColorPartImage";
 import { useEffect } from "react";
 
 export type PartDetailDrawerProps = {
@@ -50,6 +50,9 @@ export function PartDetailDrawer({ open, onOpenChange, partNumber }: PartDetailD
       setSelectedColorId(colors[0].colorId.toString());
     }
   }, [colors, selectedColorId]);
+
+  // Image handled by ColorPartImage component
+  const selectedColorIdNumber = selectedColorId ? parseInt(selectedColorId, 10) : null;
 
   // Overlay is still a simple query (no refresh needed)
   const overlayArgs = open && partNumber ? { partNumber } : "skip";
@@ -96,18 +99,18 @@ export function PartDetailDrawer({ open, onOpenChange, partNumber }: PartDetailD
                 {/* Part Image and Information */}
                 <section className="flex gap-6">
                   {/* Part Image */}
-                  {part.imageUrl && (
+                  {
                     <div className="relative h-64 w-64 flex-shrink-0">
-                      <Image
-                        src={part.imageUrl}
+                      <ColorPartImage
+                        partNumber={partNumber}
+                        colorId={selectedColorIdNumber}
                         alt={part.name}
                         fill
-                        className="rounded-lg object-contain"
-                        unoptimized // External images from Bricklink
                         sizes="256px"
+                        unoptimized
                       />
                     </div>
-                  )}
+                  }
 
                   {/* Part Information */}
                   <div className="flex-1 space-y-2 text-sm">

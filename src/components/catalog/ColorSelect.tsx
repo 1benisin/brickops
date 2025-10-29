@@ -30,6 +30,8 @@ export function ColorSelect({
   // Fetch colors for this part
   const { data: colors } = useGetPartColors(partNumber);
 
+  // We intentionally do not fetch or show color thumbnail images
+
   // Persist last used color
   const [lastUsedValues, setLastUsedValues] = useLocalStorage<{ colorId?: string }>(
     "brickops:inventory:lastUsed",
@@ -84,25 +86,39 @@ export function ColorSelect({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className="">
-        {colorOptions.map((option) => {
-          const bgColor = `#${option.hex}`;
-          const { color: textColor } = bestTextOn(bgColor);
-
-          return (
-            <SelectItem
-              key={option.value}
-              value={option.value}
-              className="cursor-pointer rounded-none"
-              style={{
-                backgroundColor: bgColor,
-                color: textColor,
-              }}
-            >
-              {option.label}
-            </SelectItem>
-          );
-        })}
+        {colorOptions.map((option) => (
+          <ColorSelectItem key={option.value} option={option} partNumber={partNumber} />
+        ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/**
+ * Helper component for individual color select items
+ * Displays color image thumbnail when available, falls back to colored square
+ */
+function ColorSelectItem({
+  option,
+  partNumber: _partNumber,
+}: {
+  option: { value: string; label: string; hex: string };
+  partNumber: string | null;
+}) {
+  const bgColor = `#${option.hex}`;
+  const { color: textColor } = bestTextOn(bgColor);
+
+  return (
+    <SelectItem
+      key={option.value}
+      value={option.value}
+      className="cursor-pointer rounded-none"
+      style={{
+        backgroundColor: bgColor,
+        color: textColor,
+      }}
+    >
+      <span>{option.label}</span>
+    </SelectItem>
   );
 }

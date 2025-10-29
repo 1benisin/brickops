@@ -50,6 +50,15 @@ export const catalogPartValidator = v.object({
 });
 
 /**
+ * Part color image information
+ */
+export const partColorImageValidator = v.object({
+  imageUrl: v.optional(v.string()),
+  thumbnailUrl: v.optional(v.string()),
+  lastFetched: v.number(),
+});
+
+/**
  * Color information (enriched with name and RGB)
  */
 export const catalogColorInfoValidator = v.object({
@@ -61,6 +70,8 @@ export const catalogColorInfoValidator = v.object({
     }),
     v.null(),
   ),
+  // Optional color-specific image
+  image: v.optional(partColorImageValidator),
 });
 
 // ============================================================================

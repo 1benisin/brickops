@@ -81,7 +81,6 @@ export default function CatalogPage() {
     setPartTitle,
     setPartId,
     setPageSize,
-    resetFilters,
   } = useSearchStore((state) => ({
     sortLocation: state.sortLocation,
     partTitle: state.partTitle,
@@ -181,10 +180,6 @@ export default function CatalogPage() {
           onPartTitleChange={setPartTitle}
           onPartIdChange={setPartId}
           onSubmit={() => undefined}
-          onClear={() => {
-            resetFilters();
-            // Pagination state is now managed by usePaginatedQuery and resets automatically when searchArgs change
-          }}
           isLoading={searchLoading}
           showLocationSearch={
             currentUser?.user && "useSortLocations" in currentUser.user
@@ -218,7 +213,7 @@ export default function CatalogPage() {
             </header>
 
             {isLoading && parts.length === 0 ? (
-              <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
+              <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(120px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] xl:grid-cols-10">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <Skeleton key={index} className="h-40 w-full rounded-lg" />
                 ))}
@@ -232,7 +227,7 @@ export default function CatalogPage() {
               </div>
             ) : (
               <div
-                className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]"
+                className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(120px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] xl:grid-cols-10"
                 data-testid="catalog-results-grid"
               >
                 {parts.map((part) => (

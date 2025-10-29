@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
@@ -39,6 +39,7 @@ import { PartPriceGuide } from "@/components/catalog/PartPriceGuide";
 import { UnitPriceInputGroup } from "./UnitPriceInputGroup";
 import { useGetPart } from "@/hooks/useGetPart";
 import { useGetPriceGuide } from "@/hooks/useGetPriceGuide";
+import { ColorPartImage } from "@/components/common/ColorPartImage";
 import type { InventoryItem, ItemCondition } from "@/types/inventory";
 import type { PriceGuide } from "@/types/catalog";
 
@@ -150,13 +151,15 @@ export function EditInventoryItemDialog({
     mode: "onChange",
   });
 
-  // derive numeric color for the guide
-  const colorId = form.watch("colorId");
+  // derive numeric color for the guide (reactive)
+  const colorId = useWatch({ control: form.control, name: "colorId" });
   const colorIdNumber = useMemo(() => {
     return colorId ? parseInt(colorId, 10) : null;
   }, [colorId]);
 
   const { data: priceGuide } = useGetPriceGuide(item?.partNumber ?? null, colorIdNumber);
+
+  // Image is handled by ColorPartImage component
 
   // Initialize form when item changes
   useEffect(() => {
@@ -210,6 +213,7 @@ export function EditInventoryItemDialog({
               ? "Loading part details…"
               : `${part?.name ?? "Part"} · ${part?.partNumber ?? "—"}`}
           </SheetDescription>
+          {/* Image moved next to form fields below for compact layout */}
         </SheetHeader>
 
         {loading ? (
@@ -227,132 +231,149 @@ export function EditInventoryItemDialog({
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
               <div className="flex-1 space-y-3">
-                {/* Core fields */}
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  <FormField<EditInventoryFormData, "colorId">
-                    control={form.control}
-                    name="colorId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Color</FormLabel>
-                        <FormControl>
-                          <ColorSelect
-                            partNumber={item?.partNumber ?? null}
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Select color..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                {/* Compact top row with image on the left and fields on the right */}
+                <div className="flex gap-4 items-start">
+                  {/* Image */}
+                  {part && (
+                    <div className="relative h-24 w-24 flex-shrink-0">
+                      <ColorPartImage
+                        partNumber={item?.partNumber ?? null}
+                        colorId={colorIdNumber}
+                        alt={part.name}
+                        fill
+                        sizes="96px"
+                        unoptimized
+                      />
+                    </div>
+                  )}
 
-                  <FormField<EditInventoryFormData, "location">
-                    control={form.control}
-                    name="location"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Location</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g., Shelf A1"
-                            onFocus={(e) => e.target.select()}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField<EditInventoryFormData, "condition">
-                    control={form.control}
-                    name="condition"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Condition</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
+                  {/* Core fields */}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 flex-1">
+                    <FormField<EditInventoryFormData, "colorId">
+                      control={form.control}
+                      name="colorId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Color</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select condition" />
-                            </SelectTrigger>
+                            <ColorSelect
+                              partNumber={item?.partNumber ?? null}
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Select color..."
+                            />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="used">Used</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField<EditInventoryFormData, "quantityAvailable">
-                    control={form.control}
-                    name="quantityAvailable"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Available Quantity</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={field.value}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                            onFocus={(e) => e.target.select()}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField<EditInventoryFormData, "location">
+                      control={form.control}
+                      name="location"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Location</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g., Shelf A1"
+                              onFocus={(e) => e.target.select()}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField<EditInventoryFormData, "quantityReserved">
-                    control={form.control}
-                    name="quantityReserved"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Reserved Quantity</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={field.value}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                            onFocus={(e) => e.target.select()}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField<EditInventoryFormData, "condition">
+                      control={form.control}
+                      name="condition"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Condition</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select condition" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="new">New</SelectItem>
+                              <SelectItem value="used">Used</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField<EditInventoryFormData, "price">
-                    control={form.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Unit Price</FormLabel>
-                        <FormControl>
-                          <UnitPriceInputGroup
-                            priceValue={field.value}
-                            onPriceChange={field.onChange}
-                            guideTypeValue={form.getValues("priceHelperType")}
-                            onGuideTypeChange={(value) => form.setValue("priceHelperType", value)}
-                            guideStatValue={form.getValues("priceHelperStat")}
-                            onGuideStatChange={(value) => form.setValue("priceHelperStat", value)}
-                          />
-                        </FormControl>
-                        <FormDescription className="text-[11px]">
-                          Auto-filled from {form.getValues("condition")} ·{" "}
-                          {form.getValues("priceHelperType")} ·{" "}
-                          {form.getValues("priceHelperStat").replace("_", " ")}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField<EditInventoryFormData, "quantityAvailable">
+                      control={form.control}
+                      name="quantityAvailable"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Available Quantity</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={field.value}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                              onFocus={(e) => e.target.select()}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField<EditInventoryFormData, "quantityReserved">
+                      control={form.control}
+                      name="quantityReserved"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Reserved Quantity</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={field.value}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                              onFocus={(e) => e.target.select()}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField<EditInventoryFormData, "price">
+                      control={form.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Unit Price</FormLabel>
+                          <FormControl>
+                            <UnitPriceInputGroup
+                              priceValue={field.value}
+                              onPriceChange={field.onChange}
+                              guideTypeValue={form.getValues("priceHelperType")}
+                              onGuideTypeChange={(value) => form.setValue("priceHelperType", value)}
+                              guideStatValue={form.getValues("priceHelperStat")}
+                              onGuideStatChange={(value) => form.setValue("priceHelperStat", value)}
+                            />
+                          </FormControl>
+                          <FormDescription className="text-[11px]">
+                            Auto-filled from {form.getValues("condition")} ·{" "}
+                            {form.getValues("priceHelperType")} ·{" "}
+                            {form.getValues("priceHelperStat").replace("_", " ")}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
 
                 {/* Notes field */}

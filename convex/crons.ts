@@ -13,25 +13,32 @@ export const logHeartbeat = internalAction({
 
 crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbeat);
 
-// Process refresh queue every 5 minutes (10 items per run = 120 API calls/hour max)
+// Drain catalog refresh outbox every 5 minutes (10 items per run = 120 API calls/hour max)
 crons.interval(
-  "process-refresh-queue",
+  "drain-catalog-refresh-outbox",
   { minutes: 5 },
-  internal.bricklink.dataRefresher.processQueue,
+  internal.catalog.refreshWorker.drainCatalogRefreshOutbox,
 );
 
-// Clean up old queue items daily at 2 AM UTC
+// Clean up old outbox items daily at 2 AM UTC
 crons.daily(
-  "cleanup-refresh-queue",
+  "cleanup-catalog-refresh-outbox",
   { hourUTC: 2, minuteUTC: 0 },
-  internal.bricklink.dataRefresher.cleanupQueue,
+  internal.bricklink.dataRefresher.cleanupOutbox,
 );
 
 // Phase 3: Drain marketplace outbox every 30 seconds
 crons.interval(
   "drain-marketplace-outbox",
-  { seconds: 30 },
+  { minutes: 5 },
   internal.inventory.syncWorker.drainMarketplaceOutbox,
+);
+
+// Poll BrickLink notifications for all active stores every 3 minutes (safety net)
+crons.interval(
+  "poll-bricklink-notifications",
+  { minutes: 3 },
+  internal.bricklink.notifications.pollAllNotifications,
 );
 
 export default crons;

@@ -1,4 +1,4 @@
-import { query } from "../_generated/server";
+import { query, internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import {
@@ -227,14 +227,24 @@ export const getPart = query({
       categoryName = category?.categoryName ?? null;
     }
 
-    // Determine status: refreshing > stale > fresh
+    // Check if refresh is in progress (outbox)
+    const outboxMessage = await ctx.db
+      .query("catalogRefreshOutbox")
+      .withIndex("by_table_primary_secondary", (q) =>
+        q.eq("tableName", "parts").eq("primaryKey", args.partNumber),
+      )
+      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
+      .first();
+
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const status: "refreshing" | "stale" | "fresh" =
-      part.refreshUntil && part.refreshUntil > Date.now()
-        ? "refreshing"
-        : part.lastFetched < thirtyDaysAgo
-          ? "stale"
-          : "fresh";
+    const isStale = part.lastFetched < thirtyDaysAgo;
+
+    // Determine status: refreshing > stale > fresh
+    const status: "refreshing" | "stale" | "fresh" = outboxMessage
+      ? "refreshing"
+      : isStale
+        ? "stale"
+        : "fresh";
 
     return {
       data: {
@@ -280,8 +290,16 @@ export const getPartColors = query({
       };
     }
 
-    // Check if currently refreshing (any lock is active)
-    const isRefreshing = partColors.some((pc) => pc.refreshUntil && pc.refreshUntil > Date.now());
+    // Check if refresh is in progress (outbox)
+    const outboxMessage = await ctx.db
+      .query("catalogRefreshOutbox")
+      .withIndex("by_table_primary_secondary", (q) =>
+        q.eq("tableName", "partColors").eq("primaryKey", args.partNumber),
+      )
+      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
+      .first();
+
+    const isRefreshing = !!outboxMessage;
 
     // Get color details for each
     const colorDetails = await Promise.all(
@@ -359,8 +377,19 @@ export const getPriceGuide = query({
       };
     };
 
-    // Check if currently refreshing (any lock is active)
-    const isRefreshing = priceRecords.some((pr) => pr.refreshUntil && pr.refreshUntil > Date.now());
+    // Check if refresh is in progress (outbox)
+    const outboxMessage = await ctx.db
+      .query("catalogRefreshOutbox")
+      .withIndex("by_table_primary_secondary", (q) =>
+        q
+          .eq("tableName", "partPrices")
+          .eq("primaryKey", args.partNumber)
+          .eq("secondaryKey", String(args.colorId)),
+      )
+      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
+      .first();
+
+    const isRefreshing = !!outboxMessage;
 
     // Determine status: refreshing > stale > fresh
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -381,3 +410,103 @@ export const getPriceGuide = query({
     };
   },
 });
+
+/**
+ * Get part color image with on-demand fetching
+ * If image doesn't exist, returns null (client should trigger fetch via action)
+ */
+// (getPartColorImage removed - client uses BrickLink CDN directly)
+
+// ============================================================================
+// INTERNAL QUERIES (for actions and worker)
+// ============================================================================
+
+/**
+ * Get outbox message for a specific resource
+ * Used by actions to check if refresh is already queued
+ */
+export const getOutboxMessage = internalQuery({
+  args: {
+    tableName: v.union(v.literal("parts"), v.literal("partColors"), v.literal("partPrices")),
+    primaryKey: v.string(),
+    secondaryKey: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("catalogRefreshOutbox")
+      .withIndex("by_table_primary_secondary", (q) =>
+        q
+          .eq("tableName", args.tableName)
+          .eq("primaryKey", args.primaryKey)
+          .eq("secondaryKey", args.secondaryKey),
+      )
+      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
+      .first();
+  },
+});
+
+/**
+ * Get outbox message by ID
+ * Used to fetch a specific message for immediate processing
+ */
+export const getOutboxMessageById = internalQuery({
+  args: {
+    messageId: v.id("catalogRefreshOutbox"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.messageId);
+  },
+});
+
+/**
+ * Get part data for internal use (returns raw schema, not validated return type)
+ */
+export const getPartInternal = internalQuery({
+  args: {
+    partNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("parts")
+      .withIndex("by_no", (q) => q.eq("no", args.partNumber))
+      .first();
+  },
+});
+
+/**
+ * Get part colors data for internal use
+ */
+export const getPartColorsInternal = internalQuery({
+  args: {
+    partNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("partColors")
+      .withIndex("by_partNo", (q) => q.eq("partNo", args.partNumber))
+      .collect();
+  },
+});
+
+/**
+ * Get price guide data for internal use
+ */
+export const getPriceGuideInternal = internalQuery({
+  args: {
+    partNumber: v.string(),
+    colorId: v.number(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("partPrices")
+      .withIndex("by_partNo_colorId", (q) =>
+        q.eq("partNo", args.partNumber).eq("colorId", args.colorId),
+      )
+      .collect();
+  },
+});
+
+/**
+ * Get part color image for internal use
+ */
+// (getPartColorImageInternal removed)

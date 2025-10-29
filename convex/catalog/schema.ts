@@ -20,7 +20,6 @@ export const catalogTables = {
     isObsolete: v.optional(v.boolean()), // Bricklink's is_obsolete
     lastFetched: v.number(), // Universal freshness timestamp
     // system fields
-    refreshUntil: v.optional(v.number()), // Lock timestamp - prevents concurrent refreshes
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
@@ -57,8 +56,8 @@ export const catalogTables = {
       filterFields: ["businessAccountId", "sortLocation"],
     }),
 
-  // Refresh queue for background data updates from Bricklink
-  catalogRefreshQueue: defineTable({
+  // Refresh outbox for background data updates from Bricklink
+  catalogRefreshOutbox: defineTable({
     tableName: v.union(
       v.literal("parts"),
       v.literal("partColors"),
@@ -73,18 +72,19 @@ export const catalogTables = {
     lastFetched: v.optional(v.number()), // When data was last refreshed (if known)
     status: v.union(
       v.literal("pending"),
-      v.literal("processing"),
-      v.literal("completed"),
+      v.literal("inflight"),
+      v.literal("succeeded"),
       v.literal("failed"),
     ),
-    errorMessage: v.optional(v.string()),
+    attempt: v.number(), // Retry attempt number (starts at 0)
+    nextAttemptAt: v.number(), // Timestamp for next retry attempt
+    lastError: v.optional(v.string()), // Last error message (renamed from errorMessage)
     processedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
-    .index("by_status_priority", ["status", "priority"])
+    .index("by_status_time", ["status", "nextAttemptAt"]) // NEW: For worker queries
     .index("by_table_primary", ["tableName", "primaryKey"])
-    .index("by_table_primary_secondary", ["tableName", "primaryKey", "secondaryKey"])
-    .index("by_status", ["status"]),
+    .index("by_table_primary_secondary", ["tableName", "primaryKey", "secondaryKey"]),
 
   // Global LEGO part pricing data from Bricklink (cached with refresh capability)
   // Each part+color can have 4 price records: new/used × sold/stock
@@ -101,7 +101,6 @@ export const catalogTables = {
     unitQuantity: v.optional(v.number()), // Bricklink's unit_quantity
     totalQuantity: v.optional(v.number()), // Bricklink's total_quantity
     guideType: v.union(v.literal("sold"), v.literal("stock")), // Bricklink's guide_type (sold/stock)
-    refreshUntil: v.optional(v.number()), // Lock for concurrent refresh protection
     lastFetched: v.number(), // Universal freshness timestamp
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
@@ -133,7 +132,6 @@ export const catalogTables = {
     categoryName: v.string(), // Bricklink's category_name
     parentId: v.optional(v.number()), // Bricklink's parent_id (0 if root)
     lastFetched: v.number(), // Universal freshness timestamp
-    refreshUntil: v.optional(v.number()), // Lock timestamp - prevents concurrent refreshes
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
@@ -150,11 +148,12 @@ export const catalogTables = {
     colorId: v.number(), // Bricklink's color_id
     quantity: v.number(), // Bricklink's quantity
     lastFetched: v.number(), // Universal freshness timestamp
-    refreshUntil: v.optional(v.number()), // Lock timestamp - prevents concurrent refreshes
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   })
     .index("by_partNo", ["partNo"])
     .index("by_colorId", ["colorId"])
     .index("by_partNo_colorId", ["partNo", "colorId"]),
+
+  // (partColorImages removed - using direct BrickLink CDN URLs client-side)
 };

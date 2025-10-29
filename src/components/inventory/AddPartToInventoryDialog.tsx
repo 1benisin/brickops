@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation } from "convex/react";
@@ -41,6 +41,7 @@ import { UnitPriceInputGroup } from "./UnitPriceInputGroup";
 import { useGetPart } from "@/hooks/useGetPart";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { useGetPriceGuide } from "@/hooks/useGetPriceGuide";
+import { ColorPartImage } from "@/components/common/ColorPartImage";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import type { PriceGuide } from "@/types/catalog";
 import type { ItemCondition } from "@/types/inventory";
@@ -181,8 +182,8 @@ export function AddPartToInventoryDialog({
     mode: "onChange",
   });
 
-  // derive numeric color for the guide
-  const colorId = form.watch("colorId");
+  // derive numeric color for the guide (reactive)
+  const colorId = useWatch({ control: form.control, name: "colorId" });
   const colorIdNumber = useMemo(() => {
     return colorId ? parseInt(colorId, 10) : null;
   }, [colorId]);
@@ -204,6 +205,9 @@ export function AddPartToInventoryDialog({
   }, [availableColors, lastUsed.colorId]);
 
   const { data: priceGuide } = useGetPriceGuide(partNumber, colorIdNumber);
+
+  // Get color-specific image for selected color
+  // Image handled by ColorPartImage component
 
   // Reset initialization flag when dialog closes or part changes
   useEffect(() => {
@@ -330,6 +334,19 @@ export function AddPartToInventoryDialog({
               ? "Loading part details…"
               : `${part?.name ?? "Part"} · ${part?.partNumber ?? "—"}`}
           </SheetDescription>
+          {/* Part Image */}
+          {part && (
+            <div className="relative h-32 w-32 flex-shrink-0 self-center mt-2">
+              <ColorPartImage
+                partNumber={partNumber}
+                colorId={colorIdNumber}
+                alt={part.name}
+                fill
+                sizes="128px"
+                unoptimized
+              />
+            </div>
+          )}
         </SheetHeader>
 
         {loading ? (

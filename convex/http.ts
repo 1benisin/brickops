@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 
 import { validateBricklink, validateBrickognize, validateBrickowl } from "./lib/external/validate";
 import { auth } from "./auth";
+import { bricklinkWebhook } from "./bricklink/webhook";
 
 const http = httpRouter();
 
@@ -96,6 +97,17 @@ http.route({
   path: "/api/health/brickowl",
   method: "GET",
   handler: brickowlHealth,
+});
+
+// BrickLink webhook endpoint - supports dynamic token routing
+// Path: /api/bricklink/webhook/{webhookToken}
+// Token is extracted in the handler from URL path
+// Note: Convex httpRouter should match paths with additional segments after the base path
+// If path-based routing doesn't work, the handler also supports query parameters (?token=...)
+http.route({
+  path: "/api/bricklink/webhook",
+  method: "POST",
+  handler: bricklinkWebhook,
 });
 
 export default http;

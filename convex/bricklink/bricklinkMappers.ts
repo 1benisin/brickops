@@ -85,6 +85,8 @@ export interface BricklinkPriceGuideResponse {
   guide_type?: string; // "sold" or "stock"
 }
 
+// (BricklinkItemImageResponse no longer needed - images loaded directly from CDN)
+
 /**
  * Maps Bricklink color API response to local database record
  */
@@ -204,3 +206,8 @@ export const mapPriceGuide = (
 export const isStale = (lastFetched: number, maxAgeMs: number): boolean => {
   return Date.now() - lastFetched > maxAgeMs;
 };
+
+/**
+ * Maps Bricklink item image API response to local database record
+ */
+// (mapPartColorImage removed)

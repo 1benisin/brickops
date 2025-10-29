@@ -22,7 +22,8 @@
  * - Minimal required fields per table; complex fields (arrays/objects) are flattened/omitted
  */
 
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream, constants } from "node:fs";
+import { mkdir, access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import sax from "sax";
@@ -31,7 +32,13 @@ import { hideBin } from "yargs/helpers";
 
 // Types intentionally minimal; conversion writes JSONL files directly
 
-const DATA_DIR = join(process.cwd(), "docs", "external-documentation", "bricklink-data");
+const DATA_DIR = join(
+  process.cwd(),
+  "docs",
+  "external-documentation",
+  "api-bricklink",
+  "seed-data",
+);
 
 const DEFAULT_LIMIT = 100; // max rows to emit per JSONL file; configurable via --limit
 
@@ -120,242 +127,292 @@ export const main = async () => {
       default: DEFAULT_LIMIT,
       describe: "Max number of records to emit per CSV (0 = no limit)",
     })
+    .option("parts-only", {
+      type: "boolean",
+      default: false,
+      describe: "Only build parts JSONL files (skip colors, categories, elements)",
+    })
     .help()
     .parse();
 
   const limit = Math.max(0, argv.limit ?? DEFAULT_LIMIT);
-  const now = Date.now();
+  // Set timestamp to one year ago so seeded data is treated as stale and triggers fresh API fetches
+  const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
+
+  // Ensure output directory exists
+  await mkdir(DATA_DIR, { recursive: true });
 
   // 1) Colors → colors.jsonl (schema: colorId, colorName, colorCode, colorType)
-  {
+  if (!argv["parts-only"]) {
     const colorPath = join(DATA_DIR, "colors.xml");
     const outPath = join(DATA_DIR, "colors.jsonl");
-    log(
-      `${colors.blue}→${colors.reset} Writing colors JSONL ${colors.dim}→${colors.reset} ${colors.dim}${outPath}${colors.reset}`,
-    );
-    const out = createWriteStream(outPath, { encoding: "utf8" });
 
-    let colorCount = 0;
+    try {
+      await access(colorPath, constants.F_OK);
+      log(
+        `${colors.blue}→${colors.reset} Writing colors JSONL ${colors.dim}→${colors.reset} ${colors.dim}${outPath}${colors.reset}`,
+      );
+      const out = createWriteStream(outPath, { encoding: "utf8" });
 
-    await parseXmlStream(colorPath, async (item) => {
-      const colorId = Number(item.COLOR);
-      const colorName = item.COLORNAME?.trim();
-      if (!colorId || !colorName) return;
+      let colorCount = 0;
 
-      const colorType = item.COLORTYPE?.trim();
-      const colorCode = item.COLORRGB?.trim() || undefined;
+      await parseXmlStream(colorPath, async (item) => {
+        const colorId = Number(item.COLOR);
+        const colorName = item.COLORNAME?.trim();
+        if (!colorId || !colorName) return;
 
-      const doc: Record<string, unknown> = {
-        colorId,
-        colorName: String(colorName),
-        lastFetched: now,
-        createdAt: now,
-      };
-      if (colorCode) doc.colorCode = String(colorCode);
-      if (colorType) doc.colorType = String(colorType);
+        const colorType = item.COLORTYPE?.trim();
+        const colorCode = item.COLORRGB?.trim() || undefined;
 
-      const line = `${JSON.stringify(doc)}\n`;
-      if (!out.write(line)) await new Promise((r) => out.once("drain", r));
-      colorCount++;
-      if (limit && colorCount >= limit) return;
-    });
-    await new Promise<void>((resolve) => out.end(resolve));
-    logProgress("Colors JSONL", colorCount, "complete");
+        const doc: Record<string, unknown> = {
+          colorId,
+          colorName: String(colorName),
+          lastFetched: oneYearAgo,
+          createdAt: oneYearAgo,
+        };
+        if (colorCode) doc.colorCode = String(colorCode);
+        if (colorType) doc.colorType = String(colorType);
+
+        const line = `${JSON.stringify(doc)}\n`;
+        if (!out.write(line)) await new Promise((r) => out.once("drain", r));
+        colorCount++;
+        if (limit && colorCount >= limit) return;
+      });
+      await new Promise<void>((resolve) => out.end(resolve));
+      logProgress("Colors JSONL", colorCount, "complete");
+    } catch {
+      log(
+        `${colors.yellow}⚠${colors.reset} Skipping colors - ${colors.dim}colors.xml not found${colors.reset}`,
+      );
+    }
   }
 
   // 2) Categories → categories.jsonl (schema: categoryId, categoryName, parentId)
-  {
+  if (!argv["parts-only"]) {
     const categoryXmlPath = join(DATA_DIR, "categories.xml");
     const categoryJsonlPath = join(DATA_DIR, "categories.jsonl");
-    log(
-      `${colors.blue}→${colors.reset} Writing categories JSONL ${colors.dim}→${colors.reset} ${colors.dim}${categoryJsonlPath}${colors.reset}`,
-    );
-    const out = createWriteStream(categoryJsonlPath, { encoding: "utf8" });
 
-    let categoryCount = 0;
-    await parseXmlStream(categoryXmlPath, async (item) => {
-      const categoryId = Number(item.CATEGORY);
-      const categoryName = item.CATEGORYNAME?.trim();
-      if (!categoryId || !categoryName) return;
+    try {
+      await access(categoryXmlPath, constants.F_OK);
+      log(
+        `${colors.blue}→${colors.reset} Writing categories JSONL ${colors.dim}→${colors.reset} ${colors.dim}${categoryJsonlPath}${colors.reset}`,
+      );
+      const out = createWriteStream(categoryJsonlPath, { encoding: "utf8" });
 
-      const doc: Record<string, unknown> = {
-        categoryId,
-        categoryName: String(categoryName),
-        lastFetched: now,
-        createdAt: now,
-      };
+      let categoryCount = 0;
+      await parseXmlStream(categoryXmlPath, async (item) => {
+        const categoryId = Number(item.CATEGORY);
+        const categoryName = item.CATEGORYNAME?.trim();
+        if (!categoryId || !categoryName) return;
 
-      // Note: parentId would come from XML if available, currently not in the data
-      // If PARENT field exists in XML, add: if (item.PARENT) doc.parentId = Number(item.PARENT);
+        const doc: Record<string, unknown> = {
+          categoryId,
+          categoryName: String(categoryName),
+          lastFetched: oneYearAgo,
+          createdAt: oneYearAgo,
+        };
 
-      const line = `${JSON.stringify(doc)}\n`;
-      if (!out.write(line)) await new Promise((r) => out.once("drain", r));
-      categoryCount++;
-      if (limit && categoryCount >= limit) return;
-    });
-    await new Promise<void>((resolve) => out.end(resolve));
-    logProgress("Categories JSONL", categoryCount, "complete");
+        // Note: parentId would come from XML if available, currently not in the data
+        // If PARENT field exists in XML, add: if (item.PARENT) doc.parentId = Number(item.PARENT);
+
+        const line = `${JSON.stringify(doc)}\n`;
+        if (!out.write(line)) await new Promise((r) => out.once("drain", r));
+        categoryCount++;
+        if (limit && categoryCount >= limit) return;
+      });
+      await new Promise<void>((resolve) => out.end(resolve));
+      logProgress("Categories JSONL", categoryCount, "complete");
+    } catch {
+      log(
+        `${colors.yellow}⚠${colors.reset} Skipping categories - ${colors.dim}categories.xml not found${colors.reset}`,
+      );
+    }
   }
 
   // 3) Codes → bricklinkElementReference.jsonl (schema: elementId, partNumber, colorId, bricklinkPartId, designId, syncedAt)
-  {
+  if (!argv["parts-only"]) {
     const codesPath = join(DATA_DIR, "codes.xml");
     const elementJsonl = join(DATA_DIR, "bricklinkElementReference.jsonl");
-    log(
-      `${colors.blue}→${colors.reset} Writing element reference JSONL ${colors.dim}→${colors.reset} ${colors.dim}${elementJsonl}${colors.reset}`,
-    );
-    const outElem = createWriteStream(elementJsonl, { encoding: "utf8" });
 
-    // For mapping color names to IDs quickly, we map "(Not Applicable)" → 0 and skip unknown names.
-    // In production, you may want to build a full colorName→colorId map from colors.xml first.
+    try {
+      await access(codesPath, constants.F_OK);
+      log(
+        `${colors.blue}→${colors.reset} Writing element reference JSONL ${colors.dim}→${colors.reset} ${colors.dim}${elementJsonl}${colors.reset}`,
+      );
+      const outElem = createWriteStream(elementJsonl, { encoding: "utf8" });
 
-    let elemCount = 0;
-    await parseXmlStream(codesPath, async (item) => {
-      const partNumber = item.ITEMID?.trim();
-      const colorName = item.COLOR?.trim();
-      const elementId = item.CODENAME?.trim();
-      if (!partNumber || !colorName || !elementId) return;
+      // For mapping color names to IDs quickly, we map "(Not Applicable)" → 0 and skip unknown names.
+      // In production, you may want to build a full colorName→colorId map from colors.xml first.
 
-      let colorId: number | undefined;
-      if (colorName.toLowerCase() === "(not applicable)") colorId = 0;
-      // Unknown color names are skipped to avoid mismatches without a full colorName→ID map
-      if (colorId === undefined) return;
+      let elemCount = 0;
+      await parseXmlStream(codesPath, async (item) => {
+        const partNumber = item.ITEMID?.trim();
+        const colorName = item.COLOR?.trim();
+        const elementId = item.CODENAME?.trim();
+        if (!partNumber || !colorName || !elementId) return;
 
-      const elemDoc: Record<string, unknown> = {
-        elementId: String(elementId),
-        partNumber: String(partNumber),
-        colorId,
-        bricklinkPartId: String(partNumber),
-        syncedAt: now,
-      };
-      // designId not available in this XML, would come from another source
+        let colorId: number | undefined;
+        if (colorName.toLowerCase() === "(not applicable)") colorId = 0;
+        // Unknown color names are skipped to avoid mismatches without a full colorName→ID map
+        if (colorId === undefined) return;
 
-      if (!outElem.write(`${JSON.stringify(elemDoc)}\n`))
-        await new Promise((r) => outElem.once("drain", r));
-      elemCount++;
-      if (limit && elemCount >= limit) return;
-    });
-    await new Promise<void>((resolve) => outElem.end(resolve));
-    logProgress("Element references JSONL", elemCount, "complete");
+        const elemDoc: Record<string, unknown> = {
+          elementId: String(elementId),
+          partNumber: String(partNumber),
+          colorId,
+          bricklinkPartId: String(partNumber),
+          syncedAt: oneYearAgo,
+        };
+        // designId not available in this XML, would come from another source
+
+        if (!outElem.write(`${JSON.stringify(elemDoc)}\n`))
+          await new Promise((r) => outElem.once("drain", r));
+        elemCount++;
+        if (limit && elemCount >= limit) return;
+      });
+      await new Promise<void>((resolve) => outElem.end(resolve));
+      logProgress("Element references JSONL", elemCount, "complete");
+    } catch {
+      log(
+        `${colors.yellow}⚠${colors.reset} Skipping element references - ${colors.dim}codes.xml not found${colors.reset}`,
+      );
+    }
   }
 
   // 4) Parts → parts.jsonl (schema: no, name, type, categoryId, alternateNo, imageUrl, etc.)
   {
     const partsPath = join(DATA_DIR, "Parts.xml");
     const partsJsonl = join(DATA_DIR, "parts.jsonl");
-    log(
-      `${colors.blue}→${colors.reset} Writing parts JSONL ${colors.dim}→${colors.reset} ${colors.dim}${partsJsonl}${colors.reset}`,
-    );
-    const out = createWriteStream(partsJsonl, { encoding: "utf8" });
 
-    // Map Bricklink item type codes to schema type enum
-    const typeMap: Record<string, "PART" | "MINIFIG" | "SET"> = {
-      P: "PART",
-      M: "MINIFIG",
-      S: "SET",
-    };
+    try {
+      await access(partsPath, constants.F_OK);
+      log(
+        `${colors.blue}→${colors.reset} Writing parts JSONL ${colors.dim}→${colors.reset} ${colors.dim}${partsJsonl}${colors.reset}`,
+      );
+      const out = createWriteStream(partsJsonl, { encoding: "utf8" });
 
-    let partCount = 0;
-    await parseXmlStream(partsPath, async (item) => {
-      const itemTypeCode = item.ITEMTYPE?.trim();
-      const partNumber = item.ITEMID?.trim();
-      const name = item.ITEMNAME?.trim();
-
-      // Only process PART, MINIFIG, SET types
-      if (!itemTypeCode || !typeMap[itemTypeCode] || !partNumber || !name) return;
-
-      const type = typeMap[itemTypeCode];
-      const categoryId = item.CATEGORY?.trim() ? Number(item.CATEGORY.trim()) : undefined;
-
-      const doc: Record<string, unknown> = {
-        no: String(partNumber),
-        name: String(name),
-        type,
-        lastFetched: now,
-        createdAt: now,
+      // Map Bricklink item type codes to schema type enum
+      const typeMap: Record<string, "PART" | "MINIFIG" | "SET"> = {
+        P: "PART",
+        M: "MINIFIG",
+        S: "SET",
       };
 
-      // Add optional fields if present
-      if (categoryId) doc.categoryId = categoryId;
-      if (item.ALTERNATE) doc.alternateNo = String(item.ALTERNATE.trim());
-      if (item.IMAGEURL) doc.imageUrl = String(item.IMAGEURL.trim());
-      if (item.THUMBNAILURL) doc.thumbnailUrl = String(item.THUMBNAILURL.trim());
-      if (item.WEIGHT) doc.weight = Number(item.WEIGHT.trim());
-      if (item.DIMX) doc.dimX = String(item.DIMX.trim());
-      if (item.DIMY) doc.dimY = String(item.DIMY.trim());
-      if (item.DIMZ) doc.dimZ = String(item.DIMZ.trim());
-      if (item.YEAR) doc.yearReleased = Number(item.YEAR.trim());
-      if (item.DESCRIPTION) doc.description = String(item.DESCRIPTION.trim());
-      if (item.ISOBSOLETE) doc.isObsolete = item.ISOBSOLETE.trim().toLowerCase() === "true";
+      let partCount = 0;
+      await parseXmlStream(partsPath, async (item) => {
+        const itemTypeCode = item.ITEMTYPE?.trim();
+        const partNumber = item.ITEMID?.trim();
+        const name = item.ITEMNAME?.trim();
 
-      const line = `${JSON.stringify(doc)}\n`;
-      if (!out.write(line)) await new Promise((r) => out.once("drain", r));
-      partCount++;
-      if (limit && partCount >= limit) return;
-    });
-    await new Promise<void>((resolve) => out.end(resolve));
-    logProgress("Parts JSONL", partCount, "complete");
+        // Only process PART, MINIFIG, SET types
+        if (!itemTypeCode || !typeMap[itemTypeCode] || !partNumber || !name) return;
+
+        const type = typeMap[itemTypeCode];
+        const categoryId = item.CATEGORY?.trim() ? Number(item.CATEGORY.trim()) : undefined;
+
+        const doc: Record<string, unknown> = {
+          no: String(partNumber),
+          name: String(name),
+          type,
+          lastFetched: oneYearAgo,
+          createdAt: oneYearAgo,
+        };
+
+        // Add optional fields if present
+        if (categoryId) doc.categoryId = categoryId;
+        if (item.ALTERNATE) doc.alternateNo = String(item.ALTERNATE.trim());
+        if (item.IMAGEURL) doc.imageUrl = String(item.IMAGEURL.trim());
+        if (item.THUMBNAILURL) doc.thumbnailUrl = String(item.THUMBNAILURL.trim());
+        if (item.WEIGHT) doc.weight = Number(item.WEIGHT.trim());
+        if (item.DIMX) doc.dimX = String(item.DIMX.trim());
+        if (item.DIMY) doc.dimY = String(item.DIMY.trim());
+        if (item.DIMZ) doc.dimZ = String(item.DIMZ.trim());
+        if (item.YEAR) doc.yearReleased = Number(item.YEAR.trim());
+        if (item.DESCRIPTION) doc.description = String(item.DESCRIPTION.trim());
+        if (item.ISOBSOLETE) doc.isObsolete = item.ISOBSOLETE.trim().toLowerCase() === "true";
+
+        const line = `${JSON.stringify(doc)}\n`;
+        if (!out.write(line)) await new Promise((r) => out.once("drain", r));
+        partCount++;
+        if (limit && partCount >= limit) return;
+      });
+      await new Promise<void>((resolve) => out.end(resolve));
+      logProgress("Parts JSONL", partCount, "complete");
+    } catch {
+      log(
+        `${colors.yellow}⚠${colors.reset} Skipping parts - ${colors.dim}Parts.xml not found${colors.reset}`,
+      );
+    }
   }
 
   // 5) Parts Sample → parts-sample.jsonl (250 records for quick testing)
   {
     const partsPath = join(DATA_DIR, "Parts.xml");
     const partsSampleJsonl = join(DATA_DIR, "parts-sample.jsonl");
-    log(
-      `${colors.blue}→${colors.reset} Writing parts sample JSONL ${colors.dim}→${colors.reset} ${colors.dim}${partsSampleJsonl}${colors.reset}`,
-    );
-    const out = createWriteStream(partsSampleJsonl, { encoding: "utf8" });
 
-    // Map Bricklink item type codes to schema type enum
-    const typeMap: Record<string, "PART" | "MINIFIG" | "SET"> = {
-      P: "PART",
-      M: "MINIFIG",
-      S: "SET",
-    };
+    try {
+      await access(partsPath, constants.F_OK);
+      log(
+        `${colors.blue}→${colors.reset} Writing parts sample JSONL ${colors.dim}→${colors.reset} ${colors.dim}${partsSampleJsonl}${colors.reset}`,
+      );
+      const out = createWriteStream(partsSampleJsonl, { encoding: "utf8" });
 
-    const sampleLimit = 250; // Fixed sample size for testing
-    let sampleCount = 0;
-
-    await parseXmlStream(partsPath, async (item) => {
-      if (sampleCount >= sampleLimit) return;
-
-      const itemTypeCode = item.ITEMTYPE?.trim();
-      const partNumber = item.ITEMID?.trim();
-      const name = item.ITEMNAME?.trim();
-
-      // Only process PART, MINIFIG, SET types
-      if (!itemTypeCode || !typeMap[itemTypeCode] || !partNumber || !name) return;
-
-      const type = typeMap[itemTypeCode];
-      const categoryId = item.CATEGORY?.trim() ? Number(item.CATEGORY.trim()) : undefined;
-
-      const doc: Record<string, unknown> = {
-        no: String(partNumber),
-        name: String(name),
-        type,
-        lastFetched: now,
-        createdAt: now,
+      // Map Bricklink item type codes to schema type enum
+      const typeMap: Record<string, "PART" | "MINIFIG" | "SET"> = {
+        P: "PART",
+        M: "MINIFIG",
+        S: "SET",
       };
 
-      // Add optional fields if present
-      if (categoryId) doc.categoryId = categoryId;
-      if (item.ALTERNATE) doc.alternateNo = String(item.ALTERNATE.trim());
-      if (item.IMAGEURL) doc.imageUrl = String(item.IMAGEURL.trim());
-      if (item.THUMBNAILURL) doc.thumbnailUrl = String(item.THUMBNAILURL.trim());
-      if (item.WEIGHT) doc.weight = Number(item.WEIGHT.trim());
-      if (item.DIMX) doc.dimX = String(item.DIMX.trim());
-      if (item.DIMY) doc.dimY = String(item.DIMY.trim());
-      if (item.DIMZ) doc.dimZ = String(item.DIMZ.trim());
-      if (item.YEAR) doc.yearReleased = Number(item.YEAR.trim());
-      if (item.DESCRIPTION) doc.description = String(item.DESCRIPTION.trim());
-      if (item.ISOBSOLETE) doc.isObsolete = item.ISOBSOLETE.trim().toLowerCase() === "true";
+      const sampleLimit = 250; // Fixed sample size for testing
+      let sampleCount = 0;
 
-      const line = `${JSON.stringify(doc)}\n`;
-      if (!out.write(line)) await new Promise((r) => out.once("drain", r));
-      sampleCount++;
-    });
-    await new Promise<void>((resolve) => out.end(resolve));
-    logProgress("Parts sample JSONL", sampleCount, "complete");
+      await parseXmlStream(partsPath, async (item) => {
+        if (sampleCount >= sampleLimit) return;
+
+        const itemTypeCode = item.ITEMTYPE?.trim();
+        const partNumber = item.ITEMID?.trim();
+        const name = item.ITEMNAME?.trim();
+
+        // Only process PART, MINIFIG, SET types
+        if (!itemTypeCode || !typeMap[itemTypeCode] || !partNumber || !name) return;
+
+        const type = typeMap[itemTypeCode];
+        const categoryId = item.CATEGORY?.trim() ? Number(item.CATEGORY.trim()) : undefined;
+
+        const doc: Record<string, unknown> = {
+          no: String(partNumber),
+          name: String(name),
+          type,
+
+          lastFetched: oneYearAgo,
+          createdAt: oneYearAgo,
+        };
+
+        // Add optional fields if present
+        if (categoryId) doc.categoryId = categoryId;
+        if (item.ALTERNATE) doc.alternateNo = String(item.ALTERNATE.trim());
+        if (item.IMAGEURL) doc.imageUrl = String(item.IMAGEURL.trim());
+        if (item.THUMBNAILURL) doc.thumbnailUrl = String(item.THUMBNAILURL.trim());
+        if (item.WEIGHT) doc.weight = Number(item.WEIGHT.trim());
+        if (item.DIMX) doc.dimX = String(item.DIMX.trim());
+        if (item.DIMY) doc.dimY = String(item.DIMY.trim());
+        if (item.DIMZ) doc.dimZ = String(item.DIMZ.trim());
+        if (item.YEAR) doc.yearReleased = Number(item.YEAR.trim());
+        if (item.DESCRIPTION) doc.description = String(item.DESCRIPTION.trim());
+        if (item.ISOBSOLETE) doc.isObsolete = item.ISOBSOLETE.trim().toLowerCase() === "true";
+
+        const line = `${JSON.stringify(doc)}\n`;
+        if (!out.write(line)) await new Promise((r) => out.once("drain", r));
+        sampleCount++;
+      });
+      await new Promise<void>((resolve) => out.end(resolve));
+      logProgress("Parts sample JSONL", sampleCount, "complete");
+    } catch {
+      log(
+        `${colors.yellow}⚠${colors.reset} Skipping parts sample - ${colors.dim}Parts.xml not found${colors.reset}`,
+      );
+    }
   }
 
   console.log();

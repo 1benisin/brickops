@@ -11,6 +11,15 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { encryptCredential } from "../lib/encryption";
 import { getRateLimitConfig } from "./rateLimitConfig";
+import { randomHex } from "../lib/webcrypto";
+
+/**
+ * Generate a unique webhook token for BrickLink callback URL
+ */
+function generateWebhookToken(): string {
+  // Generate a secure random token (32 bytes = 64 hex characters)
+  return randomHex(32);
+}
 
 type RequireOwnerReturn = {
   userId: Id<"users">;
@@ -125,7 +134,21 @@ export const saveCredentials = mutation({
 
     if (existing) {
       // Update existing credentials
-      await ctx.db.patch(existing._id, {
+      // Always ensure webhook token exists for BrickLink (generate if missing)
+      let webhookToken = existing.webhookToken;
+      if (args.provider === "bricklink" && !webhookToken) {
+        webhookToken = generateWebhookToken();
+      }
+
+      const patchData: {
+        [key: string]: unknown;
+        isActive: boolean;
+        updatedAt: number;
+        validationStatus: "pending";
+        validationMessage: undefined;
+        lastValidatedAt: undefined;
+        webhookToken?: string;
+      } = {
         ...encryptedData,
         isActive: true,
         updatedAt: now,
@@ -133,15 +156,26 @@ export const saveCredentials = mutation({
         validationStatus: "pending",
         validationMessage: undefined,
         lastValidatedAt: undefined,
-      });
+      };
+
+      // Always include webhookToken for BrickLink if it exists or was generated
+      if (args.provider === "bricklink") {
+        patchData.webhookToken = webhookToken;
+      }
+
+      await ctx.db.patch(existing._id, patchData);
       credentialId = existing._id;
     } else {
       // Create new credentials
+      // Generate webhook token for BrickLink
+      const webhookToken = args.provider === "bricklink" ? generateWebhookToken() : undefined;
+
       credentialId = await ctx.db.insert("marketplaceCredentials", {
         businessAccountId,
         provider: args.provider,
         ...encryptedData,
         isActive: true,
+        webhookToken,
         createdBy: userId,
         createdAt: now,
         updatedAt: now,
