@@ -2,183 +2,57 @@ import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 
 // ============================================================================
-// INTERNAL MUTATIONS (for data upserts and locking)
+// INTERNAL MUTATIONS (for data upserts and outbox management)
 // ============================================================================
 
 /**
- * Acquire refresh lock for a part
- * Returns true if lock was acquired, false if already locked
+ * Enqueue a catalog refresh request to the outbox
+ * Idempotent - won't create duplicate if already pending/inflight
  */
-export const markPartRefreshing = internalMutation({
-  args: { partNumber: v.string() },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("parts")
-      .withIndex("by_no", (q) => q.eq("no", args.partNumber))
-      .first();
-
-    if (existing) {
-      // Only set lock if not already locked
-      if (!existing.refreshUntil || existing.refreshUntil < Date.now()) {
-        await ctx.db.patch(existing._id, {
-          refreshUntil: Date.now() + 60_000, // 1 minute lock
-        });
-        return true; // Lock acquired
-      }
-      return false; // Already locked
-    }
-    return true; // No existing record, can proceed
-  },
-});
-
-/**
- * Release refresh lock for a part
- */
-export const clearPartRefreshing = internalMutation({
-  args: { partNumber: v.string() },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("parts")
-      .withIndex("by_no", (q) => q.eq("no", args.partNumber))
-      .first();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, { refreshUntil: 0 });
-    }
-  },
-});
-
-/**
- * Acquire refresh lock for a category
- */
-export const markCategoryRefreshing = internalMutation({
-  args: { categoryId: v.number() },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("categories")
-      .withIndex("by_categoryId", (q) => q.eq("categoryId", args.categoryId))
-      .first();
-
-    if (existing) {
-      if (!existing.refreshUntil || existing.refreshUntil < Date.now()) {
-        await ctx.db.patch(existing._id, {
-          refreshUntil: Date.now() + 60_000,
-        });
-        return true;
-      }
-      return false;
-    }
-    return true;
-  },
-});
-
-/**
- * Release refresh lock for a category
- */
-export const clearCategoryRefreshing = internalMutation({
-  args: { categoryId: v.number() },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("categories")
-      .withIndex("by_categoryId", (q) => q.eq("categoryId", args.categoryId))
-      .first();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, { refreshUntil: 0 });
-    }
-  },
-});
-
-/**
- * Acquire refresh lock for partColors
- */
-export const markPartColorsRefreshing = internalMutation({
-  args: { partNumber: v.string() },
-  handler: async (ctx, args) => {
-    // Lock all partColor records for this part
-    const records = await ctx.db
-      .query("partColors")
-      .withIndex("by_partNo", (q) => q.eq("partNo", args.partNumber))
-      .collect();
-
-    if (records.length > 0) {
-      // Check if any are already locked
-      const anyLocked = records.some((r) => r.refreshUntil && r.refreshUntil > Date.now());
-      if (anyLocked) return false;
-
-      // Lock all
-      const lockTime = Date.now() + 60_000;
-      await Promise.all(records.map((r) => ctx.db.patch(r._id, { refreshUntil: lockTime })));
-      return true;
-    }
-    return true; // No existing records, can proceed
-  },
-});
-
-/**
- * Release refresh lock for partColors
- */
-export const clearPartColorsRefreshing = internalMutation({
-  args: { partNumber: v.string() },
-  handler: async (ctx, args) => {
-    const records = await ctx.db
-      .query("partColors")
-      .withIndex("by_partNo", (q) => q.eq("partNo", args.partNumber))
-      .collect();
-
-    await Promise.all(records.map((r) => ctx.db.patch(r._id, { refreshUntil: 0 })));
-  },
-});
-
-/**
- * Acquire refresh lock for price guide (all 4 price records for a part+color)
- * Returns true if lock was acquired, false if already locked
- */
-export const markPriceGuideRefreshing = internalMutation({
+export const enqueueCatalogRefresh = internalMutation({
   args: {
-    partNumber: v.string(),
-    colorId: v.number(),
+    tableName: v.union(v.literal("parts"), v.literal("partColors"), v.literal("partPrices")),
+    primaryKey: v.string(),
+    secondaryKey: v.optional(v.string()),
+    lastFetched: v.optional(v.number()),
+    priority: v.number(),
   },
   handler: async (ctx, args) => {
-    // Lock all partPrice records for this part+color combination
-    const records = await ctx.db
-      .query("partPrices")
-      .withIndex("by_partNo_colorId", (q) =>
-        q.eq("partNo", args.partNumber).eq("colorId", args.colorId),
+    // Check if already queued (pending or inflight)
+    const existing = await ctx.db
+      .query("catalogRefreshOutbox")
+      .withIndex("by_table_primary_secondary", (q) =>
+        q
+          .eq("tableName", args.tableName)
+          .eq("primaryKey", args.primaryKey)
+          .eq("secondaryKey", args.secondaryKey),
       )
-      .collect();
+      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
+      .first();
 
-    if (records.length > 0) {
-      // Check if any are already locked
-      const anyLocked = records.some((r) => r.refreshUntil && r.refreshUntil > Date.now());
-      if (anyLocked) return false;
-
-      // Lock all
-      const lockTime = Date.now() + 60_000; // 1 minute lock
-      await Promise.all(records.map((r) => ctx.db.patch(r._id, { refreshUntil: lockTime })));
-      return true;
+    if (existing) {
+      // Already queued, skip
+      return;
     }
-    return true; // No existing records, can proceed
-  },
-});
 
-/**
- * Release refresh lock for price guide
- */
-export const clearPriceGuideRefreshing = internalMutation({
-  args: {
-    partNumber: v.string(),
-    colorId: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const records = await ctx.db
-      .query("partPrices")
-      .withIndex("by_partNo_colorId", (q) =>
-        q.eq("partNo", args.partNumber).eq("colorId", args.colorId),
-      )
-      .collect();
+    // Generate display recordId
+    const recordId = args.secondaryKey
+      ? `${args.primaryKey}:${args.secondaryKey}`
+      : args.primaryKey;
 
-    await Promise.all(records.map((r) => ctx.db.patch(r._id, { refreshUntil: 0 })));
+    // Insert to outbox
+    await ctx.db.insert("catalogRefreshOutbox", {
+      tableName: args.tableName,
+      primaryKey: args.primaryKey,
+      secondaryKey: args.secondaryKey,
+      recordId,
+      priority: args.priority,
+      lastFetched: args.lastFetched,
+      status: "pending",
+      attempt: 0,
+      nextAttemptAt: Date.now(), // Immediate processing
+      createdAt: Date.now(),
+    });
   },
 });
 

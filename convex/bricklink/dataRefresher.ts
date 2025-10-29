@@ -29,8 +29,7 @@ export const REFRESH_PRIORITY = {
 // Freshness threshold (30 days in milliseconds)
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Batch size for queue processing (10 items per minute = 600 API calls/hour max)
-const BATCH_SIZE = 10;
+// NOTE: BATCH_SIZE moved to catalog/refreshWorker.ts
 
 // ============================================================================
 // FRESHNESS UTILITIES
@@ -92,9 +91,9 @@ export const checkAndScheduleRefresh = internalMutation({
         params.priority ??
         (params.tableName === "categories" ? REFRESH_PRIORITY.LOW : REFRESH_PRIORITY.MEDIUM);
 
-      // Check if already queued (pending or processing)
+      // Check if already queued (pending or inflight)
       const existing = await ctx.db
-        .query("catalogRefreshQueue")
+        .query("catalogRefreshOutbox")
         .withIndex("by_table_primary_secondary", (q) =>
           q
             .eq("tableName", params.tableName)
@@ -102,7 +101,7 @@ export const checkAndScheduleRefresh = internalMutation({
             .eq("secondaryKey", secondaryKey),
         )
         .filter((q) =>
-          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "processing")),
+          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")),
         )
         .first();
 
@@ -110,8 +109,8 @@ export const checkAndScheduleRefresh = internalMutation({
         // Generate display recordId for logging
         const recordId = secondaryKey ? `${primaryKey}:${secondaryKey}` : primaryKey;
 
-        // Add to queue - cron job or scheduleRefreshAction will process it
-        await ctx.db.insert("catalogRefreshQueue", {
+        // Add to outbox - worker will process it
+        await ctx.db.insert("catalogRefreshOutbox", {
           tableName: params.tableName,
           primaryKey,
           secondaryKey,
@@ -119,6 +118,8 @@ export const checkAndScheduleRefresh = internalMutation({
           priority,
           lastFetched: params.lastFetched,
           status: "pending",
+          attempt: 0,
+          nextAttemptAt: now, // Immediate processing
           createdAt: now,
         });
       }
@@ -127,23 +128,23 @@ export const checkAndScheduleRefresh = internalMutation({
 });
 
 // ============================================================================
-// QUEUE MANAGEMENT
+// OUTBOX MANAGEMENT (queue processing moved to catalog/refreshWorker.ts)
 // ============================================================================
 
 /**
- * Clean up old queue items - called by cron job daily
+ * Clean up old outbox items - called by cron job daily
  * Exported as internalMutation for cron jobs to call
  */
-export const cleanupQueue = internalMutation({
+export const cleanupOutbox = internalMutation({
   args: {},
   handler: async (ctx) => {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     const oldItems = await ctx.db
-      .query("catalogRefreshQueue")
+      .query("catalogRefreshOutbox")
       .filter((q) =>
         q.and(
-          q.or(q.eq(q.field("status"), "completed"), q.eq(q.field("status"), "failed")),
+          q.or(q.eq(q.field("status"), "succeeded"), q.eq(q.field("status"), "failed")),
           q.lt(q.field("processedAt"), sevenDaysAgo),
         ),
       )
@@ -156,7 +157,7 @@ export const cleanupQueue = internalMutation({
     const deletedCount = oldItems.length;
 
     if (deletedCount > 0) {
-      console.log(`[catalog] Cleaned up ${deletedCount} old queue items`);
+      console.log(`[catalog] Cleaned up ${deletedCount} old outbox items`);
     }
 
     return { deletedCount };
@@ -242,204 +243,5 @@ export const upsertPriceGuide = internalMutation({
   },
 });
 
-// ============================================================================
-// HELPER MUTATIONS (Called by processQueue action)
-// ============================================================================
-
-/**
- * Get next batch of items to process from queue
- * Exported as internalQuery for processQueue to call
- */
-export const getBatch = internalQuery({
-  args: { batchSize: v.number() },
-  handler: async (ctx, args): Promise<Doc<"catalogRefreshQueue">[]> => {
-    const items = await ctx.db
-      .query("catalogRefreshQueue")
-      .withIndex("by_status_priority", (q) => q.eq("status", "pending"))
-      .order("asc") // Processes by priority (1, 2, 3)
-      .take(args.batchSize);
-
-    return items;
-  },
-});
-
-/**
- * Mark queue item as processing
- * Exported as internalMutation for processQueue to call
- */
-export const updateStatusProcessing = internalMutation({
-  args: { queueId: v.id("catalogRefreshQueue") },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.queueId, {
-      status: "processing",
-    });
-  },
-});
-
-/**
- * Mark queue item as completed
- * Exported as internalMutation for processQueue to call
- */
-export const updateStatusCompleted = internalMutation({
-  args: { queueId: v.id("catalogRefreshQueue") },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.queueId, {
-      status: "completed",
-      processedAt: Date.now(),
-    });
-  },
-});
-
-/**
- * Mark queue item as failed
- * Exported as internalMutation for processQueue to call
- */
-export const updateStatusFailed = internalMutation({
-  args: { queueId: v.id("catalogRefreshQueue"), errorMessage: v.string() },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.queueId, {
-      status: "failed",
-      errorMessage: args.errorMessage,
-      processedAt: Date.now(),
-    });
-  },
-});
-
-// ============================================================================
-// QUEUE PROCESSOR (Main orchestration)
-// ============================================================================
-
-/**
- * Process refresh queue - fetches data from Bricklink with rate limiting
- * Called by cron job every 5 minutes
- * Processes up to 10 items per run (120 API calls/hour max)
- * Exported as internalAction for cron jobs to call
- */
-export const processQueue = internalAction({
-  args: {},
-  returns: v.union(
-    v.object({
-      processed: v.number(),
-      successful: v.number(),
-      failed: v.number(),
-    }),
-    v.object({
-      processed: v.number(),
-      message: v.string(),
-    }),
-  ),
-  handler: async (ctx) => {
-    // Enforce global BrickLink limiter per batch item
-    // Get next batch from queue - type is inferred from getBatch return type
-    const batch: Doc<"catalogRefreshQueue">[] = await ctx.runQuery(
-      internal.bricklink.dataRefresher.getBatch,
-      {
-        batchSize: BATCH_SIZE,
-      },
-    );
-
-    if (batch.length === 0) {
-      return { processed: 0, message: "Queue empty" };
-    }
-
-    console.log(`[catalog] Processing ${batch.length} items from refresh queue`);
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const item of batch) {
-      try {
-        const token = await ctx.runMutation(internal.ratelimit.mutations.takeToken, {
-          bucket: "bricklink:global",
-        });
-        if (!token.granted) {
-          const retryAfterMs = Math.max(0, token.resetAt - Date.now());
-          throw new Error(`RATE_LIMIT_EXCEEDED:retry after ${retryAfterMs}ms`);
-        }
-        // Mark as processing
-        await ctx.runMutation(internal.bricklink.dataRefresher.updateStatusProcessing, {
-          queueId: item._id,
-        });
-
-        // Fetch from Bricklink and update database based on table type
-        if (item.tableName === "parts") {
-          // primaryKey = partNo
-          const partData = await catalogClient.getRefreshedPart(item.primaryKey);
-          await ctx.runMutation(internal.catalog.mutations.upsertPart, { data: partData });
-        } else if (item.tableName === "partColors") {
-          // primaryKey = partNo
-          const partColorsData = await catalogClient.getRefreshedPartColors(item.primaryKey);
-          await ctx.runMutation(internal.catalog.mutations.upsertPartColors, {
-            data: partColorsData,
-          });
-        } else if (item.tableName === "colors") {
-          // primaryKey = colorId
-          const colorData = await catalogClient.getRefreshedColor(parseInt(item.primaryKey));
-          await ctx.runMutation(internal.bricklink.dataRefresher.upsertColor, { data: colorData });
-        } else if (item.tableName === "categories") {
-          // primaryKey = categoryId
-          const categoryData = await catalogClient.getRefreshedCategory(parseInt(item.primaryKey));
-          await ctx.runMutation(internal.catalog.mutations.upsertCategory, {
-            data: categoryData,
-          });
-        } else if (item.tableName === "partPrices") {
-          // primaryKey = partNo, secondaryKey = colorId
-          // Note: This fetches all 4 variants (N/U × sold/stock)
-          const priceGuides = await catalogClient.getRefreshedPriceGuide(
-            item.primaryKey,
-            parseInt(item.secondaryKey!),
-          );
-
-          // Upsert all 4 price guide variants
-          await Promise.all([
-            ctx.runMutation(internal.bricklink.dataRefresher.upsertPriceGuide, {
-              data: priceGuides.usedStock,
-            }),
-            ctx.runMutation(internal.bricklink.dataRefresher.upsertPriceGuide, {
-              data: priceGuides.newStock,
-            }),
-            ctx.runMutation(internal.bricklink.dataRefresher.upsertPriceGuide, {
-              data: priceGuides.usedSold,
-            }),
-            ctx.runMutation(internal.bricklink.dataRefresher.upsertPriceGuide, {
-              data: priceGuides.newSold,
-            }),
-          ]);
-        }
-
-        // Mark as completed
-        await ctx.runMutation(internal.bricklink.dataRefresher.updateStatusCompleted, {
-          queueId: item._id,
-        });
-
-        successCount++;
-
-        recordMetric("catalog.queue.item.success", {
-          tableName: item.tableName,
-          recordId: item.recordId,
-        });
-      } catch (error) {
-        failCount++;
-        const errorMsg = error instanceof Error ? error.message : String(error);
-
-        await ctx.runMutation(internal.bricklink.dataRefresher.updateStatusFailed, {
-          queueId: item._id,
-          errorMessage: errorMsg,
-        });
-
-        recordMetric("catalog.queue.item.failed", {
-          tableName: item.tableName,
-          recordId: item.recordId,
-          error: errorMsg,
-        });
-      }
-    }
-    console.log(`[catalog] Queue processed: ${successCount} success, ${failCount} failed`);
-
-    return {
-      processed: batch.length,
-      successful: successCount,
-      failed: failCount,
-    };
-  },
-});
+// NOTE: Queue processing moved to catalog/refreshWorker.ts
+// This file now only contains helper functions for enqueuing and cleanup

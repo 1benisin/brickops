@@ -8,7 +8,11 @@
  * @module
  */
 
-import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as auth from "../auth.js";
 import type * as bricklink_bricklinkMappers from "../bricklink/bricklinkMappers.js";
 import type * as bricklink_catalogClient from "../bricklink/catalogClient.js";
@@ -23,6 +27,7 @@ import type * as catalog_actions from "../catalog/actions.js";
 import type * as catalog_helpers from "../catalog/helpers.js";
 import type * as catalog_mutations from "../catalog/mutations.js";
 import type * as catalog_queries from "../catalog/queries.js";
+import type * as catalog_refreshWorker from "../catalog/refreshWorker.js";
 import type * as catalog_validators from "../catalog/validators.js";
 import type * as crons from "../crons.js";
 import type * as hello from "../hello.js";
@@ -94,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   "catalog/helpers": typeof catalog_helpers;
   "catalog/mutations": typeof catalog_mutations;
   "catalog/queries": typeof catalog_queries;
+  "catalog/refreshWorker": typeof catalog_refreshWorker;
   "catalog/validators": typeof catalog_validators;
   crons: typeof crons;
   hello: typeof hello;
@@ -142,5 +148,11 @@ declare const fullApi: ApiFromModules<{
   "users/mutations": typeof users_mutations;
   "users/queries": typeof users_queries;
 }>;
-export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
-export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
