@@ -34,7 +34,7 @@ export function useGetPriceGuide(
   );
 
   const res = useQuery(api.catalog.queries.getPriceGuide, args ?? "skip");
-  const refresh = useAction(api.catalog.actions.refreshPriceGuide);
+  const refresh = useAction(api.catalog.actions.enqueueRefreshPriceGuide);
 
   // Deduplication for auto-refresh
   const seen = useRef(new Set<string>());

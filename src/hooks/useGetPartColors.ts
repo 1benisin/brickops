@@ -24,7 +24,7 @@ export function useGetPartColors(partNumber: string | null): UseGetPartColorsRes
   const args = useMemo(() => (partNumber ? { partNumber } : null), [partNumber]);
 
   const res = useQuery(api.catalog.queries.getPartColors, args ?? "skip");
-  const refresh = useAction(api.catalog.actions.refreshPartColors);
+  const refresh = useAction(api.catalog.actions.enqueueRefreshPartColors);
 
   // Deduplication for auto-refresh
   const seen = useRef(new Set<string>());
