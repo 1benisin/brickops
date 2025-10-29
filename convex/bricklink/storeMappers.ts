@@ -101,34 +101,40 @@ export function mapConvexToBricklinkUpdate(
   convexInventory: Doc<"inventoryItems">,
   previousQuantity?: number,
 ): BricklinkInventoryUpdateRequest {
-  // Format price as fixed-point string
-  const unit_price = convexInventory.price?.toFixed(4);
+  // Format price as fixed-point string (always include)
+  const unit_price = convexInventory.price ? convexInventory.price.toFixed(4) : "0.0000";
 
   // Calculate quantity delta if previous quantity provided
   let quantity: string | undefined;
   if (previousQuantity !== undefined) {
     const delta = convexInventory.quantityAvailable - previousQuantity;
-    if (delta !== 0) {
-      quantity = delta > 0 ? `+${delta}` : `${delta}`; // Prefix with + or - (minus already included)
-    }
+    // Always include quantity delta, even if 0
+    quantity = delta > 0 ? `+${delta}` : `${delta}`;
   }
 
+  // Map condition: "new" -> "N", "used" -> "U" (always include)
+  const new_or_used: "N" | "U" = convexInventory.condition === "new" ? "N" : "U";
+
   // Map notes to description (public-facing description)
-  const description = convexInventory.notes;
+  const description = convexInventory.notes || "";
 
   // Map location to remarks (private internal location)
-  const remarks = convexInventory.location;
+  const remarks = convexInventory.location || "";
 
-  return {
-    quantity,
+  // Build update payload - ALWAYS include all fields to match BrickOps state
+  const payload: BricklinkInventoryUpdateRequest = {
     unit_price,
+    new_or_used,
     description,
-    remarks, // Maps to our location field
-    bulk: 1,
-    is_retain: false,
-    is_stock_room: false, // Not using stock room feature
-    stock_room_id: undefined,
+    remarks,
   };
+
+  // Include quantity if we have a previous quantity to calculate delta
+  if (quantity !== undefined) {
+    payload.quantity = quantity;
+  }
+
+  return payload;
 }
 
 /**

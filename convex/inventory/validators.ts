@@ -13,7 +13,7 @@ export const itemCondition = v.union(v.literal("new"), v.literal("used"));
 
 export const actionType = v.union(v.literal("create"), v.literal("update"), v.literal("delete"));
 
-// For sync queue (inventorySyncQueue table still uses changeType)
+// Reusable change type for history tracking
 export const changeType = v.union(v.literal("create"), v.literal("update"), v.literal("delete"));
 
 export const syncStatus = v.union(
@@ -24,6 +24,31 @@ export const syncStatus = v.union(
 );
 
 export const marketplaceProvider = v.union(v.literal("bricklink"), v.literal("brickowl"));
+
+export const marketplaceSync = v.optional(
+  v.object({
+    bricklink: v.optional(
+      v.object({
+        lotId: v.optional(v.number()),
+        status: syncStatus,
+        lastSyncAttempt: v.optional(v.number()),
+        error: v.optional(v.string()),
+        lastSyncedSeq: v.optional(v.number()),
+        lastSyncedAvailable: v.optional(v.number()),
+      }),
+    ),
+    brickowl: v.optional(
+      v.object({
+        lotId: v.optional(v.string()),
+        status: syncStatus,
+        lastSyncAttempt: v.optional(v.number()),
+        error: v.optional(v.string()),
+        lastSyncedSeq: v.optional(v.number()),
+        lastSyncedAvailable: v.optional(v.number()),
+      }),
+    ),
+  }),
+);
 
 // Partial inventory item data for sync operations (represents Partial<Doc<"inventoryItems">>)
 export const partialInventoryItemData = v.optional(
@@ -46,36 +71,7 @@ export const partialInventoryItemData = v.optional(
     isArchived: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
     fileId: v.optional(v.id("inventoryFiles")),
-    marketplaceSync: v.optional(
-      v.object({
-        bricklink: v.optional(
-          v.object({
-            lotId: v.optional(v.number()),
-            status: v.union(
-              v.literal("pending"),
-              v.literal("syncing"),
-              v.literal("synced"),
-              v.literal("failed"),
-            ),
-            lastSyncAttempt: v.number(),
-            error: v.optional(v.string()),
-          }),
-        ),
-        brickowl: v.optional(
-          v.object({
-            lotId: v.optional(v.string()),
-            status: v.union(
-              v.literal("pending"),
-              v.literal("syncing"),
-              v.literal("synced"),
-              v.literal("failed"),
-            ),
-            lastSyncAttempt: v.number(),
-            error: v.optional(v.string()),
-          }),
-        ),
-      }),
-    ),
+    marketplaceSync: marketplaceSync,
   }),
 );
 
@@ -109,6 +105,8 @@ export const updateInventoryItemArgs = v.object({
   price: v.optional(v.number()),
   notes: v.optional(v.string()),
   reason: v.optional(v.string()),
+  correlationId: v.optional(v.string()), // For idempotency
+  batchId: v.optional(v.string()), // For batch operations
 });
 
 export const deleteInventoryItemArgs = v.object({
@@ -140,61 +138,6 @@ export const getInventoryTotalsArgs = v.object({});
 
 export const getItemSyncStatusArgs = v.object({
   itemId: inventoryItemId,
-});
-
-export const getPendingChangesCountArgs = v.object({});
-
-// New history-based queries (refactor requirement)
-export const listInventoryHistoryArgs = v.object({
-  cursor: v.optional(v.string()),
-  limit: v.optional(v.number()),
-  // Filters
-  dateFrom: v.optional(v.number()),
-  dateTo: v.optional(v.number()),
-  action: v.optional(actionType),
-  userId: v.optional(userId),
-  itemId: v.optional(inventoryItemId),
-  source: v.optional(v.string()),
-  query: v.optional(v.string()),
-});
-
-export const getInventoryHistoryArgs = v.object({
-  historyId: v.id("inventoryHistory"),
-});
-
-// ============================================================================
-// INTERNAL QUERY/MUTATION ARGS
-// ============================================================================
-
-export const getPendingChangesArgs = v.object({
-  businessAccountId,
-  limit: v.optional(v.number()),
-});
-
-export const getChangeArgs = v.object({
-  changeId: v.id("inventorySyncQueue"),
-});
-
-export const getInventoryItemArgs = v.object({
-  itemId: inventoryItemId,
-});
-
-export const markSyncingArgs = v.object({
-  changeId: v.id("inventorySyncQueue"),
-});
-
-export const updateSyncStatusArgs = v.object({
-  changeId: v.id("inventorySyncQueue"),
-  provider: marketplaceProvider,
-  success: v.boolean(),
-  marketplaceId: v.optional(v.union(v.number(), v.string())),
-  error: v.optional(v.string()),
-});
-
-export const recordSyncErrorArgs = v.object({
-  changeId: v.id("inventorySyncQueue"),
-  provider: marketplaceProvider,
-  error: v.string(),
 });
 
 // ============================================================================
@@ -240,36 +183,7 @@ export const listInventoryItemsReturns = v.array(
     deletedAt: v.optional(v.number()),
     // Story 3.5 - Inventory Files fields
     fileId: v.optional(v.id("inventoryFiles")),
-    marketplaceSync: v.optional(
-      v.object({
-        bricklink: v.optional(
-          v.object({
-            lotId: v.optional(v.number()),
-            status: v.union(
-              v.literal("pending"),
-              v.literal("syncing"),
-              v.literal("synced"),
-              v.literal("failed"),
-            ),
-            lastSyncAttempt: v.number(),
-            error: v.optional(v.string()),
-          }),
-        ),
-        brickowl: v.optional(
-          v.object({
-            lotId: v.optional(v.string()),
-            status: v.union(
-              v.literal("pending"),
-              v.literal("syncing"),
-              v.literal("synced"),
-              v.literal("failed"),
-            ),
-            lastSyncAttempt: v.number(),
-            error: v.optional(v.string()),
-          }),
-        ),
-      }),
-    ),
+    marketplaceSync: marketplaceSync,
   }),
 );
 
@@ -287,180 +201,9 @@ export const getInventoryTotalsReturns = v.object({
 
 export const getItemSyncStatusReturns = v.object({
   itemId: inventoryItemId,
-  marketplaceSync: v.optional(
-    v.object({
-      bricklink: v.optional(
-        v.object({
-          lotId: v.optional(v.number()),
-          status: v.union(
-            v.literal("pending"),
-            v.literal("syncing"),
-            v.literal("synced"),
-            v.literal("failed"),
-          ),
-          lastSyncAttempt: v.number(),
-          error: v.optional(v.string()),
-        }),
-      ),
-      brickowl: v.optional(
-        v.object({
-          lotId: v.optional(v.string()),
-          status: v.union(
-            v.literal("pending"),
-            v.literal("syncing"),
-            v.literal("synced"),
-            v.literal("failed"),
-          ),
-          lastSyncAttempt: v.number(),
-          error: v.optional(v.string()),
-        }),
-      ),
-    }),
-  ),
+  marketplaceSync: marketplaceSync,
   pendingChangesCount: v.number(),
-});
-
-export const getPendingChangesCountReturns = v.object({
-  count: v.number(),
-});
-
-// New history-based query returns
-export const inventoryHistoryEntry = v.object({
-  _id: v.id("inventoryHistory"),
-  _creationTime: v.number(),
-  businessAccountId,
-  itemId: inventoryItemId,
-  timestamp: v.number(),
-  userId: v.optional(userId),
-  action: actionType,
-  oldData: partialInventoryItemData,
-  newData: partialInventoryItemData,
-  source: v.string(),
-  reason: v.optional(v.string()),
-  relatedTransactionId: v.optional(v.string()),
-  // Actor details for UI (computed)
-  actorFirstName: v.optional(v.string()),
-  actorLastName: v.optional(v.string()),
-});
-
-export const listInventoryHistoryReturns = v.object({
-  entries: v.array(inventoryHistoryEntry),
-  nextCursor: v.optional(v.string()),
-});
-
-export const getInventoryHistoryReturns = inventoryHistoryEntry;
-
-// Internal query returns
-export const getPendingChangesReturns = v.array(
-  v.object({
-    _id: v.id("inventorySyncQueue"),
-    _creationTime: v.number(),
-    businessAccountId,
-    inventoryItemId,
-    changeType,
-    previousData: partialInventoryItemData,
-    newData: partialInventoryItemData,
-    reason: v.optional(v.string()),
-    syncStatus,
-    correlationId: v.string(),
-    bricklinkSyncedAt: v.optional(v.number()),
-    brickowlSyncedAt: v.optional(v.number()),
-    createdBy: userId,
-    createdAt: v.number(),
-  }),
-);
-
-export const getChangeReturns = v.object({
-  _id: v.id("inventorySyncQueue"),
-  _creationTime: v.number(),
-  businessAccountId,
-  inventoryItemId,
-  changeType,
-  previousData: partialInventoryItemData,
-  newData: partialInventoryItemData,
-  reason: v.optional(v.string()),
-  syncStatus,
-  correlationId: v.string(),
-  bricklinkSyncedAt: v.optional(v.number()),
-  brickowlSyncedAt: v.optional(v.number()),
-  createdBy: userId,
-  createdAt: v.number(),
-});
-
-export const getInventoryItemReturns = v.object({
-  _id: inventoryItemId,
-  _creationTime: v.number(),
-  businessAccountId,
-  name: v.string(),
-  partNumber: v.string(),
-  colorId: v.string(),
-  location: v.string(),
-  quantityAvailable: v.number(),
-  quantityReserved: v.optional(v.number()),
-  condition: itemCondition,
-  price: v.optional(v.number()),
-  notes: v.optional(v.string()),
-  createdBy: userId,
-  createdAt: v.number(),
-  updatedAt: v.optional(v.number()),
-  isArchived: v.optional(v.boolean()), // Matches schema - optional field
-  deletedAt: v.optional(v.number()),
-  lastSyncedAt: v.optional(v.number()),
-  marketplaceSync: v.optional(
-    v.object({
-      bricklink: v.optional(
-        v.object({
-          lotId: v.optional(v.number()),
-          status: v.union(
-            v.literal("pending"),
-            v.literal("syncing"),
-            v.literal("synced"),
-            v.literal("failed"),
-          ),
-          lastSyncAttempt: v.number(),
-          error: v.optional(v.string()),
-        }),
-      ),
-      brickowl: v.optional(
-        v.object({
-          lotId: v.optional(v.string()),
-          status: v.union(
-            v.literal("pending"),
-            v.literal("syncing"),
-            v.literal("synced"),
-            v.literal("failed"),
-          ),
-          lastSyncAttempt: v.number(),
-          error: v.optional(v.string()),
-        }),
-      ),
-    }),
-  ),
-});
-
-// Internal mutations return void (null)
-export const markSyncingReturns = v.null();
-export const updateSyncStatusReturns = v.null();
-export const recordSyncErrorReturns = v.null();
-
-// Internal query return types
-export const getBusinessAccountsWithPendingChangesReturns = v.array(v.id("businessAccounts"));
-
-// Internal actions return types
-export const processAllPendingChangesReturns = v.object({
-  accountsProcessed: v.number(),
-  totalProcessed: v.number(),
-  totalSucceeded: v.number(),
-  totalFailed: v.number(),
-  durationMs: v.number(),
-});
-
-export const processPendingChangesReturns = v.object({
-  processed: v.number(),
-  succeeded: v.number(),
-  failed: v.number(),
-  durationMs: v.optional(v.number()),
-  reason: v.optional(v.string()),
+  nextRetryAt: v.optional(v.number()),
 });
 
 // ============================================================================

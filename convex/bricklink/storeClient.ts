@@ -168,6 +168,7 @@ export interface OperationOptions {
 export interface BricklinkInventoryUpdateRequest {
   quantity?: string; // Must have +/- prefix (e.g., "+5", "-3")
   unit_price?: string;
+  new_or_used?: "N" | "U"; // Condition: "N" for new, "U" for used
   description?: string;
   remarks?: string;
   bulk?: number;

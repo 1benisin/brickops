@@ -1,6 +1,43 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const marketplaceSync = v.optional(
+  v.object({
+    bricklink: v.optional(
+      v.object({
+        lotId: v.optional(v.number()),
+        status: v.union(
+          v.literal("pending"),
+          v.literal("syncing"),
+          v.literal("synced"),
+          v.literal("failed"),
+        ),
+        lastSyncAttempt: v.optional(v.number()),
+        error: v.optional(v.string()),
+        // Phase 2: Cursor tracking for retry logic
+        lastSyncedSeq: v.optional(v.number()), // Last ledger sequence applied to marketplace
+        lastSyncedAvailable: v.optional(v.number()), // Denormalized available quantity at last sync
+      }),
+    ),
+    brickowl: v.optional(
+      v.object({
+        lotId: v.optional(v.string()),
+        status: v.union(
+          v.literal("pending"),
+          v.literal("syncing"),
+          v.literal("synced"),
+          v.literal("failed"),
+        ),
+        lastSyncAttempt: v.optional(v.number()),
+        error: v.optional(v.string()),
+        // Phase 2: Cursor tracking for retry logic
+        lastSyncedSeq: v.optional(v.number()),
+        lastSyncedAvailable: v.optional(v.number()),
+      }),
+    ),
+  }),
+);
+
 export const inventoryTables = {
   // Inventory files for batch collections (Story 3.5)
   inventoryFiles: defineTable({
@@ -37,93 +74,100 @@ export const inventoryTables = {
     // Inventory file association (Story 3.5)
     fileId: v.optional(v.id("inventoryFiles")),
     // Consolidated marketplace sync tracking (refactored from individual fields)
-    marketplaceSync: v.optional(
-      v.object({
-        bricklink: v.optional(
-          v.object({
-            lotId: v.optional(v.number()),
-            status: v.union(
-              v.literal("pending"),
-              v.literal("syncing"),
-              v.literal("synced"),
-              v.literal("failed"),
-            ),
-            lastSyncAttempt: v.number(),
-            error: v.optional(v.string()),
-          }),
-        ),
-        brickowl: v.optional(
-          v.object({
-            lotId: v.optional(v.string()),
-            status: v.union(
-              v.literal("pending"),
-              v.literal("syncing"),
-              v.literal("synced"),
-              v.literal("failed"),
-            ),
-            lastSyncAttempt: v.number(),
-            error: v.optional(v.string()),
-          }),
-        ),
-      }),
-    ),
+    marketplaceSync: marketplaceSync,
   })
     .index("by_businessAccount", ["businessAccountId"])
     .index("by_fileId", ["fileId"]),
 
-  // Historical audit trail for all inventory changes (local tracking)
-  inventoryHistory: defineTable({
+  // NEW: Specialized ledger for quantity changes
+  inventoryQuantityLedger: defineTable({
     businessAccountId: v.id("businessAccounts"),
     itemId: v.id("inventoryItems"),
-    timestamp: v.number(), // Renamed from createdAt
-    userId: v.optional(v.id("users")), // Renamed from actorUserId, optional for automation
-    action: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
-    // Change snapshots - ONLY store changed fields
-    oldData: v.optional(v.any()), // Partial<InventoryItem> - before state
-    newData: v.optional(v.any()), // Partial<InventoryItem> - after state
-    // Context / metadata
-    source: v.union(v.literal("user"), v.literal("bricklink"), v.literal("order")),
-    reason: v.optional(v.string()), // User-provided explanation
-    relatedOrderId: v.optional(v.string()), // For order-triggered changes
+    timestamp: v.number(), // When the change took effect (timestamp of the order) or manual adjustment
+
+    // Phase 1: Sequence tracking for event sourcing
+    seq: v.number(), // Per-item monotonic sequence number
+    preAvailable: v.number(), // Balance before this delta
+    postAvailable: v.number(), // Balance after this delta (running balance)
+
+    // Quantity deltas (can be negative)
+    deltaAvailable: v.number(),
+
+    // Context
+    reason: v.union(
+      v.literal("initial_stock"),
+      v.literal("manual_adjustment"),
+      v.literal("order_sale"),
+      v.literal("item_deleted"),
+    ),
+    source: v.union(
+      v.literal("user"),
+      v.literal("bricklink"), // order from BrickLink marketplace
+      v.literal("brickowl"), // order from BrickOwl marketplace
+    ),
+    userId: v.optional(v.id("users")),
+    // For idempotency + join back to orders/returns
+    orderId: v.optional(v.string()), // TODO make v.id("orders") once we have an orders table
+    // For grouping related changes and debugging
+    correlationId: v.optional(v.string()),
   })
     .index("by_item", ["itemId"])
-    .index("by_businessAccount", ["businessAccountId"])
-    .index("by_timestamp", ["businessAccountId", "timestamp"]),
+    .index("by_item_timestamp", ["itemId", "timestamp"])
+    .index("by_business_timestamp", ["businessAccountId", "timestamp"])
+    .index("by_order", ["orderId"])
+    .index("by_correlation", ["correlationId"])
+    .index("by_item_seq", ["itemId", "seq"]), // NEW: Enables efficient window queries
 
-  // Sync queue for marketplace orchestration (Story 3.4)
-  inventorySyncQueue: defineTable({
+  // NEW: Specialized ledger for location changes
+  inventoryLocationLedger: defineTable({
     businessAccountId: v.id("businessAccounts"),
-    inventoryItemId: v.id("inventoryItems"),
-    changeType: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
+    itemId: v.id("inventoryItems"),
+    timestamp: v.number(),
 
-    // Change data
-    previousData: v.optional(v.any()), // Full previous state (for update/delete)
-    newData: v.optional(v.any()), // Full new state (for create/update)
-    reason: v.optional(v.string()), // User-provided reason for change
+    // Location change
+    fromLocation: v.optional(v.string()), // null for initial location
+    toLocation: v.string(),
 
-    // Sync tracking (per provider)
-    syncStatus: v.union(
+    // Context
+    reason: v.string(),
+    source: v.union(v.literal("user")),
+    userId: v.optional(v.id("users")),
+    // For grouping related changes and debugging
+    correlationId: v.optional(v.string()),
+  })
+    .index("by_item", ["itemId"])
+    .index("by_item_timestamp", ["itemId", "timestamp"])
+    .index("by_business_timestamp", ["businessAccountId", "timestamp"])
+    .index("by_location", ["businessAccountId", "toLocation"])
+    .index("by_correlation", ["correlationId"]),
+
+  // Phase 2: Transactional outbox for marketplace sync operations
+  marketplaceOutbox: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    itemId: v.id("inventoryItems"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    kind: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
+
+    // Delta window (what this sync covers)
+    fromSeqExclusive: v.number(),
+    toSeqInclusive: v.number(),
+
+    // Idempotency
+    idempotencyKey: v.string(),
+
+    // Lifecycle
+    status: v.union(
       v.literal("pending"),
-      v.literal("syncing"),
-      v.literal("synced"),
+      v.literal("inflight"),
+      v.literal("succeeded"),
       v.literal("failed"),
     ),
-    bricklinkSyncedAt: v.optional(v.number()),
-    brickowlSyncedAt: v.optional(v.number()),
-
-    // Conflict tracking
-    conflictStatus: v.optional(v.union(v.literal("detected"), v.literal("resolved"))),
-    conflictDetails: v.optional(v.any()),
-
-    // Metadata
-    correlationId: v.string(),
-    createdBy: v.id("users"),
+    attempt: v.number(),
+    nextAttemptAt: v.number(),
+    lastError: v.optional(v.string()),
     createdAt: v.number(),
-    // File context for tracking
-    fileId: v.optional(v.id("inventoryFiles")), // Track if change originated from file
+    correlationId: v.optional(v.string()),
   })
-    .index("by_business_pending", ["businessAccountId", "syncStatus"])
-    .index("by_business_createdAt", ["businessAccountId", "createdAt"]) // Story 3.6 - paginate history by createdAt DESC
-    .index("by_inventory_item", ["inventoryItemId", "createdAt"])
-    .index("by_correlation", ["correlationId"]),
+    .index("by_status_time", ["status", "nextAttemptAt"])
+    .index("by_item_provider_time", ["itemId", "provider", "createdAt"]),
 };

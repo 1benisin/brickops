@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "../_generated/server";
+import { query, internalQuery } from "../_generated/server";
 import { requireUser, assertBusinessMembership } from "./helpers";
 import {
   listInventoryItemsArgs,
@@ -10,13 +10,6 @@ import {
   getInventoryTotalsReturns,
   getItemSyncStatusArgs,
   getItemSyncStatusReturns,
-  getPendingChangesCountArgs,
-  getPendingChangesCountReturns,
-  // New history-based validators (refactor requirement)
-  listInventoryHistoryArgs,
-  listInventoryHistoryReturns,
-  getInventoryHistoryArgs,
-  getInventoryHistoryReturns,
 } from "./validators";
 
 export const listInventoryItems = query({
@@ -98,8 +91,7 @@ export const getInventoryTotals = query({
 
 /**
  * Get sync status for a specific inventory item
- * Returns last synced timestamps per provider, sync errors, and pending changes count
- * AC: 3.4.6 - Real-time reactive query for UI status display
+ * Returns sync status from marketplaceSync field and outbox status
  */
 export const getItemSyncStatus = query({
   args: getItemSyncStatusArgs,
@@ -114,210 +106,187 @@ export const getItemSyncStatus = query({
 
     assertBusinessMembership(user, item.businessAccountId);
 
-    // Get most recent sync queue entries for this item
-    const syncEntries = await ctx.db
-      .query("inventorySyncQueue")
-      .withIndex("by_inventory_item", (q) => q.eq("inventoryItemId", args.itemId))
+    // Phase 3: Count pending/inflight outbox messages
+    const pendingMessages = await ctx.db
+      .query("marketplaceOutbox")
+      .withIndex("by_item_provider_time", (q) => q.eq("itemId", args.itemId))
+      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
       .collect();
 
-    // Sort by creation time (newest first)
-    syncEntries.sort((a, b) => b.createdAt - a.createdAt);
-
-    // Find most recent sync timestamps per provider
-    let bricklinkSyncedAt: number | undefined;
-    let brickowlSyncedAt: number | undefined;
-
-    for (const entry of syncEntries) {
-      if (!bricklinkSyncedAt && entry.bricklinkSyncedAt) {
-        bricklinkSyncedAt = entry.bricklinkSyncedAt;
+    const nextRetryAt = pendingMessages.reduce((min, msg) => {
+      if (msg.nextAttemptAt > Date.now()) {
+        return Math.min(min, msg.nextAttemptAt);
       }
-      if (!brickowlSyncedAt && entry.brickowlSyncedAt) {
-        brickowlSyncedAt = entry.brickowlSyncedAt;
-      }
-      if (bricklinkSyncedAt && brickowlSyncedAt) break;
-    }
-
-    // Count pending changes
-    const pendingChangesCount = syncEntries.filter((e) => e.syncStatus === "pending").length;
+      return min;
+    }, Infinity);
 
     return {
       itemId: args.itemId,
       marketplaceSync: item.marketplaceSync,
-      pendingChangesCount,
+      pendingChangesCount: pendingMessages.length,
+      nextRetryAt: nextRetryAt === Infinity ? undefined : nextRetryAt,
     };
   },
 });
 
-/**
- * Get count of pending changes for a business account
- * Returns count for UI sync queue indicator
- * AC: 3.4.6 - Real-time reactive query for queue status
- */
-export const getPendingChangesCount = query({
-  args: getPendingChangesCountArgs,
-  returns: getPendingChangesCountReturns,
-  handler: async (ctx) => {
-    const { businessAccountId } = await requireUser(ctx);
+// ============================================================================
+// Ledger Queries (New)
+// ============================================================================
 
-    const pendingChanges = await ctx.db
-      .query("inventorySyncQueue")
-      .withIndex("by_business_pending", (q) =>
-        q.eq("businessAccountId", businessAccountId).eq("syncStatus", "pending"),
+/**
+ * Get quantity ledger entries for a specific item
+ */
+export const getItemQuantityLedger = query({
+  args: {
+    itemId: v.id("inventoryItems"),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("inventoryQuantityLedger")
+      .withIndex("by_item", (q) => q.eq("itemId", args.itemId))
+      .collect();
+
+    // Sort newest first
+    entries.sort((a, b) => b.timestamp - a.timestamp);
+
+    const limit = args.limit ?? 100;
+    return entries.slice(0, limit);
+  },
+});
+
+/**
+ * Get location ledger entries for a specific item
+ */
+export const getItemLocationLedger = query({
+  args: {
+    itemId: v.id("inventoryItems"),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("inventoryLocationLedger")
+      .withIndex("by_item", (q) => q.eq("itemId", args.itemId))
+      .collect();
+
+    // Sort newest first
+    entries.sort((a, b) => b.timestamp - a.timestamp);
+
+    const limit = args.limit ?? 100;
+    return entries.slice(0, limit);
+  },
+});
+
+/**
+ * Calculate current on-hand quantity from ledger (for reconciliation)
+ */
+export const calculateOnHandQuantity = query({
+  args: {
+    itemId: v.id("inventoryItems"),
+  },
+  returns: v.object({
+    calculatedAvailable: v.number(),
+    ledgerEntries: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx);
+
+    const entries = await ctx.db
+      .query("inventoryQuantityLedger")
+      .withIndex("by_item", (q) => q.eq("itemId", args.itemId))
+      .collect();
+
+    let calculatedAvailable = 0;
+
+    for (const entry of entries) {
+      calculatedAvailable += entry.deltaAvailable;
+    }
+
+    return {
+      calculatedAvailable,
+      ledgerEntries: entries.length,
+    };
+  },
+});
+
+// ============================================================================
+// Phase 3: Worker support queries (internal)
+// ============================================================================
+
+/**
+ * Compute delta from ledger window (internal query for worker)
+ * Phase 3: Used by outbox worker to compute deltas for sync operations
+ */
+export const computeDeltaFromWindow = internalQuery({
+  args: {
+    itemId: v.id("inventoryItems"),
+    fromSeqExclusive: v.number(),
+    toSeqInclusive: v.number(),
+  },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("inventoryQuantityLedger")
+      .withIndex("by_item_seq", (q) =>
+        q
+          .eq("itemId", args.itemId)
+          .gt("seq", args.fromSeqExclusive)
+          .lte("seq", args.toSeqInclusive),
       )
       .collect();
 
-    return {
-      count: pendingChanges.length,
-    };
+    return entries.reduce((acc, entry) => acc + entry.deltaAvailable, 0);
   },
 });
 
 /**
- * Get unresolved conflicts for UI display
- * AC: 3.4.5 - Query unresolved conflicts
+ * Get current max sequence from ledger (internal query for worker)
  */
-export const getConflicts = query({
-  args: {},
-  returns: v.array(
+export const getCurrentLedgerSeq = internalQuery({
+  args: {
+    itemId: v.id("inventoryItems"),
+  },
+  returns: v.union(
     v.object({
-      changeId: v.id("inventorySyncQueue"),
-      inventoryItemId: v.id("inventoryItems"),
-      changeType: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
-      conflictDetails: v.any(),
-      createdAt: v.number(),
-      itemData: v.optional(
-        v.object({
-          name: v.string(),
-          partNumber: v.string(),
-          colorId: v.string(),
-          quantityAvailable: v.number(),
-        }),
-      ),
+      seq: v.number(),
     }),
+    v.null(),
   ),
-  handler: async (ctx) => {
-    const { businessAccountId } = await requireUser(ctx);
+  handler: async (ctx, args) => {
+    const lastEntry = await ctx.db
+      .query("inventoryQuantityLedger")
+      .withIndex("by_item_seq", (q) => q.eq("itemId", args.itemId))
+      .order("desc")
+      .first();
 
-    // Query all changes with unresolved conflicts
-    const allChanges = await ctx.db
-      .query("inventorySyncQueue")
-      .withIndex("by_business_pending", (q) => q.eq("businessAccountId", businessAccountId))
+    return lastEntry ? { seq: lastEntry.seq } : null;
+  },
+});
+
+/**
+ * Get ledger entry at specific sequence (internal query for worker)
+ */
+export const getLedgerEntryAtSeq = internalQuery({
+  args: {
+    itemId: v.id("inventoryItems"),
+    seq: v.number(),
+  },
+  returns: v.union(
+    v.object({
+      seq: v.number(),
+      postAvailable: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("inventoryQuantityLedger")
+      .withIndex("by_item_seq", (q) => q.eq("itemId", args.itemId))
       .collect();
 
-    const conflicts = allChanges.filter((c) => c.conflictStatus === "detected");
-
-    // Enrich with inventory item data for UI display
-    const enrichedConflicts = await Promise.all(
-      conflicts.map(async (conflict) => {
-        const item = await ctx.db.get(conflict.inventoryItemId);
-        return {
-          changeId: conflict._id,
-          inventoryItemId: conflict.inventoryItemId,
-          changeType: conflict.changeType,
-          conflictDetails: conflict.conflictDetails,
-          createdAt: conflict.createdAt,
-          itemData: item
-            ? {
-                name: item.name,
-                partNumber: item.partNumber,
-                colorId: item.colorId,
-                quantityAvailable: item.quantityAvailable,
-              }
-            : undefined,
-        };
-      }),
-    );
-
-    // Sort by creation time (newest first)
-    return enrichedConflicts.sort((a, b) => b.createdAt - a.createdAt);
-  },
-});
-
-// ============================================================================
-// New History-Based Queries (Refactor Requirement)
-// ============================================================================
-
-/**
- * List inventory history entries with filtering and pagination
- * Replaces sync queue based history queries
- */
-export const listInventoryHistory = query({
-  args: listInventoryHistoryArgs,
-  returns: listInventoryHistoryReturns,
-  handler: async (ctx, args) => {
-    const { businessAccountId } = await requireUser(ctx);
-
-    const PAGE_SIZE = Math.min(Math.max(args.limit ?? 25, 1), 100);
-    const cursorTs = args.cursor ? Number(args.cursor) : undefined;
-
-    // Query inventory history with business account scope
-    const q = ctx.db
-      .query("inventoryHistory")
-      .withIndex("by_timestamp", (q) => q.eq("businessAccountId", businessAccountId));
-
-    const rows = await q.collect();
-
-    // Sort newest first
-    rows.sort((a, b) => b.timestamp - a.timestamp);
-
-    // Apply filters
-    let filteredRows = rows.filter((r) => (cursorTs ? r.timestamp < cursorTs : true));
-
-    if (args.dateFrom) filteredRows = filteredRows.filter((r) => r.timestamp >= args.dateFrom!);
-    if (args.dateTo) filteredRows = filteredRows.filter((r) => r.timestamp <= args.dateTo!);
-    if (args.action) filteredRows = filteredRows.filter((r) => r.action === args.action);
-    if (args.userId) filteredRows = filteredRows.filter((r) => r.userId === args.userId);
-    if (args.itemId) filteredRows = filteredRows.filter((r) => r.itemId === args.itemId);
-    if (args.source) filteredRows = filteredRows.filter((r) => r.source === args.source);
-
-    // Text search
-    if (args.query) {
-      const qLower = args.query.toLowerCase();
-      filteredRows = filteredRows.filter((r) => {
-        const reasonMatch = (r.reason ?? "").toLowerCase().includes(qLower);
-        const itemIdMatch = String(r.itemId).toLowerCase().includes(qLower);
-        return reasonMatch || itemIdMatch;
-      });
-    }
-
-    const page = filteredRows.slice(0, PAGE_SIZE);
-
-    // Fetch actor details (names)
-    const userIds = Array.from(new Set(page.map((r) => r.userId).filter(Boolean) as string[]));
-    const actors = await Promise.all(userIds.map((id) => ctx.db.get(id)));
-    const idToActor = new Map(userIds.map((id, i) => [id, actors[i] ?? null]));
-
-    const entries = page.map((r) => ({
-      ...r,
-      actorFirstName: idToActor.get(r.userId!)?.firstName,
-      actorLastName: idToActor.get(r.userId!)?.lastName,
-    }));
-
-    const nextCursor =
-      page.length === PAGE_SIZE ? String(page[page.length - 1].timestamp) : undefined;
-
-    return { entries, nextCursor };
-  },
-});
-
-/**
- * Get a specific inventory history entry with full details
- */
-export const getInventoryHistory = query({
-  args: getInventoryHistoryArgs,
-  returns: getInventoryHistoryReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    const historyEntry = await ctx.db.get(args.historyId);
-    if (!historyEntry) throw new Error("History entry not found");
-    assertBusinessMembership(user, historyEntry.businessAccountId);
-
-    // Include actor info
-    const actor = historyEntry.userId ? await ctx.db.get(historyEntry.userId) : null;
-    return {
-      ...historyEntry,
-      actorFirstName: actor?.firstName,
-      actorLastName: actor?.lastName,
-    };
+    const entry = entries.find((e) => e.seq === args.seq);
+    return entry ? { seq: entry.seq, postAvailable: entry.postAvailable } : null;
   },
 });

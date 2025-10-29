@@ -27,9 +27,11 @@ crons.daily(
   internal.bricklink.dataRefresher.cleanupQueue,
 );
 
-// Process inventory sync queue every 5 minutes (Story 3.4, Task 4)
-// Syncs pending inventory changes to all configured marketplaces (BrickLink, BrickOwl)
-// DEPRECATED: Replaced with immediate sync in Story 3.6
-// crons.interval("inventory-sync", { minutes: 5 }, internal.inventory.sync.processAllPendingChanges);
+// Phase 3: Drain marketplace outbox every 30 seconds
+crons.interval(
+  "drain-marketplace-outbox",
+  { seconds: 30 },
+  internal.inventory.syncWorker.drainMarketplaceOutbox,
+);
 
 export default crons;

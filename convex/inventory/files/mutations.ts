@@ -209,18 +209,6 @@ export const recordBatchSyncResults = internalMutation({
         }
 
         await ctx.db.patch(result.itemId, updates);
-
-        // Create inventoryHistory entry for successful sync
-        await ctx.db.insert("inventoryHistory", {
-          businessAccountId: item.businessAccountId,
-          itemId: result.itemId,
-          changeType: "batch_sync",
-          actorUserId: file.createdBy, // Use file creator as actor for system operation
-          reason: `Batch sync to ${result.provider} via file ${file.name}`,
-          createdAt: timestamp,
-          marketplace: result.provider,
-          marketplaceLotId: result.marketplaceLotId,
-        });
       } else {
         // ========================================
         // FAILED SYNC
@@ -271,18 +259,6 @@ export const recordBatchSyncResults = internalMutation({
         }
 
         await ctx.db.patch(result.itemId, failedUpdates);
-
-        // Create inventoryHistory entry for failed sync
-        await ctx.db.insert("inventoryHistory", {
-          businessAccountId: item.businessAccountId,
-          itemId: result.itemId,
-          changeType: "batch_sync_failed",
-          actorUserId: file.createdBy, // Use file creator as actor for system operation
-          reason: `Batch sync to ${result.provider} failed via file ${file.name}`,
-          createdAt: timestamp,
-          marketplace: result.provider,
-          syncError: result.error || "Unknown error",
-        });
       }
     }
 
