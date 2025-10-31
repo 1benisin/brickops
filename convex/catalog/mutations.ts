@@ -1,5 +1,6 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
 
 // ============================================================================
 // INTERNAL MUTATIONS (for data upserts and outbox management)
@@ -8,6 +9,7 @@ import { v } from "convex/values";
 /**
  * Enqueue a catalog refresh request to the outbox
  * Idempotent - won't create duplicate if already pending/inflight
+ * Returns the message ID if created, or undefined if duplicate found
  */
 export const enqueueCatalogRefresh = internalMutation({
   args: {
@@ -17,7 +19,7 @@ export const enqueueCatalogRefresh = internalMutation({
     lastFetched: v.optional(v.number()),
     priority: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"catalogRefreshOutbox"> | undefined> => {
     // Check if already queued (pending or inflight)
     const existing = await ctx.db
       .query("catalogRefreshOutbox")
@@ -32,7 +34,7 @@ export const enqueueCatalogRefresh = internalMutation({
 
     if (existing) {
       // Already queued, skip
-      return;
+      return undefined;
     }
 
     // Generate display recordId
@@ -40,8 +42,8 @@ export const enqueueCatalogRefresh = internalMutation({
       ? `${args.primaryKey}:${args.secondaryKey}`
       : args.primaryKey;
 
-    // Insert to outbox
-    await ctx.db.insert("catalogRefreshOutbox", {
+    // Insert to outbox and return ID
+    const messageId = await ctx.db.insert("catalogRefreshOutbox", {
       tableName: args.tableName,
       primaryKey: args.primaryKey,
       secondaryKey: args.secondaryKey,
@@ -53,6 +55,8 @@ export const enqueueCatalogRefresh = internalMutation({
       nextAttemptAt: Date.now(), // Immediate processing
       createdAt: Date.now(),
     });
+
+    return messageId;
   },
 });
 
@@ -216,3 +220,9 @@ export const upsertPriceGuide = internalMutation({
     }
   },
 });
+
+/**
+ * Upsert part color image into database
+ * Internal mutation used by on-demand fetch action
+ */
+// (upsertPartColorImage removed)

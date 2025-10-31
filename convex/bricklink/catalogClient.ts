@@ -295,6 +295,8 @@ export class BricklinkClient {
     }
   }
 
+  // (getPartColorImage removed - client uses BrickLink CDN directly)
+
   /**
    * Get all colors from Bricklink API
    */

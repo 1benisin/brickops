@@ -76,6 +76,7 @@ export const getCredentialStatus = query({
       validationMessage: credential.validationMessage,
       createdAt: credential.createdAt,
       updatedAt: credential.updatedAt,
+      webhookToken: credential.webhookToken, // Include webhook token for BrickLink
       // Mask credentials for display
       maskedCredentials:
         args.provider === "bricklink"

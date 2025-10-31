@@ -411,6 +411,12 @@ export const getPriceGuide = query({
   },
 });
 
+/**
+ * Get part color image with on-demand fetching
+ * If image doesn't exist, returns null (client should trigger fetch via action)
+ */
+// (getPartColorImage removed - client uses BrickLink CDN directly)
+
 // ============================================================================
 // INTERNAL QUERIES (for actions and worker)
 // ============================================================================
@@ -436,6 +442,19 @@ export const getOutboxMessage = internalQuery({
       )
       .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
       .first();
+  },
+});
+
+/**
+ * Get outbox message by ID
+ * Used to fetch a specific message for immediate processing
+ */
+export const getOutboxMessageById = internalQuery({
+  args: {
+    messageId: v.id("catalogRefreshOutbox"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.messageId);
   },
 });
 
@@ -486,3 +505,8 @@ export const getPriceGuideInternal = internalQuery({
       .collect();
   },
 });
+
+/**
+ * Get part color image for internal use
+ */
+// (getPartColorImageInternal removed)

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Copy, RefreshCw, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Copy, RefreshCw, UserPlus } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
@@ -16,6 +16,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
 } from "@/components/ui";
 import { BrickLinkCredentialsForm } from "@/components/settings/BricklinkCredentialsForm";
 import { BrickOwlCredentialsForm } from "@/components/settings/BrickowlCredentialsForm";
@@ -36,6 +40,7 @@ interface MemberRow {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const authState = useQuery(api.users.queries.getAuthState);
   const currentUser = useQuery(api.users.queries.getCurrentUser);
   const members = useQuery(api.users.queries.listMembers);
@@ -57,8 +62,6 @@ export default function SettingsPage() {
   const [isRegenerating, startInviteTransition] = useTransition();
   const [useSortLocations, setUseSortLocations] = useState(false);
   const [isUpdatingPreferences, startPreferencesTransition] = useTransition();
-  const [isMarketplaceExpanded, setIsMarketplaceExpanded] = useState(false);
-  const [isUsersExpanded, setIsUsersExpanded] = useState(false);
 
   // User management state
   const [isInviting, startUserInviteTransition] = useTransition();
@@ -69,6 +72,16 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState<Role>("manager");
   const [inviteResult, setInviteResult] = useState<string | null>(null);
   const [userError, setUserError] = useState<string | null>(null);
+
+  // Tab state management with URL sync
+  const [activeTab, setActiveTab] = useState(() => {
+    return searchParams.get("tab") || "profile";
+  });
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    router.push(`/settings?tab=${value}`, { scroll: false });
+  };
 
   useEffect(() => {
     if (currentUser?.user) {
@@ -150,7 +163,6 @@ export default function SettingsPage() {
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to update preferences";
         console.error(message);
-        // Revert on error
         setUseSortLocations(!checked);
       }
     });
@@ -248,130 +260,142 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-10">
-      <section className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Account settings
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Update your personal details and manage workspace access for your team.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage your account, team, preferences, and integrations.
+        </p>
+      </div>
 
-        <div className="grid gap-6 rounded-lg border bg-background p-6 shadow-sm md:grid-cols-2">
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Profile</h2>
-              <p className="text-sm text-muted-foreground">
-                This information is shared with your team to help identify activity in audit logs.
-              </p>
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
+          <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
+        </TabsList>
+
+        {/* Profile Tab */}
+        <TabsContent value="profile" className="space-y-6">
+          <div className="grid gap-6 rounded-lg border bg-background p-6 shadow-sm md:grid-cols-2">
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Personal Information</h2>
+                <p className="text-sm text-muted-foreground">
+                  This information is shared with your team to help identify activity in audit logs.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <label htmlFor="firstName" className="text-sm font-medium text-foreground">
+                    First name
+                  </label>
+                  <Input
+                    id="firstName"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    disabled={isUpdatingProfile}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="lastName" className="text-sm font-medium text-foreground">
+                    Last name
+                  </label>
+                  <Input
+                    id="lastName"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    disabled={isUpdatingProfile}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-medium text-foreground">
+                    Email
+                  </label>
+                  <Input
+                    id="email"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    value={currentUser.user?.email ?? ""}
+                    disabled
+                    readOnly
+                  />
+                </div>
+              </div>
+
+              {profileError ? <p className="text-sm text-destructive">{profileError}</p> : null}
+              {profileSuccess ? <p className="text-sm text-green-600">{profileSuccess}</p> : null}
+
+              <Button type="button" onClick={handleProfileSubmit} disabled={isUpdatingProfile}>
+                {isUpdatingProfile ? "Saving…" : "Save profile"}
+              </Button>
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label htmlFor="firstName" className="text-sm font-medium text-foreground">
-                  First name
-                </label>
-                <Input
-                  id="firstName"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  disabled={isUpdatingProfile}
-                />
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Role & Permissions</h2>
+                <p className="text-sm text-muted-foreground">
+                  Your current access level in this workspace.
+                </p>
               </div>
-              <div className="space-y-2">
-                <label htmlFor="lastName" className="text-sm font-medium text-foreground">
-                  Last name
-                </label>
-                <Input
-                  id="lastName"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  value={lastName}
-                  onChange={(event) => setLastName(event.target.value)}
-                  disabled={isUpdatingProfile}
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium text-foreground">
-                  Email
-                </label>
-                <Input
-                  id="email"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  value={currentUser.user?.email ?? ""}
-                  disabled
-                  readOnly
-                />
+              <div className="rounded-md border bg-card p-4" data-testid="role-permissions">
+                <p className="text-sm">
+                  <span className="font-medium text-foreground">Role:</span>{" "}
+                  <span className="capitalize text-muted-foreground">
+                    {currentUser.user?.role ?? "—"}
+                  </span>
+                </p>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  {currentUser.user?.role === "owner" ? (
+                    <>
+                      <li>
+                        Full access to all features including user management and account settings
+                      </li>
+                      <li>Can invite, remove, and change roles of users</li>
+                      <li>Can rotate the business invite code</li>
+                    </>
+                  ) : null}
+                  {currentUser.user?.role === "manager" ? (
+                    <>
+                      <li>Full inventory and order management</li>
+                      <li>Cannot manage users or account settings</li>
+                    </>
+                  ) : null}
+                  {currentUser.user?.role === "picker" ? (
+                    <>
+                      <li>Access to picking workflows and inventory adjustments</li>
+                      <li>Read-only elsewhere</li>
+                    </>
+                  ) : null}
+                  {currentUser.user?.role === "viewer" ? (
+                    <>
+                      <li>Read-only access to inventory and orders</li>
+                      <li>Cannot make changes</li>
+                    </>
+                  ) : null}
+                </ul>
               </div>
             </div>
-
-            {profileError ? <p className="text-sm text-destructive">{profileError}</p> : null}
-            {profileSuccess ? <p className="text-sm text-green-600">{profileSuccess}</p> : null}
-
-            <Button type="button" onClick={handleProfileSubmit} disabled={isUpdatingProfile}>
-              {isUpdatingProfile ? "Saving…" : "Save profile"}
-            </Button>
           </div>
+        </TabsContent>
 
-          <div className="space-y-4">
+        {/* Team Tab */}
+        <TabsContent value="team" className="space-y-6">
+          {/* Team Invite Code Section */}
+          <section className="rounded-lg border bg-background p-6 shadow-sm">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Your role & permissions</h2>
-              <p className="text-sm text-muted-foreground">
-                Your current access level in this workspace.
-              </p>
-            </div>
-            <div className="rounded-md border bg-card p-4" data-testid="role-permissions">
-              <p className="text-sm">
-                <span className="font-medium text-foreground">Role:</span>{" "}
-                <span className="capitalize text-muted-foreground">
-                  {currentUser.user?.role ?? "—"}
-                </span>
-              </p>
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {currentUser.user?.role === "owner" ? (
-                  <>
-                    <li>
-                      Full access to all features including user management and account settings
-                    </li>
-                    <li>Can invite, remove, and change roles of users</li>
-                    <li>Can rotate the business invite code</li>
-                  </>
-                ) : null}
-                {currentUser.user?.role === "manager" ? (
-                  <>
-                    <li>Full inventory and order management</li>
-                    <li>Cannot manage users or account settings</li>
-                  </>
-                ) : null}
-                {currentUser.user?.role === "picker" ? (
-                  <>
-                    <li>Access to picking workflows and inventory adjustments</li>
-                    <li>Read-only elsewhere</li>
-                  </>
-                ) : null}
-                {currentUser.user?.role === "viewer" ? (
-                  <>
-                    <li>Read-only access to inventory and orders</li>
-                    <li>Cannot make changes</li>
-                  </>
-                ) : null}
-              </ul>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Team invite</h2>
+              <h2 className="text-lg font-semibold text-foreground">Team Invite Code</h2>
               <p className="text-sm text-muted-foreground">
                 Share this invite code during sign-up so teammates join the same business account.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input value={inviteCode} readOnly disabled className="sm:max-w-xs" />
               <div className="flex gap-2">
                 <Button
@@ -382,279 +406,242 @@ export default function SettingsPage() {
                 >
                   <Copy className="mr-2 size-4" /> Copy
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handleRegenerateInvite}
-                  disabled={!isOwner || isRegenerating}
-                >
-                  <RefreshCw className="mr-2 size-4" />
-                  {isRegenerating ? "Rotating…" : "Rotate"}
-                </Button>
+                {isOwner && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleRegenerateInvite}
+                    disabled={!isOwner || isRegenerating}
+                  >
+                    <RefreshCw className="mr-2 size-4" />
+                    {isRegenerating ? "Rotating…" : "Rotate"}
+                  </Button>
+                )}
               </div>
             </div>
             {inviteFeedback ? (
-              <p className="text-sm text-muted-foreground">{inviteFeedback}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{inviteFeedback}</p>
             ) : null}
             {!isOwner ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Invite code rotation is limited to business owners.
               </p>
             ) : null}
-          </div>
-        </div>
-      </section>
+          </section>
 
-      {/* Catalog Preferences Section */}
-      <section className="space-y-4 rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Catalog Preferences</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Customize how you search and view your catalog
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4 pt-4">
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-4">
-            <div className="flex-1">
-              <label
-                htmlFor="use-sort-locations"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
-                Enable Sort Locations
-              </label>
-              <p className="text-sm text-muted-foreground mt-1.5">
-                Show location-based search in the catalog. When enabled, you can search parts by
-                their physical storage location.
-              </p>
-            </div>
-            <Switch
-              id="use-sort-locations"
-              checked={useSortLocations}
-              onCheckedChange={handleSortLocationsToggle}
-              disabled={isUpdatingPreferences}
-              className="ml-4"
-            />
-          </div>
-        </div>
-      </section>
-
-      {isOwner && (
-        <section className="space-y-4">
-          <div className="rounded-lg border bg-background shadow-sm">
-            <button
-              onClick={() => setIsMarketplaceExpanded(!isMarketplaceExpanded)}
-              className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-muted/50"
-            >
+          {/* Team Members Section */}
+          <section className="space-y-4 rounded-lg border bg-background p-6 shadow-sm">
+            <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                  Marketplace Credentials{" "}
-                  <span className="text-sm font-normal text-muted-foreground">(Owner only)</span>
-                </h2>
+                <h2 className="text-lg font-semibold text-foreground">Team Members</h2>
                 <p className="text-sm text-muted-foreground">
-                  Connect your marketplace accounts to BrickOps. You can connect to BrickLink,
-                  BrickOwl, or both.
+                  Everyone listed here shares access to inventory, orders, and catalog data for{" "}
+                  <span className="font-medium text-foreground">
+                    {currentUser.businessAccount?.name ?? "your business"}
+                  </span>
+                  .
                 </p>
               </div>
-              {isMarketplaceExpanded ? (
-                <ChevronUp className="size-5 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="size-5 text-muted-foreground" />
+              {isOwner && (
+                <Button
+                  type="button"
+                  onClick={() => setInviteOpen(true)}
+                  data-testid="invite-button"
+                >
+                  <UserPlus className="mr-2 size-4" />
+                  Invite user
+                </Button>
               )}
-            </button>
+            </div>
 
-            {isMarketplaceExpanded && (
-              <div className="space-y-6 border-t p-6">
-                {/* Sync Settings Section */}
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">Auto-Sync Settings</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Control which marketplaces automatically sync inventory changes.
-                    </p>
-                  </div>
-                  <div className="space-y-4">
-                    {syncSettings?.map((setting) => (
-                      <div key={setting.provider} className="flex items-center justify-between">
-                        <div>
-                          <label className="text-sm font-medium">
-                            Auto-sync to {setting.provider}
-                          </label>
-                          <p className="text-xs text-muted-foreground">
-                            Automatically sync inventory changes to {setting.provider}
-                          </p>
-                        </div>
-                        <Switch
-                          checked={setting.syncEnabled}
-                          onCheckedChange={(enabled: boolean) =>
-                            handleSyncSettingsChange(setting.provider, enabled)
-                          }
-                          disabled={!setting.isActive}
-                        />
-                      </div>
-                    ))}
-                    {(!syncSettings || syncSettings.length === 0) && (
-                      <p className="text-sm text-muted-foreground">
-                        Configure marketplace credentials above to enable sync settings.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* BrickLink Credentials Section */}
-                <div className="space-y-4 border-t pt-6">
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">
-                      BrickLink Credentials{" "}
-                      <span className="text-sm font-normal text-muted-foreground">(Optional)</span>
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Connect your BrickLink store using OAuth 1.0a credentials. Only configure this
-                      if you sell on BrickLink.
-                    </p>
-                  </div>
-                  <BrickLinkCredentialsForm />
-                </div>
-
-                {/* BrickOwl Credentials Section */}
-                <div className="space-y-4 border-t pt-6">
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">
-                      BrickOwl Credentials{" "}
-                      <span className="text-sm font-normal text-muted-foreground">(Optional)</span>
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Connect your BrickOwl store using your API key. Only configure this if you
-                      sell on BrickOwl.
-                    </p>
-                  </div>
-                  <BrickOwlCredentialsForm />
-                </div>
-              </div>
+            {userError && (
+              <p className="text-sm text-destructive" role="alert">
+                {userError}
+              </p>
             )}
-          </div>
-        </section>
-      )}
 
-      <section className="space-y-4">
-        <div className="rounded-lg border bg-background shadow-sm">
-          <button
-            onClick={() => setIsUsersExpanded(!isUsersExpanded)}
-            className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-muted/50"
-          >
+            <div className="overflow-hidden rounded-lg border bg-background">
+              <div className="grid grid-cols-5 gap-4 bg-muted/50 p-3 text-sm font-medium text-muted-foreground">
+                <span>Name</span>
+                <span>Role</span>
+                <span>Status</span>
+                <span>Email</span>
+                <span className="text-right">Actions</span>
+              </div>
+              <div className="divide-y">
+                {sortedMembers.map((member) => (
+                  <div key={member._id} className="grid grid-cols-5 items-center gap-4 p-3 text-sm">
+                    <span className="font-medium text-foreground">
+                      {member.name ??
+                        (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() || "—")}
+                      {member.isCurrentUser ? " (you)" : ""}
+                    </span>
+                    <span className="capitalize text-muted-foreground">
+                      {isOwner && !member.isCurrentUser ? (
+                        <select
+                          aria-label={`role-select-${member._id}`}
+                          className="rounded border bg-background px-2 py-1"
+                          value={member.role}
+                          onChange={(e) => handleRoleChange(member, e.target.value as Role)}
+                          disabled={isUpdatingRoleId === member._id}
+                          data-testid={`role-select-${member._id}`}
+                        >
+                          <option value="manager">manager</option>
+                          <option value="picker">picker</option>
+                          <option value="viewer">viewer</option>
+                        </select>
+                      ) : (
+                        member.role
+                      )}
+                    </span>
+                    <span className="capitalize text-muted-foreground">{member.status}</span>
+                    <span className="text-muted-foreground">{member.email ?? "—"}</span>
+                    <span className="flex justify-end">
+                      {isOwner && !member.isCurrentUser ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            const displayName =
+                              member.name ??
+                              (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() ||
+                                member.email ||
+                                "this user");
+                            if (window.confirm(`Are you sure you want to remove ${displayName}?`)) {
+                              handleRemove(member);
+                            }
+                          }}
+                          disabled={isRemovingId === member._id}
+                          data-testid={`remove-${member._id}`}
+                        >
+                          Remove
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </TabsContent>
+
+        {/* Preferences Tab */}
+        <TabsContent value="preferences" className="space-y-6">
+          <section className="rounded-lg border bg-background p-6 shadow-sm">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Team Members</h2>
-              <p className="text-sm text-muted-foreground">
-                Everyone listed here shares access to inventory, orders, and catalog data for{" "}
-                <span className="font-medium text-foreground">
-                  {currentUser.businessAccount?.name ?? "your business"}
-                </span>
-                .
+              <h2 className="text-lg font-semibold">Catalog Preferences</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Customize how you search and view your catalog
               </p>
             </div>
-            {isUsersExpanded ? (
-              <ChevronUp className="size-5 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="size-5 text-muted-foreground" />
-            )}
-          </button>
 
-          {isUsersExpanded && (
-            <div className="space-y-4 border-t p-6">
-              {isOwner && (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    onClick={() => setInviteOpen(true)}
-                    data-testid="invite-button"
+            <div className="space-y-4 pt-4">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-4">
+                <div className="flex-1">
+                  <label
+                    htmlFor="use-sort-locations"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                   >
-                    <UserPlus className="mr-2 size-4" />
-                    Invite user
-                  </Button>
+                    Enable Sort Locations
+                  </label>
+                  <p className="text-sm text-muted-foreground mt-1.5">
+                    Show location-based search in the catalog. When enabled, you can search parts by
+                    their physical storage location.
+                  </p>
                 </div>
-              )}
+                <Switch
+                  id="use-sort-locations"
+                  checked={useSortLocations}
+                  onCheckedChange={handleSortLocationsToggle}
+                  disabled={isUpdatingPreferences}
+                  className="ml-4"
+                />
+              </div>
+            </div>
+          </section>
+        </TabsContent>
 
-              {userError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {userError}
-                </p>
-              )}
-
-              <div className="overflow-hidden rounded-lg border bg-background">
-                <div className="grid grid-cols-5 gap-4 bg-muted/50 p-3 text-sm font-medium text-muted-foreground">
-                  <span>Name</span>
-                  <span>Role</span>
-                  <span>Status</span>
-                  <span>Email</span>
-                  <span className="text-right">Actions</span>
+        {/* Integrations Tab */}
+        <TabsContent value="integrations" className="space-y-6">
+          {isOwner ? (
+            <>
+              {/* Auto-Sync Settings Section */}
+              <section className="rounded-lg border bg-background p-6 shadow-sm">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Auto-Sync Settings</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Control which marketplaces automatically sync inventory changes.
+                  </p>
                 </div>
-                <div className="divide-y">
-                  {sortedMembers.map((member) => (
-                    <div
-                      key={member._id}
-                      className="grid grid-cols-5 items-center gap-4 p-3 text-sm"
-                    >
-                      <span className="font-medium text-foreground">
-                        {member.name ??
-                          (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() || "—")}
-                        {member.isCurrentUser ? " (you)" : ""}
-                      </span>
-                      <span className="capitalize text-muted-foreground">
-                        {isOwner && !member.isCurrentUser ? (
-                          <select
-                            aria-label={`role-select-${member._id}`}
-                            className="rounded border bg-background px-2 py-1"
-                            value={member.role}
-                            onChange={(e) => handleRoleChange(member, e.target.value as Role)}
-                            disabled={isUpdatingRoleId === member._id}
-                            data-testid={`role-select-${member._id}`}
-                          >
-                            <option value="manager">manager</option>
-                            <option value="picker">picker</option>
-                            <option value="viewer">viewer</option>
-                          </select>
-                        ) : (
-                          member.role
-                        )}
-                      </span>
-                      <span className="capitalize text-muted-foreground">{member.status}</span>
-                      <span className="text-muted-foreground">{member.email ?? "—"}</span>
-                      <span className="flex justify-end">
-                        {isOwner && !member.isCurrentUser ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              const displayName =
-                                member.name ??
-                                (`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() ||
-                                  member.email ||
-                                  "this user");
-                              if (
-                                window.confirm(`Are you sure you want to remove ${displayName}?`)
-                              ) {
-                                handleRemove(member);
-                              }
-                            }}
-                            disabled={isRemovingId === member._id}
-                            data-testid={`remove-${member._id}`}
-                          >
-                            Remove
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </span>
+                <div className="mt-4 space-y-4">
+                  {syncSettings?.map((setting) => (
+                    <div key={setting.provider} className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium">
+                          Auto-sync to {setting.provider}
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          Automatically sync inventory changes to {setting.provider}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={setting.syncEnabled}
+                        onCheckedChange={(enabled: boolean) =>
+                          handleSyncSettingsChange(setting.provider, enabled)
+                        }
+                        disabled={!setting.isActive}
+                      />
                     </div>
                   ))}
+                  {(!syncSettings || syncSettings.length === 0) && (
+                    <p className="text-sm text-muted-foreground">
+                      Configure marketplace credentials below to enable sync settings.
+                    </p>
+                  )}
                 </div>
-              </div>
+              </section>
+
+              {/* BrickLink Credentials Section */}
+              <section className="space-y-4 rounded-lg border bg-background p-6 shadow-sm">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">
+                    BrickLink Credentials{" "}
+                    <span className="text-sm font-normal text-muted-foreground">(Optional)</span>
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Connect your BrickLink store using OAuth 1.0a credentials. Only configure this
+                    if you sell on BrickLink.
+                  </p>
+                </div>
+                <BrickLinkCredentialsForm />
+              </section>
+
+              {/* BrickOwl Credentials Section */}
+              <section className="space-y-4 rounded-lg border bg-background p-6 shadow-sm">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">
+                    BrickOwl Credentials{" "}
+                    <span className="text-sm font-normal text-muted-foreground">(Optional)</span>
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Connect your BrickOwl store using your API key. Only configure this if you sell
+                    on BrickOwl.
+                  </p>
+                </div>
+                <BrickOwlCredentialsForm />
+              </section>
+            </>
+          ) : (
+            <div className="rounded-lg border bg-card p-6">
+              <p className="text-sm text-muted-foreground">
+                Marketplace integrations are only available to workspace owners.
+              </p>
             </div>
           )}
-        </div>
-      </section>
+        </TabsContent>
+      </Tabs>
 
       {/* User Invite Dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

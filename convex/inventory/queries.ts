@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, internalQuery } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { requireUser, assertBusinessMembership } from "./helpers";
 import {
   listInventoryItemsArgs,
@@ -288,5 +289,213 @@ export const getLedgerEntryAtSeq = internalQuery({
 
     const entry = entries.find((e) => e.seq === args.seq);
     return entry ? { seq: entry.seq, postAvailable: entry.postAvailable } : null;
+  },
+});
+
+// ============================================================================
+// Unified History Query
+// ============================================================================
+
+/**
+ * Get unified inventory history combining quantity and location changes
+ * Returns paginated results sorted by timestamp DESC
+ */
+export const getUnifiedInventoryHistory = query({
+  args: {
+    changeType: v.optional(v.union(v.literal("quantity"), v.literal("location"))),
+    dateFrom: v.optional(v.number()),
+    dateTo: v.optional(v.number()),
+    partNumber: v.optional(v.string()),
+    location: v.optional(v.string()),
+    userId: v.optional(v.id("users")),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, args) => {
+    const { businessAccountId } = await requireUser(ctx);
+
+    const limit = args.limit ?? 100;
+    const offset = args.offset ?? 0;
+
+    // Collect quantity ledger entries
+    let quantityEntries = await ctx.db
+      .query("inventoryQuantityLedger")
+      .withIndex("by_business_timestamp", (q) => q.eq("businessAccountId", businessAccountId))
+      .collect();
+
+    // Apply date filters if provided
+    if (args.dateFrom !== undefined) {
+      quantityEntries = quantityEntries.filter((e) => e.timestamp >= args.dateFrom!);
+    }
+    if (args.dateTo !== undefined) {
+      quantityEntries = quantityEntries.filter((e) => e.timestamp <= args.dateTo!);
+    }
+
+    // Collect location ledger entries
+    let locationEntries = await ctx.db
+      .query("inventoryLocationLedger")
+      .withIndex("by_business_timestamp", (q) => q.eq("businessAccountId", businessAccountId))
+      .collect();
+
+    // Apply date filters if provided
+    if (args.dateFrom !== undefined) {
+      locationEntries = locationEntries.filter((e) => e.timestamp >= args.dateFrom!);
+    }
+    if (args.dateTo !== undefined) {
+      locationEntries = locationEntries.filter((e) => e.timestamp <= args.dateTo!);
+    }
+
+    // Transform to unified format
+    const unifiedEntries: Array<{
+      _id: string;
+      changeType: "quantity" | "location";
+      timestamp: number;
+      userId: string | undefined;
+      itemId: string;
+      reason: string;
+      source: string;
+      correlationId: string | undefined;
+      // Quantity-specific fields
+      deltaAvailable?: number;
+      preAvailable?: number;
+      postAvailable?: number;
+      seq?: number;
+      orderId?: string;
+      // Location-specific fields
+      fromLocation?: string;
+      toLocation?: string;
+    }> = [];
+
+    // Process quantity entries
+    if (!args.changeType || args.changeType === "quantity") {
+      for (const entry of quantityEntries) {
+        // Filter by userId if provided
+        if (args.userId !== undefined && entry.userId !== args.userId) {
+          continue;
+        }
+
+        // Get item to filter by partNumber and location
+        const item = await ctx.db.get(entry.itemId);
+        if (!item || item.isArchived) continue;
+
+        if (args.partNumber !== undefined && item.partNumber !== args.partNumber) {
+          continue;
+        }
+        if (args.location !== undefined && item.location !== args.location) {
+          continue;
+        }
+
+        unifiedEntries.push({
+          _id: entry._id,
+          changeType: "quantity",
+          timestamp: entry.timestamp,
+          userId: entry.userId,
+          itemId: entry.itemId,
+          reason: entry.reason,
+          source: entry.source,
+          correlationId: entry.correlationId,
+          deltaAvailable: entry.deltaAvailable,
+          preAvailable: entry.preAvailable,
+          postAvailable: entry.postAvailable,
+          seq: entry.seq,
+          orderId: entry.orderId,
+        });
+      }
+    }
+
+    // Process location entries
+    if (!args.changeType || args.changeType === "location") {
+      for (const entry of locationEntries) {
+        // Filter by userId if provided
+        if (args.userId !== undefined && entry.userId !== args.userId) {
+          continue;
+        }
+
+        // Get item to filter by partNumber
+        const item = await ctx.db.get(entry.itemId);
+        if (!item || item.isArchived) continue;
+
+        if (args.partNumber !== undefined && item.partNumber !== args.partNumber) {
+          continue;
+        }
+        // For location changes, check if toLocation matches
+        if (args.location !== undefined && entry.toLocation !== args.location) {
+          continue;
+        }
+
+        unifiedEntries.push({
+          _id: entry._id,
+          changeType: "location",
+          timestamp: entry.timestamp,
+          userId: entry.userId,
+          itemId: entry.itemId,
+          reason: entry.reason,
+          source: entry.source,
+          correlationId: entry.correlationId,
+          fromLocation: entry.fromLocation,
+          toLocation: entry.toLocation,
+        });
+      }
+    }
+
+    // Sort by timestamp DESC (newest first)
+    unifiedEntries.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Apply pagination
+    const paginatedEntries = unifiedEntries.slice(offset, offset + limit);
+
+    // Enrich with item and user details
+    const enrichedEntries = await Promise.all(
+      paginatedEntries.map(async (entry) => {
+        const item = await ctx.db.get(entry.itemId as Id<"inventoryItems">);
+        if (!item) return null;
+
+        // Get user info
+        let actor = null;
+        if (entry.userId) {
+          const user = await ctx.db.get(entry.userId as Id<"users">);
+          if (user) {
+            actor = {
+              firstName: user.firstName ?? undefined,
+              lastName: user.lastName ?? undefined,
+              email: user.email ?? undefined,
+            };
+          }
+        }
+
+        // Get part name from catalog
+        let partName: string | undefined = undefined;
+        if (item.partNumber) {
+          const part = await ctx.db
+            .query("parts")
+            .withIndex("by_no", (q) => q.eq("no", item.partNumber))
+            .first();
+          if (part) {
+            partName = part.name;
+          }
+        }
+
+        return {
+          ...entry,
+          item: {
+            _id: item._id,
+            partNumber: item.partNumber,
+            name: item.name,
+            colorId: item.colorId,
+            location: item.location,
+            condition: item.condition,
+            price: item.price,
+            quantityAvailable: item.quantityAvailable,
+            quantityReserved: item.quantityReserved,
+          },
+          partName,
+          actor,
+        };
+      }),
+    );
+
+    // Filter out null entries (items that no longer exist)
+    return enrichedEntries.filter((e): e is NonNullable<typeof e> => e !== null);
   },
 });

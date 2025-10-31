@@ -16,7 +16,7 @@ crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbea
 // Drain catalog refresh outbox every 5 minutes (10 items per run = 120 API calls/hour max)
 crons.interval(
   "drain-catalog-refresh-outbox",
-  { minutes: 1 },
+  { minutes: 5 },
   internal.catalog.refreshWorker.drainCatalogRefreshOutbox,
 );
 
@@ -32,6 +32,13 @@ crons.interval(
   "drain-marketplace-outbox",
   { minutes: 5 },
   internal.inventory.syncWorker.drainMarketplaceOutbox,
+);
+
+// Poll BrickLink notifications for all active stores every 3 minutes (safety net)
+crons.interval(
+  "poll-bricklink-notifications",
+  { minutes: 3 },
+  internal.bricklink.notifications.pollAllNotifications,
 );
 
 export default crons;

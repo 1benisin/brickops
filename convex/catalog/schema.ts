@@ -154,4 +154,6 @@ export const catalogTables = {
     .index("by_partNo", ["partNo"])
     .index("by_colorId", ["colorId"])
     .index("by_partNo_colorId", ["partNo", "colorId"]),
+
+  // (partColorImages removed - using direct BrickLink CDN URLs client-side)
 };

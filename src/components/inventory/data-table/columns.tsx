@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SyncStatusIndicator } from "@/components/inventory/SyncStatusIndicator";
 import type { InventoryItem } from "@/types/inventory";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime, bestTextOn } from "@/lib/utils";
+import { useGetPartColors } from "@/hooks/useGetPartColors";
+import { ColorPartImage } from "@/components/common/ColorPartImage";
 
 // Type for marketplace sync configuration
 export type MarketplaceSyncConfig = {
@@ -42,6 +44,48 @@ const ConditionBadge = ({ condition }: { condition: InventoryItem["condition"] }
     <Badge variant="outline" className={variants[condition]}>
       {condition.charAt(0).toUpperCase() + condition.slice(1)}
     </Badge>
+  );
+};
+
+// Color badge component that shows color name with background color (no thumbnail)
+const PartColorBadge = ({ partNumber, colorId }: { partNumber: string; colorId: string }) => {
+  const { data: colors } = useGetPartColors(partNumber);
+
+  const selectedColor = colors?.find((c) => String(c.colorId) === colorId);
+  if (!selectedColor) {
+    return <span className="text-muted-foreground text-sm">{colorId}</span>;
+  }
+
+  const bgColor = `#${selectedColor.hexCode || "ffffff"}`;
+  const { color: textColor } = bestTextOn(bgColor);
+
+  return (
+    <div
+      className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm font-medium"
+      style={{
+        backgroundColor: bgColor,
+        color: textColor,
+      }}
+    >
+      <span>{selectedColor.name || `Color ${colorId}`}</span>
+    </div>
+  );
+};
+
+// Separate color image thumbnail cell renderer
+const ColorThumbnail = ({ partNumber, colorId }: { partNumber: string; colorId: string }) => {
+  return (
+    <div className="relative h-6 w-6">
+      <ColorPartImage
+        partNumber={partNumber}
+        colorId={colorId}
+        alt={`Color ${colorId}`}
+        fill
+        className="rounded object-contain"
+        unoptimized
+        sizes="24px"
+      />
+    </div>
   );
 };
 
@@ -99,7 +143,7 @@ export const createColumns = (
       minSize: 100,
       maxSize: 400,
       cell: ({ row }) => (
-        <div className="max-w-[200px] truncate" title={row.getValue("name")}>
+        <div className="w-full truncate" title={row.getValue("name")}>
           {row.getValue("name")}
         </div>
       ),
@@ -110,10 +154,30 @@ export const createColumns = (
       accessorKey: "colorId",
       meta: { label: "Color" },
       header: "Color",
-      size: 100,
-      minSize: 60,
+      size: 120,
+      minSize: 80,
       maxSize: 200,
-      cell: ({ row }) => <div className="font-mono text-sm">{row.getValue("colorId")}</div>,
+      cell: ({ row }) => {
+        const item = row.original;
+        return <PartColorBadge partNumber={item.partNumber} colorId={String(item.colorId)} />;
+      },
+    },
+    // Color Thumbnail column (separate image preview)
+    {
+      id: "colorThumbnail",
+      header: "Color Image",
+      size: 80,
+      minSize: 60,
+      maxSize: 120,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const item = row.original;
+        return (
+          <div className="flex items-center">
+            <ColorThumbnail partNumber={item.partNumber} colorId={String(item.colorId)} />
+          </div>
+        );
+      },
     },
     // Location column
     {
@@ -125,7 +189,7 @@ export const createColumns = (
       minSize: 80,
       maxSize: 250,
       cell: ({ row }) => (
-        <div className="max-w-[120px] truncate" title={row.getValue("location")}>
+        <div className="w-full truncate" title={row.getValue("location")}>
           {row.getValue("location")}
         </div>
       ),

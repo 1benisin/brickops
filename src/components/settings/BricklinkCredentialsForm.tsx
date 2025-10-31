@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, X, Loader2, AlertCircle } from "lucide-react";
+import { Check, X, Loader2, AlertCircle, Copy, ExternalLink } from "lucide-react";
+import { getEnv } from "@/lib/env";
 
 export function BrickLinkCredentialsForm() {
   const status = useQuery(api.marketplace.queries.getCredentialStatus, {
@@ -23,10 +24,6 @@ export function BrickLinkCredentialsForm() {
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
 
   const [isSaving, startSaveTransition] = useTransition();
   const [isTesting, startTestTransition] = useTransition();
@@ -35,10 +32,38 @@ export function BrickLinkCredentialsForm() {
   const configured = status?.configured ?? false;
   const isActive = status?.isActive ?? false;
 
+  // Construct webhook callback URL from query data (auto-updates when mutation completes)
+  const webhookUrl = useMemo(() => {
+    if (!configured || !status?.webhookToken) {
+      return null;
+    }
+
+    const env = getEnv();
+    // Convex HTTP routes are accessible via {deployment}.convex.site
+    // Convert from .convex.cloud (WebSocket) to .convex.site (HTTP)
+    const baseUrl = env.NEXT_PUBLIC_CONVEX_URL.replace(".convex.cloud", ".convex.site").replace(
+      "/functions",
+      "",
+    );
+    return `${baseUrl}/api/bricklink/webhook/${status.webhookToken}`;
+  }, [configured, status?.webhookToken]);
+
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyWebhookUrl = async () => {
+    if (!webhookUrl) return;
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
   const handleSave = () => {
     setError(null);
     setSuccess(null);
-    setTestResult(null);
 
     if (!consumerKey || !consumerSecret || !tokenValue || !tokenSecret) {
       setError("All fields are required for BrickLink credentials");
@@ -54,12 +79,25 @@ export function BrickLinkCredentialsForm() {
           bricklinkTokenValue: tokenValue,
           bricklinkTokenSecret: tokenSecret,
         });
+
+        // Credentials saved - webhookToken generated and saved by mutation
+        // Query will auto-refetch and show callback URL + status automatically
         setSuccess("Credentials saved successfully");
+
         // Clear form after save
         setConsumerKey("");
         setConsumerSecret("");
         setTokenValue("");
         setTokenSecret("");
+
+        // Automatically test connection after save (status will update in Connection Status badge)
+        try {
+          await testConnection({ provider: "bricklink" });
+          // Connection status will automatically update in the status badge via reactive query
+        } catch (testErr) {
+          // Test failure will be shown in Connection Status badge via query
+          console.error("Connection test error:", testErr);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to save credentials";
         setError(message);
@@ -70,7 +108,6 @@ export function BrickLinkCredentialsForm() {
   const handleTest = () => {
     setError(null);
     setSuccess(null);
-    setTestResult(null);
 
     if (!configured) {
       setError("Please save credentials before testing connection");
@@ -79,17 +116,12 @@ export function BrickLinkCredentialsForm() {
 
     startTestTransition(async () => {
       try {
-        const result = await testConnection({ provider: "bricklink" });
-        setTestResult(result);
-        if (result.success) {
-          setSuccess("Connection test successful!");
-        } else {
-          setError(`Connection test failed: ${result.message}`);
-        }
+        await testConnection({ provider: "bricklink" });
+        // Connection status will update in the Connection Status badge via query
+        setSuccess("Connection test initiated. Check status above.");
       } catch (err) {
         const message = err instanceof Error ? err.message : "Connection test failed";
         setError(message);
-        setTestResult({ success: false, message });
       }
     });
   };
@@ -97,7 +129,6 @@ export function BrickLinkCredentialsForm() {
   const handleRevoke = () => {
     setError(null);
     setSuccess(null);
-    setTestResult(null);
 
     if (
       !confirm("Are you sure you want to revoke these credentials? This action cannot be undone.")
@@ -123,26 +154,187 @@ export function BrickLinkCredentialsForm() {
 
   return (
     <div className="space-y-6">
-      {/* Status Badge */}
+      {/* Setup Instructions */}
+      <div className="rounded-lg border-2 border-blue-300 bg-blue-100 dark:bg-blue-950 dark:border-blue-700 p-5 shadow-sm">
+        <div className="mb-4">
+          <h4 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
+            <AlertCircle className="size-5 text-blue-600 dark:text-blue-400" />
+            Setting Up BrickLink API Access
+          </h4>
+          <p className="text-sm text-foreground mb-4 font-medium">
+            To connect your BrickLink store, you need to register your application and obtain OAuth
+            credentials. Follow these steps:
+          </p>
+          <ol className="list-decimal list-inside space-y-3 text-sm text-foreground mb-4">
+            <li className="font-medium">
+              Go to your{" "}
+              <a
+                href="https://www.bricklink.com/v2/api/register_consumer.page"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+              >
+                BrickLink API Settings
+                <ExternalLink className="size-3.5" />
+              </a>
+            </li>
+            <li className="font-medium">
+              Add a new Access Token with:
+              <ul className="list-disc list-inside ml-5 mt-2 space-y-2 font-normal">
+                <li>
+                  <strong className="font-semibold">IP Address:</strong>{" "}
+                  <code className="bg-white dark:bg-gray-800 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 font-mono text-sm font-bold text-gray-900 dark:text-gray-100">
+                    0.0.0.0
+                  </code>
+                </li>
+                <li>
+                  <strong className="font-semibold">IP Mask:</strong>{" "}
+                  <code className="bg-white dark:bg-gray-800 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 font-mono text-sm font-bold text-gray-900 dark:text-gray-100">
+                    0.0.0.0
+                  </code>
+                </li>
+              </ul>
+            </li>
+            <li className="font-medium">
+              Copy your Consumer Key, Consumer Secret, Token Value, and Token Secret
+            </li>
+            <li className="font-medium">Paste them into the form below and save</li>
+            <li className="font-medium">
+              Copy the Callback URL below and add it to your BrickLink API settings
+            </li>
+          </ol>
+        </div>
+        <div className="pt-3 border-t border-blue-300 dark:border-blue-800">
+          <a
+            href="https://www.bricklink.com/v2/api/register_consumer.page"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+          >
+            <ExternalLink className="size-4" />
+            Open BrickLink API Settings
+          </a>
+        </div>
+      </div>
+
+      {/* Connection Status - Always Visible */}
+      <div className="rounded-md border bg-muted/50 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium">Connection Status</span>
+          {status?.validationStatus === "testing" && (
+            <Loader2 className="size-4 animate-spin text-yellow-600" />
+          )}
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {configured ? (
+            <>
+              {isActive && status?.validationStatus === "success" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-xs font-medium text-green-700">
+                  <Check className="size-3.5" />
+                  Active & Connected
+                </span>
+              ) : isActive && status?.validationStatus === "failed" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700">
+                  <X className="size-3.5" />
+                  Active but Connection Failed
+                </span>
+              ) : isActive ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 px-3 py-1.5 text-xs font-medium text-yellow-700">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Active - Testing Connection
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700">
+                  <X className="size-3.5" />
+                  Inactive
+                </span>
+              )}
+              {status?.lastValidatedAt && (
+                <div className="text-xs text-muted-foreground">
+                  Last tested: {new Date(status.lastValidatedAt).toLocaleString()}
+                </div>
+              )}
+              {status?.validationMessage && (
+                <div className="text-xs text-muted-foreground w-full">
+                  {status.validationMessage}
+                </div>
+              )}
+            </>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700">
+              Not Configured
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Callback URL - Always Visible When Configured */}
       {configured && (
-        <div className="flex items-center gap-4 rounded-md border bg-muted/50 p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Status:</span>
-            {isActive ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
-                <Check className="size-3" />
-                Configured
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
-                <X className="size-3" />
-                Inactive
-              </span>
-            )}
+        <div className="space-y-4 rounded-md border bg-muted/50 p-4">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground mb-2">Callback URL (Webhook)</h4>
+            <p className="text-xs text-muted-foreground mb-3">
+              Copy this URL and paste it into your BrickLink API settings to receive order
+              notifications automatically. This enables real-time order processing.
+            </p>
           </div>
-          {status?.lastValidatedAt && (
-            <div className="text-sm text-muted-foreground">
-              Last validated: {new Date(status.lastValidatedAt).toLocaleString()}
+
+          {webhookUrl ? (
+            <div className="space-y-2">
+              <label htmlFor="webhook-url" className="text-xs font-medium text-foreground">
+                Callback URL
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="webhook-url"
+                  value={webhookUrl}
+                  readOnly
+                  className="font-mono text-xs"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyWebhookUrl}
+                  className="shrink-0"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="mr-2 size-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 size-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Paste this URL in the &quot;Callback URL&quot; field in your{" "}
+                <a
+                  href="https://www.bricklink.com/v2/api/register_consumer.page"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  BrickLink API Settings
+                  <ExternalLink className="size-3" />
+                </a>
+              </p>
+            </div>
+          ) : status === undefined ? (
+            <div className="rounded-md bg-blue-50 border border-blue-200 p-3">
+              <p className="text-xs text-blue-800">Loading callback URL...</p>
+            </div>
+          ) : (
+            <div className="rounded-md bg-yellow-50 border border-yellow-200 p-3">
+              <p className="text-xs text-yellow-800">
+                Callback URL will appear here once credentials are saved. If you just saved, it
+                should appear automatically.
+              </p>
             </div>
           )}
         </div>
@@ -215,15 +407,6 @@ export function BrickLinkCredentialsForm() {
         </div>
       </div>
 
-      {/* Helper Text */}
-      <div className="rounded-md bg-muted/50 p-4">
-        <p className="text-xs text-muted-foreground">
-          <AlertCircle className="mr-1 inline size-3" />
-          These are your personal BrickLink OAuth 1.0a credentials. You can obtain these from your
-          BrickLink account settings. All credentials are encrypted and stored securely.
-        </p>
-      </div>
-
       {/* Feedback Messages */}
       {error && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
@@ -234,38 +417,6 @@ export function BrickLinkCredentialsForm() {
       {success && (
         <div className="rounded-md border border-green-500/50 bg-green-50 p-3">
           <p className="text-sm text-green-700">{success}</p>
-        </div>
-      )}
-
-      {testResult && status?.validationStatus && (
-        <div
-          className={`rounded-md border p-3 ${
-            status.validationStatus === "success"
-              ? "border-green-500/50 bg-green-50"
-              : status.validationStatus === "failed"
-                ? "border-destructive/50 bg-destructive/10"
-                : "border-yellow-500/50 bg-yellow-50"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {status.validationStatus === "success" ? (
-              <Check className="size-4 text-green-700" />
-            ) : status.validationStatus === "failed" ? (
-              <X className="size-4 text-destructive" />
-            ) : (
-              <Loader2 className="size-4 animate-spin text-yellow-700" />
-            )}
-            <p className="text-sm font-medium">
-              {status.validationStatus === "success"
-                ? "Connection Successful"
-                : status.validationStatus === "failed"
-                  ? "Connection Failed"
-                  : "Testing..."}
-            </p>
-          </div>
-          {status.validationMessage && (
-            <p className="mt-1 text-xs text-muted-foreground">{status.validationMessage}</p>
-          )}
         </div>
       )}
 

@@ -1398,6 +1398,89 @@ export class BricklinkStoreClient {
   }
 
   /**
+   * Get unread push notifications
+   * GET /notifications
+   */
+  async getNotifications(): Promise<
+    Array<{
+      event_type: "Order" | "Message" | "Feedback";
+      resource_id: number;
+      timestamp: string;
+    }>
+  > {
+    const response = await this.request<
+      BricklinkApiResponse<
+        Array<{
+          event_type: "Order" | "Message" | "Feedback";
+          resource_id: number;
+          timestamp: string;
+        }>
+      >
+    >({
+      path: "/notifications",
+      method: "GET",
+    });
+
+    return response.data.data;
+  }
+
+  /**
+   * Get order details
+   * GET /orders/{order_id}
+   */
+  async getOrder(orderId: number): Promise<BricklinkOrderResponse> {
+    const response = await this.request<BricklinkApiResponse<BricklinkOrderResponse>>({
+      path: `/orders/${orderId}`,
+      method: "GET",
+    });
+
+    return response.data.data;
+  }
+
+  /**
+   * Get order items
+   * GET /orders/{order_id}/items
+   */
+  async getOrderItems(orderId: number): Promise<BricklinkOrderItemResponse[][]> {
+    const response = await this.request<BricklinkApiResponse<BricklinkOrderItemResponse[][]>>({
+      path: `/orders/${orderId}/items`,
+      method: "GET",
+    });
+
+    return response.data.data;
+  }
+
+  /**
+   * Get list of orders
+   * GET /orders
+   */
+  async getOrders(options?: {
+    direction?: "in" | "out";
+    status?: string;
+    filed?: boolean;
+  }): Promise<BricklinkOrderSummaryResponse[]> {
+    const query: Record<string, string | boolean | undefined> = {};
+
+    if (options?.direction) {
+      query.direction = options.direction;
+    }
+    if (options?.status) {
+      query.status = options.status;
+    }
+    if (options?.filed !== undefined) {
+      query.filed = options.filed;
+    }
+
+    const response = await this.request<BricklinkApiResponse<BricklinkOrderSummaryResponse[]>>({
+      path: "/orders",
+      method: "GET",
+      query,
+    });
+
+    return response.data.data;
+  }
+
+  /**
    * @internal Test only - creates client with custom credentials
    */
   static createForTesting(
@@ -1407,4 +1490,136 @@ export class BricklinkStoreClient {
   ): BricklinkStoreClient {
     return new BricklinkStoreClient(credentials, businessAccountId, ctx);
   }
+}
+
+/**
+ * BrickLink Order Response from API
+ */
+export interface BricklinkOrderResponse {
+  order_id: string;
+  date_ordered: string;
+  date_status_changed: string;
+  seller_name: string;
+  store_name: string;
+  buyer_name: string;
+  buyer_email: string;
+  buyer_order_count: number;
+  require_insurance: boolean;
+  status: string;
+  is_invoiced: boolean;
+  is_filed: boolean;
+  drive_thru_sent: boolean;
+  salesTax_collected_by_bl: boolean;
+  remarks?: string;
+  total_count: number;
+  unique_count: number;
+  total_weight?: string;
+  payment?: {
+    method: string;
+    currency_code: string;
+    date_paid?: string;
+    status: string;
+  };
+  shipping?: {
+    method?: string;
+    method_id?: string;
+    tracking_no?: string;
+    tracking_link?: string;
+    date_shipped?: string;
+    address?: {
+      name?: {
+        full?: string;
+        first?: string;
+        last?: string;
+      };
+      full?: string;
+      address1?: string;
+      address2?: string;
+      country_code?: string;
+      city?: string;
+      state?: string;
+      postal_code?: string;
+      phone_number?: string;
+    };
+  };
+  cost: {
+    currency_code: string;
+    subtotal: string;
+    grand_total: string;
+    salesTax_collected_by_BL?: string;
+    final_total?: string;
+    etc1?: string;
+    etc2?: string;
+    insurance?: string;
+    shipping?: string;
+    credit?: string;
+    coupon?: string;
+    vat_rate?: string;
+    vat_amount?: string;
+  };
+  disp_cost?: {
+    currency_code: string;
+    subtotal: string;
+    grand_total: string;
+    etc1?: string;
+    etc2?: string;
+    insurance?: string;
+    shipping?: string;
+    credit?: string;
+    coupon?: string;
+    vat_rate?: string;
+    vat_amount?: string;
+  };
+}
+
+/**
+ * BrickLink Order Summary Response (from GET /orders list)
+ */
+export interface BricklinkOrderSummaryResponse {
+  order_id: string;
+  date_ordered: string;
+  seller_name: string;
+  store_name: string;
+  buyer_name: string;
+  total_count: number;
+  unique_count: number;
+  status: string;
+  payment: {
+    method: string;
+    status: string;
+    date_paid?: string;
+    currency_code: string;
+  };
+  cost: {
+    subtotal: string;
+    grand_total: string;
+    currency_code: string;
+  };
+}
+
+/**
+ * BrickLink Order Item Response from API
+ */
+export interface BricklinkOrderItemResponse {
+  inventory_id?: number;
+  item: {
+    no: string;
+    name: string;
+    type: string;
+    category_id?: number;
+  };
+  color_id: number;
+  color_name?: string;
+  quantity: number;
+  new_or_used: "N" | "U";
+  completeness?: "C" | "B" | "S";
+  unit_price: string;
+  unit_price_final: string;
+  disp_unit_price?: string;
+  disp_unit_price_final?: string;
+  currency_code: string;
+  disp_currency_code?: string;
+  remarks?: string;
+  description?: string;
+  weight?: string;
 }

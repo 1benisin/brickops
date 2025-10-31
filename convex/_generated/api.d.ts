@@ -8,18 +8,16 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
+import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
 import type * as auth from "../auth.js";
 import type * as bricklink_bricklinkMappers from "../bricklink/bricklinkMappers.js";
 import type * as bricklink_catalogClient from "../bricklink/catalogClient.js";
 import type * as bricklink_dataRefresher from "../bricklink/dataRefresher.js";
+import type * as bricklink_notifications from "../bricklink/notifications.js";
 import type * as bricklink_oauth from "../bricklink/oauth.js";
 import type * as bricklink_storeClient from "../bricklink/storeClient.js";
 import type * as bricklink_storeMappers from "../bricklink/storeMappers.js";
+import type * as bricklink_webhook from "../bricklink/webhook.js";
 import type * as brickowl_auth from "../brickowl/auth.js";
 import type * as brickowl_storeClient from "../brickowl/storeClient.js";
 import type * as brickowl_storeMappers from "../brickowl/storeMappers.js";
@@ -89,9 +87,11 @@ declare const fullApi: ApiFromModules<{
   "bricklink/bricklinkMappers": typeof bricklink_bricklinkMappers;
   "bricklink/catalogClient": typeof bricklink_catalogClient;
   "bricklink/dataRefresher": typeof bricklink_dataRefresher;
+  "bricklink/notifications": typeof bricklink_notifications;
   "bricklink/oauth": typeof bricklink_oauth;
   "bricklink/storeClient": typeof bricklink_storeClient;
   "bricklink/storeMappers": typeof bricklink_storeMappers;
+  "bricklink/webhook": typeof bricklink_webhook;
   "brickowl/auth": typeof brickowl_auth;
   "brickowl/storeClient": typeof brickowl_storeClient;
   "brickowl/storeMappers": typeof brickowl_storeMappers;
@@ -148,11 +148,5 @@ declare const fullApi: ApiFromModules<{
   "users/mutations": typeof users_mutations;
   "users/queries": typeof users_queries;
 }>;
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
+export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
+export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;

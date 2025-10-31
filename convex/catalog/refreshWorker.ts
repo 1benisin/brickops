@@ -126,6 +126,30 @@ export const drainCatalogRefreshOutbox = internalAction({
 });
 
 /**
+ * Process a single outbox message immediately
+ * Used to provide immediate feedback when data is missing
+ */
+export const processSingleOutboxMessage = internalAction({
+  args: {
+    messageId: v.id("catalogRefreshOutbox"),
+  },
+  handler: async (ctx, args) => {
+    // Fetch the message to ensure it exists and is still pending
+    const message = await ctx.runQuery(internal.catalog.queries.getOutboxMessageById, {
+      messageId: args.messageId,
+    });
+
+    if (!message || message.status !== "pending") {
+      // Message already processed or doesn't exist
+      return;
+    }
+
+    // Use existing processOutboxMessage helper
+    await processOutboxMessage(ctx, message);
+  },
+});
+
+/**
  * Process a single outbox message
  * Fetches data from Bricklink and updates database
  */
