@@ -30,7 +30,8 @@ export const marketplaceTables = {
   })
     .index("by_business_provider", ["businessAccountId", "provider"])
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_webhookToken", ["webhookToken"]),
+    .index("by_webhookToken", ["webhookToken"])
+    .index("by_provider_active", ["provider", "isActive"]),
 
   // Per-business-account rate limiting for marketplace APIs
   marketplaceRateLimits: defineTable({

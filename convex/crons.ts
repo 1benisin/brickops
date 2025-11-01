@@ -37,7 +37,7 @@ crons.interval(
 // Poll BrickLink notifications for all active stores every 3 minutes (safety net)
 crons.interval(
   "poll-bricklink-notifications",
-  { minutes: 3 },
+  { minutes: 10 },
   internal.bricklink.notifications.pollAllNotifications,
 );
 

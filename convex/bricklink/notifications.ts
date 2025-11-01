@@ -3,7 +3,12 @@
  * Handles notification ingestion and processing (both webhook and polling)
  */
 
-import { internalAction, internalMutation, internalQuery } from "../_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  type ActionCtx,
+} from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
@@ -186,7 +191,7 @@ export const processNotification = internalAction({
  * Process order notification: fetch full order data and upsert
  */
 async function processOrderNotification(
-  ctx: Parameters<typeof processNotification>[0],
+  ctx: ActionCtx,
   businessAccountId: Id<"businessAccounts">,
   orderId: number,
 ) {
@@ -518,10 +523,10 @@ export const pollAllNotifications = internalAction({
 export const getAllActiveCredentials = internalQuery({
   args: {},
   handler: async (ctx) => {
+    // Use index to get only active BrickLink credentials
     const credentials = await ctx.db
       .query("marketplaceCredentials")
-      .withIndex("by_businessAccount")
-      .filter((q) => q.eq(q.field("provider"), "bricklink").eq(q.field("isActive"), true))
+      .withIndex("by_provider_active", (q) => q.eq("provider", "bricklink").eq("isActive", true))
       .collect();
 
     return credentials.map((cred) => ({
