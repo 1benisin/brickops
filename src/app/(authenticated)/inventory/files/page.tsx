@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { InventoryFilesList } from "@/components/inventory/InventoryFilesList";
+import { InventoryFilesList } from "@/components/inventory/files/InventoryFilesList";
 
 export default function InventoryFilesPage() {
   const currentUser = useQuery(api.users.queries.getCurrentUser);

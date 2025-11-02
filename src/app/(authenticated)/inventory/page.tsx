@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { History } from "lucide-react";
-import { AddInventoryItemButton } from "@/components/inventory/AddInventoryItemButton";
-import { InventoryTable } from "@/components/inventory/InventoryTable";
+import { AddInventoryItemButton } from "@/components/inventory/add-item-workflow/AddInventoryItemButton";
+import { InventoryTable } from "@/components/inventory/table/InventoryTable";
 import { Button } from "@/components/ui/button";
 
 export default function InventoryPage() {

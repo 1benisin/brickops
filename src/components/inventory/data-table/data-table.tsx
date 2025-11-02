@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { EditInventoryItemDialog } from "@/components/inventory/EditInventoryItemDialog";
+import { EditInventoryItemDialog } from "@/components/inventory/dialogs/EditInventoryItemDialog";
 
 interface DataTableProps<TData> {
   data: TData[];

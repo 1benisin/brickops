@@ -3,10 +3,10 @@
 import { useMemo, useState, useCallback } from "react";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTablePagination } from "@/components/ui/data-table/data-table-pagination";
-import { createInventoryColumns, type MarketplaceSyncConfig } from "./inventory-columns";
-import { InventoryBulkActions } from "./inventory-bulk-actions";
+import { createInventoryColumns, type MarketplaceSyncConfig } from "./InventoryTableColumns";
+import { InventoryBulkActions } from "./InventoryBulkActions";
 import type { InventoryItem } from "@/types/inventory";
-import { EditInventoryItemDialog } from "@/components/inventory/EditInventoryItemDialog";
+import { EditInventoryItemDialog } from "@/components/inventory/dialogs/EditInventoryItemDialog";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { QuerySpec } from "@/convex/inventory/types";

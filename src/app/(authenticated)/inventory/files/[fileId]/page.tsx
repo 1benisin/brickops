@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { InventoryFileDetail } from "@/components/inventory/InventoryFileDetail";
+import { InventoryFileDetail } from "@/components/inventory/files/InventoryFileDetail";
 
 export default function InventoryFileDetailPage({
   params,

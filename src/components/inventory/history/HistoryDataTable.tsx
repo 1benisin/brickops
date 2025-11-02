@@ -8,7 +8,7 @@ import {
   useReactTable,
   SortingState,
 } from "@tanstack/react-table";
-import { createHistoryColumns, type UnifiedHistoryEntry } from "./history-columns";
+import { createHistoryColumns, type UnifiedHistoryEntry } from "./HistoryColumns";
 import {
   Table,
   TableBody,

@@ -4,9 +4,9 @@ import { Plus } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { ButtonProps } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
-import { SearchOrCaptureDialog } from "./SearchOrCaptureDialog";
+import { SearchOrCaptureDialog } from "../dialogs/SearchOrCaptureDialog";
 import { IdentificationResultsList } from "./IdentificationResultsList";
-import { AddPartToInventoryDialog } from "./AddPartToInventoryDialog";
+import { AddPartToInventoryDialog } from "../dialogs/AddPartToInventoryDialog";
 import { useAddItemWorkflow } from "@/hooks/useAddItemWorkflow";
 
 export interface AddInventoryItemButtonProps {

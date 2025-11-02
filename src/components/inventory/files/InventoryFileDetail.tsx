@@ -37,8 +37,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/AlertDialog";
 import { ArrowLeft, Upload, ArrowUpDown, Trash2 } from "lucide-react";
-import { AddInventoryItemButton } from "./AddInventoryItemButton";
-import { BatchSyncDialog } from "./BatchSyncDialog";
+import { AddInventoryItemButton } from "../add-item-workflow/AddInventoryItemButton";
+import { BatchSyncDialog } from "../dialogs/BatchSyncDialog";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { bestTextOn } from "@/lib/utils";
 import type { SyncStatus, ItemCondition } from "@/types/inventory";

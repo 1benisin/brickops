@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import type { UnifiedSearchResult, UnifiedResultItem } from "./SearchOrCaptureDialog";
+import type { UnifiedSearchResult, UnifiedResultItem } from "../dialogs/SearchOrCaptureDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";

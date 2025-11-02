@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SyncStatusIndicator } from "@/components/inventory/SyncStatusIndicator";
+import { SyncStatusIndicator } from "@/components/inventory/shared/SyncStatusIndicator";
 import type { InventoryItem } from "@/types/inventory";
 import { formatRelativeTime, bestTextOn } from "@/lib/utils";
 import { useGetPartColors } from "@/hooks/useGetPartColors";

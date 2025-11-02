@@ -14,6 +14,7 @@ export interface EnhancedColumnMeta<TData, TValue = unknown> {
     step?: number;
     currency?: boolean; // For number filters
   };
+  textFilterMode?: "prefix" | "contains";
   [key: string]: unknown;
 }
 
