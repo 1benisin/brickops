@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { DataTable } from "./data-table/data-table";
+import { InventoryTableWrapper } from "./inventory-table-wrapper";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
@@ -59,28 +59,6 @@ const EmptyState = () => (
   </div>
 );
 
-// Stat card component
-const StatCard = ({
-  label,
-  value,
-  isLoading,
-}: {
-  label: string;
-  value: number | undefined;
-  isLoading: boolean;
-}) => (
-  <Card className="py-3 px-4">
-    <div className="flex flex-col gap-1">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      {isLoading ? (
-        <Skeleton className="h-5 w-12" />
-      ) : (
-        <div className="text-base font-bold">{value?.toLocaleString() || 0}</div>
-      )}
-    </div>
-  </Card>
-);
-
 export function InventoryTable() {
   const items = useQuery(api.inventory.queries.listInventoryItems);
   const totals = useQuery(api.inventory.queries.getInventoryTotals);
@@ -100,11 +78,6 @@ export function InventoryTable() {
   if (items.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <StatCard label="Available" value={0} isLoading={false} />
-          <StatCard label="Reserved" value={0} isLoading={false} />
-          <StatCard label="Sold" value={0} isLoading={false} />
-        </div>
         <EmptyState />
       </div>
     );
@@ -112,15 +85,9 @@ export function InventoryTable() {
 
   return (
     <div className="flex flex-col gap-4 flex-1 min-h-0">
-      {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-2 flex-shrink-0">
-        <StatCard label="Available" value={totals?.totals.available} isLoading={false} />
-        <StatCard label="Reserved" value={totals?.totals.reserved} isLoading={false} />
-      </div>
-
       {/* Data Table - Scrollable Area */}
       <div className="flex-1 min-h-0">
-        <DataTable data={items} syncConfig={syncConfig} />
+        <InventoryTableWrapper data={items} syncConfig={syncConfig} />
       </div>
     </div>
   );

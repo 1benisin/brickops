@@ -48,6 +48,7 @@ import type * as inventory_mutations from "../inventory/mutations.js";
 import type * as inventory_queries from "../inventory/queries.js";
 import type * as inventory_sync from "../inventory/sync.js";
 import type * as inventory_syncWorker from "../inventory/syncWorker.js";
+import type * as inventory_types from "../inventory/types.js";
 import type * as inventory_validators from "../inventory/validators.js";
 import type * as lib_dbRateLimiter from "../lib/dbRateLimiter.js";
 import type * as lib_encryption from "../lib/encryption.js";
@@ -122,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/queries": typeof inventory_queries;
   "inventory/sync": typeof inventory_sync;
   "inventory/syncWorker": typeof inventory_syncWorker;
+  "inventory/types": typeof inventory_types;
   "inventory/validators": typeof inventory_validators;
   "lib/dbRateLimiter": typeof lib_dbRateLimiter;
   "lib/encryption": typeof lib_encryption;
