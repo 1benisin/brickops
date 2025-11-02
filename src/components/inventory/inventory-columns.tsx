@@ -18,6 +18,7 @@ import type { InventoryItem } from "@/types/inventory";
 import { formatRelativeTime, bestTextOn } from "@/lib/utils";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { ColorPartImage } from "@/components/common/ColorPartImage";
+import { createColumn } from "@/components/ui/data-table/column-definitions";
 
 // Type for marketplace sync configuration
 export type MarketplaceSyncConfig = {
@@ -89,13 +90,13 @@ const ColorThumbnail = ({ partNumber, colorId }: { partNumber: string; colorId: 
   );
 };
 
-export const createColumns = (
+export const createInventoryColumns = (
   syncConfig: MarketplaceSyncConfig,
   onEditItem?: (item: InventoryItem) => void,
 ): ColumnDef<InventoryItem>[] => {
   const baseColumns: ColumnDef<InventoryItem>[] = [
     // Selection column
-    {
+    createColumn({
       id: "select",
       meta: { label: "Select" },
       size: 40,
@@ -128,25 +129,34 @@ export const createColumns = (
           aria-label="Select row"
         />
       ),
-    },
+    }),
     // Part Number column
-    {
+    createColumn({
       id: "partNumber",
       accessorKey: "partNumber",
-      meta: { label: "Part Number", filterType: "text", filterPlaceholder: "Search part numbers..." },
+      meta: {
+        label: "Part Number",
+        filterType: "text",
+        filterPlaceholder: "Search part numbers...",
+      },
       header: "Part Number",
       enableSorting: true,
       size: 120,
       minSize: 80,
       maxSize: 300,
       cell: ({ row }) => <div className="font-medium font-mono">{row.getValue("partNumber")}</div>,
-    },
+    }),
     // Name column
-    {
+    createColumn({
       id: "name",
       accessorKey: "name",
-      meta: { label: "Name" },
+      meta: {
+        label: "Name",
+        filterType: "text",
+        filterPlaceholder: "Search names...",
+      },
       header: "Name",
+      enableSorting: true,
       size: 200,
       minSize: 100,
       maxSize: 400,
@@ -155,13 +165,18 @@ export const createColumns = (
           {row.getValue("name")}
         </div>
       ),
-    },
+    }),
     // Color ID column
-    {
+    createColumn({
       id: "colorId",
       accessorKey: "colorId",
-      meta: { label: "Color" },
+      meta: {
+        label: "Color",
+        filterType: "text",
+        filterPlaceholder: "Search color IDs...",
+      },
       header: "Color",
+      enableSorting: true,
       size: 120,
       minSize: 80,
       maxSize: 200,
@@ -169,9 +184,9 @@ export const createColumns = (
         const item = row.original;
         return <PartColorBadge partNumber={item.partNumber} colorId={String(item.colorId)} />;
       },
-    },
+    }),
     // Color Thumbnail column (separate image preview)
-    {
+    createColumn({
       id: "colorThumbnail",
       header: "Color Image",
       size: 80,
@@ -186,13 +201,18 @@ export const createColumns = (
           </div>
         );
       },
-    },
+    }),
     // Location column
-    {
+    createColumn({
       id: "location",
       accessorKey: "location",
-      meta: { label: "Location" },
+      meta: {
+        label: "Location",
+        filterType: "select",
+        filterOptions: [], // Will be populated dynamically from data
+      },
       header: "Location",
+      enableSorting: true,
       size: 120,
       minSize: 80,
       maxSize: 250,
@@ -201,23 +221,34 @@ export const createColumns = (
           {row.getValue("location")}
         </div>
       ),
-    },
+    }),
     // Condition column
-    {
+    createColumn({
       id: "condition",
       accessorKey: "condition",
-      meta: { label: "Condition" },
+      meta: {
+        label: "Condition",
+        filterType: "select",
+        filterOptions: [
+          { label: "New", value: "new" },
+          { label: "Used", value: "used" },
+        ],
+      },
       header: "Condition",
+      enableSorting: true,
       size: 100,
       minSize: 80,
       maxSize: 150,
       cell: ({ row }) => <ConditionBadge condition={row.getValue("condition")} />,
-    },
+    }),
     // Available Quantity column
-    {
+    createColumn({
       id: "quantityAvailable",
       accessorKey: "quantityAvailable",
-      meta: { label: "Available" },
+      meta: {
+        label: "Available",
+        filterType: "number",
+      },
       header: () => <div className="text-right">Available</div>,
       enableSorting: true,
       size: 100,
@@ -227,12 +258,15 @@ export const createColumns = (
         const quantity = row.getValue("quantityAvailable") as number;
         return <div className="text-right font-mono font-medium">{quantity.toLocaleString()}</div>;
       },
-    },
+    }),
     // Date Created column
-    {
+    createColumn({
       id: "createdAt",
       accessorKey: "createdAt",
-      meta: { label: "Date Created" },
+      meta: {
+        label: "Date Created",
+        filterType: "date",
+      },
       header: "Date Created",
       enableSorting: true,
       size: 150,
@@ -242,13 +276,17 @@ export const createColumns = (
         const timestamp = row.getValue("createdAt") as number;
         return <div className="text-sm text-muted-foreground">{formatRelativeTime(timestamp)}</div>;
       },
-    },
+    }),
     // Reserved Quantity column (only show if > 0)
-    {
+    createColumn({
       id: "quantityReserved",
       accessorKey: "quantityReserved",
-      meta: { label: "Reserved" },
+      meta: {
+        label: "Reserved",
+        filterType: "number",
+      },
       header: () => <div className="text-right">Reserved</div>,
+      enableSorting: true,
       size: 100,
       minSize: 80,
       maxSize: 150,
@@ -259,12 +297,19 @@ export const createColumns = (
           <div className="text-right font-mono text-yellow-700">{quantity.toLocaleString()}</div>
         );
       },
-    },
+    }),
     // Unit Price column (only show if set)
-    {
+    createColumn({
       id: "price",
       accessorKey: "price",
-      meta: { label: "Unit Price" },
+      meta: {
+        label: "Unit Price",
+        filterType: "number",
+        filterConfig: {
+          currency: true,
+          step: 0.01,
+        },
+      },
       header: () => <div className="text-right">Unit Price</div>,
       enableSorting: true,
       size: 120,
@@ -275,12 +320,19 @@ export const createColumns = (
         if (!price) return null;
         return <div className="text-right font-mono font-medium">{formatCurrency(price)}</div>;
       },
-    },
+    }),
     // Total Price column (unit price × quantity available)
-    {
+    createColumn({
       id: "totalPrice",
       meta: { label: "Total Price" },
       header: () => <div className="text-right">Total Price</div>,
+      enableSorting: true, // Can sort client-side (computed column)
+      // Add accessorFn so TanStack Table recognizes this as a sortable column
+      accessorFn: (row) => {
+        const price = (row.price as number | undefined) ?? 0;
+        const quantity = (row.quantityAvailable as number) ?? 0;
+        return price * quantity;
+      },
       size: 130,
       minSize: 100,
       maxSize: 200,
@@ -291,13 +343,17 @@ export const createColumns = (
         const total = price * quantity;
         return <div className="text-right font-mono font-semibold">{formatCurrency(total)}</div>;
       },
-    },
+    }),
     // Last Updated column
-    {
+    createColumn({
       id: "updatedAt",
       accessorKey: "updatedAt",
-      meta: { label: "Last Updated" },
+      meta: {
+        label: "Last Updated",
+        filterType: "date",
+      },
       header: "Last Updated",
+      enableSorting: true,
       size: 150,
       minSize: 100,
       maxSize: 250,
@@ -307,44 +363,62 @@ export const createColumns = (
         const timestamp = updatedAt || createdAt;
         return <div className="text-sm text-muted-foreground">{formatRelativeTime(timestamp)}</div>;
       },
-    },
+    }),
   ];
 
   // Conditionally add sync status columns based on marketplace configuration
   const syncColumns: ColumnDef<InventoryItem>[] = [];
 
   if (syncConfig.showBricklinkSync) {
-    syncColumns.push({
-      id: "marketplaceSync.bricklink",
-      header: "BrickLink Sync",
-      size: 130,
-      minSize: 100,
-      maxSize: 200,
-      enableSorting: false,
-      cell: ({ row }) => {
-        const item = row.original;
-        return <SyncStatusIndicator item={item} marketplace="bricklink" />;
-      },
-    });
+    syncColumns.push(
+      createColumn({
+        id: "marketplaceSync.bricklink",
+        header: "BrickLink Sync",
+        size: 130,
+        minSize: 100,
+        maxSize: 200,
+        enableSorting: true,
+        // Add accessorFn so TanStack Table recognizes this as a sortable column
+        accessorFn: (row) => {
+          const sync = row.marketplaceSync?.bricklink;
+          if (!sync) return null;
+          // Return status for sorting - we handle the actual sort order in the wrapper
+          return sync.status;
+        },
+        cell: ({ row }) => {
+          const item = row.original;
+          return <SyncStatusIndicator item={item} marketplace="bricklink" />;
+        },
+      }),
+    );
   }
 
   if (syncConfig.showBrickowlSync) {
-    syncColumns.push({
-      id: "marketplaceSync.brickowl",
-      header: "BrickOwl Sync",
-      size: 130,
-      minSize: 100,
-      maxSize: 200,
-      enableSorting: false,
-      cell: ({ row }) => {
-        const item = row.original;
-        return <SyncStatusIndicator item={item} marketplace="brickowl" />;
-      },
-    });
+    syncColumns.push(
+      createColumn({
+        id: "marketplaceSync.brickowl",
+        header: "BrickOwl Sync",
+        size: 130,
+        minSize: 100,
+        maxSize: 200,
+        enableSorting: true,
+        // Add accessorFn so TanStack Table recognizes this as a sortable column
+        accessorFn: (row) => {
+          const sync = row.marketplaceSync?.brickowl;
+          if (!sync) return null;
+          // Return status for sorting - we handle the actual sort order in the wrapper
+          return sync.status;
+        },
+        cell: ({ row }) => {
+          const item = row.original;
+          return <SyncStatusIndicator item={item} marketplace="brickowl" />;
+        },
+      }),
+    );
   }
 
   // Actions column (always at the end)
-  const actionsColumn: ColumnDef<InventoryItem> = {
+  const actionsColumn = createColumn<InventoryItem>({
     id: "actions",
     size: 60,
     minSize: 60,
@@ -382,7 +456,7 @@ export const createColumns = (
         </DropdownMenu>
       );
     },
-  };
+  });
 
   // Combine all columns: base + sync columns + actions
   return [...baseColumns, ...syncColumns, actionsColumn];

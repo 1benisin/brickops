@@ -29,6 +29,7 @@ import { pathToFileURL } from "node:url";
 import sax from "sax";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { decode } from "he";
 
 // Types intentionally minimal; conversion writes JSONL files directly
 
@@ -68,6 +69,14 @@ const logProgress = (category: string, current: number, total: number | string) 
       `${colors.green}✓${colors.reset} ${colors.bright}${category}${colors.reset}: ${colors.yellow}${current.toLocaleString()}${colors.reset} ${colors.dim}processed${colors.reset}`,
     );
   }
+};
+
+/**
+ * Decodes HTML entities in a string using the 'he' library
+ * Handles both named entities (&amp;) and numeric entities (&#40;)
+ */
+const decodeHtmlEntities = (input: string): string => {
+  return decode(input, { isAttributeValue: false });
 };
 
 /**
@@ -166,7 +175,7 @@ export const main = async () => {
 
         const doc: Record<string, unknown> = {
           colorId,
-          colorName: String(colorName),
+          colorName: decodeHtmlEntities(String(colorName)),
           lastFetched: oneYearAgo,
           createdAt: oneYearAgo,
         };
@@ -207,7 +216,7 @@ export const main = async () => {
 
         const doc: Record<string, unknown> = {
           categoryId,
-          categoryName: String(categoryName),
+          categoryName: decodeHtmlEntities(String(categoryName)),
           lastFetched: oneYearAgo,
           createdAt: oneYearAgo,
         };
@@ -312,7 +321,7 @@ export const main = async () => {
 
         const doc: Record<string, unknown> = {
           no: String(partNumber),
-          name: String(name),
+          name: decodeHtmlEntities(String(name)),
           type,
           lastFetched: oneYearAgo,
           createdAt: oneYearAgo,
@@ -328,7 +337,7 @@ export const main = async () => {
         if (item.DIMY) doc.dimY = String(item.DIMY.trim());
         if (item.DIMZ) doc.dimZ = String(item.DIMZ.trim());
         if (item.YEAR) doc.yearReleased = Number(item.YEAR.trim());
-        if (item.DESCRIPTION) doc.description = String(item.DESCRIPTION.trim());
+        if (item.DESCRIPTION) doc.description = decodeHtmlEntities(String(item.DESCRIPTION.trim()));
         if (item.ISOBSOLETE) doc.isObsolete = item.ISOBSOLETE.trim().toLowerCase() === "true";
 
         const line = `${JSON.stringify(doc)}\n`;
@@ -382,7 +391,7 @@ export const main = async () => {
 
         const doc: Record<string, unknown> = {
           no: String(partNumber),
-          name: String(name),
+          name: decodeHtmlEntities(String(name)),
           type,
 
           lastFetched: oneYearAgo,
@@ -399,7 +408,7 @@ export const main = async () => {
         if (item.DIMY) doc.dimY = String(item.DIMY.trim());
         if (item.DIMZ) doc.dimZ = String(item.DIMZ.trim());
         if (item.YEAR) doc.yearReleased = Number(item.YEAR.trim());
-        if (item.DESCRIPTION) doc.description = String(item.DESCRIPTION.trim());
+        if (item.DESCRIPTION) doc.description = decodeHtmlEntities(String(item.DESCRIPTION.trim()));
         if (item.ISOBSOLETE) doc.isObsolete = item.ISOBSOLETE.trim().toLowerCase() === "true";
 
         const line = `${JSON.stringify(doc)}\n`;

@@ -76,8 +76,55 @@ export const inventoryTables = {
     // Consolidated marketplace sync tracking (refactored from individual fields)
     marketplaceSync: marketplaceSync,
   })
+    // Existing indexes (keep these)
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_fileId", ["fileId"]),
+    .index("by_fileId", ["fileId"])
+
+    // NEW: Composite indexes for common query patterns
+    // Pattern: default listing (sort by createdAt desc)
+    .index("by_businessAccount_createdAt", ["businessAccountId", "createdAt"])
+
+    // Pattern: filter by condition + sort by date
+    .index("by_businessAccount_condition_createdAt", [
+      "businessAccountId",
+      "condition",
+      "createdAt",
+    ])
+
+    // Pattern: filter by location + sort by part number (for location view)
+    .index("by_businessAccount_location_partNumber", [
+      "businessAccountId",
+      "location",
+      "partNumber",
+    ])
+
+    // Pattern: filter by price range + sort by price (for price browsing)
+    .index("by_businessAccount_price", ["businessAccountId", "price"])
+
+    // Pattern: part number prefix search + sort by part number
+    .index("by_businessAccount_partNumber", ["businessAccountId", "partNumber"])
+
+    // Pattern: quantity filtering + sort by quantity
+    .index("by_businessAccount_quantity", ["businessAccountId", "quantityAvailable"])
+
+    // NEW: Indexes for additional sortable columns
+    // Pattern: sort by name
+    .index("by_businessAccount_name", ["businessAccountId", "name"])
+
+    // Pattern: sort by colorId
+    .index("by_businessAccount_colorId", ["businessAccountId", "colorId"])
+
+    // Pattern: sort by location (dedicated index for direct sorting)
+    .index("by_businessAccount_location", ["businessAccountId", "location"])
+
+    // Pattern: sort by condition (dedicated index for direct sorting)
+    .index("by_businessAccount_condition", ["businessAccountId", "condition"])
+
+    // Pattern: sort by quantityReserved
+    .index("by_businessAccount_quantityReserved", ["businessAccountId", "quantityReserved"])
+
+    // Pattern: sort by updatedAt
+    .index("by_businessAccount_updatedAt", ["businessAccountId", "updatedAt"]),
 
   // NEW: Specialized ledger for quantity changes
   inventoryQuantityLedger: defineTable({

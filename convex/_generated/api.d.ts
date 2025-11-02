@@ -8,7 +8,11 @@
  * @module
  */
 
-import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as auth from "../auth.js";
 import type * as bricklink_bricklinkMappers from "../bricklink/bricklinkMappers.js";
 import type * as bricklink_catalogClient from "../bricklink/catalogClient.js";
@@ -44,6 +48,7 @@ import type * as inventory_mutations from "../inventory/mutations.js";
 import type * as inventory_queries from "../inventory/queries.js";
 import type * as inventory_sync from "../inventory/sync.js";
 import type * as inventory_syncWorker from "../inventory/syncWorker.js";
+import type * as inventory_types from "../inventory/types.js";
 import type * as inventory_validators from "../inventory/validators.js";
 import type * as lib_dbRateLimiter from "../lib/dbRateLimiter.js";
 import type * as lib_encryption from "../lib/encryption.js";
@@ -118,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/queries": typeof inventory_queries;
   "inventory/sync": typeof inventory_sync;
   "inventory/syncWorker": typeof inventory_syncWorker;
+  "inventory/types": typeof inventory_types;
   "inventory/validators": typeof inventory_validators;
   "lib/dbRateLimiter": typeof lib_dbRateLimiter;
   "lib/encryption": typeof lib_encryption;
@@ -148,5 +154,11 @@ declare const fullApi: ApiFromModules<{
   "users/mutations": typeof users_mutations;
   "users/queries": typeof users_queries;
 }>;
-export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
-export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;

@@ -12,6 +12,7 @@ import {
   getItemSyncStatusArgs,
   getItemSyncStatusReturns,
 } from "./validators";
+import { querySpecValidator } from "./types";
 
 export const listInventoryItems = query({
   args: listInventoryItemsArgs,
@@ -497,5 +498,394 @@ export const getUnifiedInventoryHistory = query({
 
     // Filter out null entries (items that no longer exist)
     return enrichedEntries.filter((e): e is NonNullable<typeof e> => e !== null);
+  },
+});
+
+// ============================================================================
+// Server-Side Filtered Query (Step 0: Server-Side Infrastructure)
+// ============================================================================
+
+/**
+ * Unified query function for inventory table with server-side pagination, filtering, and sorting
+ * Uses QuerySpec pattern for normalized query contract
+ */
+export const listInventoryItemsFiltered = query({
+  args: {
+    querySpec: querySpecValidator,
+  },
+  returns: v.object({
+    items: v.array(v.any()),
+    cursor: v.optional(v.string()),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const { businessAccountId } = await requireUser(ctx);
+    const { filters, sort, pagination } = args.querySpec;
+
+    // Choose best index based on filters and sort
+    const primarySort = sort[0]?.id || "createdAt";
+    const sortDesc = sort[0]?.desc ?? true;
+
+    // Index selection logic - using const assertions for type safety
+    type IndexName =
+      | "by_businessAccount_createdAt"
+      | "by_businessAccount_condition_createdAt"
+      | "by_businessAccount_location_partNumber"
+      | "by_businessAccount_price"
+      | "by_businessAccount_partNumber"
+      | "by_businessAccount_quantity"
+      | "by_businessAccount_name"
+      | "by_businessAccount_colorId"
+      | "by_businessAccount_location"
+      | "by_businessAccount_condition"
+      | "by_businessAccount_quantityReserved"
+      | "by_businessAccount_updatedAt";
+
+    let indexName: IndexName;
+    let queryBuilder;
+
+    if (filters?.condition && primarySort === "createdAt") {
+      // Use composite index: by_businessAccount_condition_createdAt
+      indexName = "by_businessAccount_condition_createdAt";
+      const conditionValue = filters.condition.value as "new" | "used";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) =>
+          q.eq("businessAccountId", businessAccountId).eq("condition", conditionValue),
+        );
+    } else if (filters?.location && primarySort === "partNumber") {
+      // Use composite index: by_businessAccount_location_partNumber
+      indexName = "by_businessAccount_location_partNumber";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) =>
+          q.eq("businessAccountId", businessAccountId).eq("location", filters.location!.value),
+        );
+    } else if (primarySort === "price") {
+      indexName = "by_businessAccount_price";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "partNumber") {
+      indexName = "by_businessAccount_partNumber";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "quantityAvailable") {
+      indexName = "by_businessAccount_quantity";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "name") {
+      indexName = "by_businessAccount_name";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "colorId") {
+      indexName = "by_businessAccount_colorId";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "location") {
+      indexName = "by_businessAccount_location";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "condition") {
+      indexName = "by_businessAccount_condition";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "quantityReserved") {
+      indexName = "by_businessAccount_quantityReserved";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else if (primarySort === "updatedAt") {
+      indexName = "by_businessAccount_updatedAt";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    } else {
+      // Default: sort by createdAt
+      indexName = "by_businessAccount_createdAt";
+      queryBuilder = ctx.db
+        .query("inventoryItems")
+        .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+    }
+
+    // Build query with filters
+    queryBuilder = queryBuilder
+      .filter((q) => {
+        // Always filter out archived items
+        let filter = q.eq(q.field("isArchived"), false);
+
+        // Text prefix searches
+        if (filters?.partNumber?.kind === "prefix") {
+          const prefix = filters.partNumber.value;
+          filter = q.and(
+            filter,
+            q.gte(q.field("partNumber"), prefix),
+            q.lt(q.field("partNumber"), prefix + "\uffff"),
+          );
+        }
+
+        if (filters?.name?.kind === "prefix") {
+          const prefix = filters.name.value;
+          filter = q.and(
+            filter,
+            q.gte(q.field("name"), prefix),
+            q.lt(q.field("name"), prefix + "\uffff"),
+          );
+        }
+
+        if (filters?.colorId?.kind === "prefix") {
+          const prefix = filters.colorId.value;
+          filter = q.and(
+            filter,
+            q.gte(q.field("colorId"), prefix),
+            q.lt(q.field("colorId"), prefix + "\uffff"),
+          );
+        }
+
+        // Number ranges
+        if (filters?.price?.kind === "numberRange") {
+          if (filters.price.min !== undefined) {
+            filter = q.and(filter, q.gte(q.field("price"), filters.price.min));
+          }
+          if (filters.price.max !== undefined) {
+            filter = q.and(filter, q.lte(q.field("price"), filters.price.max));
+          }
+        }
+
+        if (filters?.quantityAvailable?.kind === "numberRange") {
+          if (filters.quantityAvailable.min !== undefined) {
+            filter = q.and(
+              filter,
+              q.gte(q.field("quantityAvailable"), filters.quantityAvailable.min),
+            );
+          }
+          if (filters.quantityAvailable.max !== undefined) {
+            filter = q.and(
+              filter,
+              q.lte(q.field("quantityAvailable"), filters.quantityAvailable.max),
+            );
+          }
+        }
+
+        if (filters?.quantityReserved?.kind === "numberRange") {
+          if (filters.quantityReserved.min !== undefined) {
+            filter = q.and(
+              filter,
+              q.gte(q.field("quantityReserved"), filters.quantityReserved.min),
+            );
+          }
+          if (filters.quantityReserved.max !== undefined) {
+            filter = q.and(
+              filter,
+              q.lte(q.field("quantityReserved"), filters.quantityReserved.max),
+            );
+          }
+        }
+
+        // Date ranges
+        if (filters?.createdAt?.kind === "dateRange") {
+          if (filters.createdAt.start !== undefined) {
+            filter = q.and(filter, q.gte(q.field("createdAt"), filters.createdAt.start));
+          }
+          if (filters.createdAt.end !== undefined) {
+            filter = q.and(filter, q.lte(q.field("createdAt"), filters.createdAt.end));
+          }
+        }
+
+        if (filters?.updatedAt?.kind === "dateRange") {
+          if (filters.updatedAt.start !== undefined) {
+            filter = q.and(filter, q.gte(q.field("updatedAt"), filters.updatedAt.start));
+          }
+          if (filters.updatedAt.end !== undefined) {
+            filter = q.and(filter, q.lte(q.field("updatedAt"), filters.updatedAt.end));
+          }
+        }
+
+        // Note: condition and location filters are handled via index predicates above
+        // Additional filters here if not using composite indexes
+
+        return filter;
+      })
+      .order(sortDesc ? "desc" : "asc");
+
+    // Apply cursor if provided (for pagination)
+    if (pagination.cursor) {
+      const cursorDoc = await ctx.db.get(pagination.cursor as Id<"inventoryItems">);
+      if (cursorDoc) {
+        // Filter items after cursor based on sort field
+        queryBuilder = queryBuilder.filter((q) => {
+          if (primarySort === "createdAt") {
+            if (sortDesc) {
+              // For desc: get items with createdAt < cursor OR (createdAt == cursor AND _id > cursor)
+              return q.or(
+                q.lt(q.field("createdAt"), cursorDoc.createdAt),
+                q.and(
+                  q.eq(q.field("createdAt"), cursorDoc.createdAt),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            } else {
+              // For asc: get items with createdAt > cursor OR (createdAt == cursor AND _id > cursor)
+              return q.or(
+                q.gt(q.field("createdAt"), cursorDoc.createdAt),
+                q.and(
+                  q.eq(q.field("createdAt"), cursorDoc.createdAt),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            }
+          } else if (primarySort === "partNumber") {
+            // Similar logic for partNumber sort
+            if (sortDesc) {
+              return q.or(
+                q.lt(q.field("partNumber"), cursorDoc.partNumber),
+                q.and(
+                  q.eq(q.field("partNumber"), cursorDoc.partNumber),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            } else {
+              return q.or(
+                q.gt(q.field("partNumber"), cursorDoc.partNumber),
+                q.and(
+                  q.eq(q.field("partNumber"), cursorDoc.partNumber),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            }
+          } else if (primarySort === "name") {
+            // String sort for name
+            if (sortDesc) {
+              return q.or(
+                q.lt(q.field("name"), cursorDoc.name),
+                q.and(q.eq(q.field("name"), cursorDoc.name), q.gt(q.field("_id"), cursorDoc._id)),
+              );
+            } else {
+              return q.or(
+                q.gt(q.field("name"), cursorDoc.name),
+                q.and(q.eq(q.field("name"), cursorDoc.name), q.gt(q.field("_id"), cursorDoc._id)),
+              );
+            }
+          } else if (primarySort === "colorId") {
+            // String sort for colorId
+            if (sortDesc) {
+              return q.or(
+                q.lt(q.field("colorId"), cursorDoc.colorId),
+                q.and(
+                  q.eq(q.field("colorId"), cursorDoc.colorId),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            } else {
+              return q.or(
+                q.gt(q.field("colorId"), cursorDoc.colorId),
+                q.and(
+                  q.eq(q.field("colorId"), cursorDoc.colorId),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            }
+          } else if (primarySort === "location") {
+            // String sort for location
+            if (sortDesc) {
+              return q.or(
+                q.lt(q.field("location"), cursorDoc.location),
+                q.and(
+                  q.eq(q.field("location"), cursorDoc.location),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            } else {
+              return q.or(
+                q.gt(q.field("location"), cursorDoc.location),
+                q.and(
+                  q.eq(q.field("location"), cursorDoc.location),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            }
+          } else if (primarySort === "condition") {
+            // Enum sort for condition (treated as string)
+            if (sortDesc) {
+              return q.or(
+                q.lt(q.field("condition"), cursorDoc.condition),
+                q.and(
+                  q.eq(q.field("condition"), cursorDoc.condition),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            } else {
+              return q.or(
+                q.gt(q.field("condition"), cursorDoc.condition),
+                q.and(
+                  q.eq(q.field("condition"), cursorDoc.condition),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            }
+          } else if (primarySort === "quantityReserved") {
+            // Number sort for quantityReserved
+            if (sortDesc) {
+              return q.or(
+                q.lt(q.field("quantityReserved"), cursorDoc.quantityReserved),
+                q.and(
+                  q.eq(q.field("quantityReserved"), cursorDoc.quantityReserved),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            } else {
+              return q.or(
+                q.gt(q.field("quantityReserved"), cursorDoc.quantityReserved),
+                q.and(
+                  q.eq(q.field("quantityReserved"), cursorDoc.quantityReserved),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
+              );
+            }
+          } else if (primarySort === "updatedAt") {
+            // Date/timestamp sort for updatedAt (optional field, use createdAt if undefined)
+            // For cursor: use updatedAt if present, otherwise createdAt
+            const cursorValue = cursorDoc.updatedAt ?? cursorDoc.createdAt;
+            if (sortDesc) {
+              // Descending: items with updatedAt < cursor OR (updatedAt == cursor AND _id > cursor)
+              // Note: Items without updatedAt will sort by createdAt in the query itself
+              return q.or(
+                q.lt(q.field("updatedAt"), cursorValue),
+                q.and(q.eq(q.field("updatedAt"), cursorValue), q.gt(q.field("_id"), cursorDoc._id)),
+              );
+            } else {
+              // Ascending: items with updatedAt > cursor OR (updatedAt == cursor AND _id > cursor)
+              return q.or(
+                q.gt(q.field("updatedAt"), cursorValue),
+                q.and(q.eq(q.field("updatedAt"), cursorValue), q.gt(q.field("_id"), cursorDoc._id)),
+              );
+            }
+          }
+          // Fallback: use _id for other sort fields
+          return q.gt(q.field("_id"), cursorDoc._id);
+        });
+      }
+    }
+
+    // Take requested page size
+    const results = await queryBuilder.take(pagination.pageSize);
+
+    // Calculate next cursor
+    const cursor =
+      results.length === pagination.pageSize && results.length > 0
+        ? results[results.length - 1]._id
+        : undefined;
+
+    return {
+      items: results,
+      cursor: cursor,
+      isDone: cursor === undefined,
+    };
   },
 });
