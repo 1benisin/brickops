@@ -54,6 +54,9 @@ export function InventoryTableWrapper({
     { id: "createdAt", desc: true },
   ]);
 
+  // Client-side filtering state (when data is provided)
+  const [clientFilters, setClientFilters] = useState<Record<string, unknown>>({});
+
   // Fetch data using Convex query (only if not using provided data)
   // Pass "skip" to conditionally skip the query when data is provided
   const result = useQuery(
@@ -61,7 +64,7 @@ export function InventoryTableWrapper({
     data ? ("skip" as const) : { querySpec },
   );
 
-  // Client-side sorting when data is provided
+  // Client-side filtering and sorting when data is provided
   const sortedData = useMemo(() => {
     // Get raw data (from props or server)
     const rawData = data ?? result?.items ?? [];
@@ -70,7 +73,75 @@ export function InventoryTableWrapper({
       return rawData;
     }
 
-    const sorted = [...rawData];
+    // Apply client-side filtering
+    const filtered = rawData.filter((item: InventoryItem) => {
+      // Text prefix filters
+      if (clientFilters.partNumber && typeof clientFilters.partNumber === "string") {
+        const partNumber = String(item.partNumber || "");
+        if (!partNumber.toLowerCase().startsWith(String(clientFilters.partNumber).toLowerCase())) {
+          return false;
+        }
+      }
+      if (clientFilters.name && typeof clientFilters.name === "string") {
+        const name = String(item.name || "");
+        if (!name.toLowerCase().includes(String(clientFilters.name).toLowerCase())) {
+          return false;
+        }
+      }
+      if (clientFilters.colorId && typeof clientFilters.colorId === "string") {
+        const colorId = String(item.colorId || "");
+        if (!colorId.toLowerCase().startsWith(String(clientFilters.colorId).toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Number range filters
+      if (clientFilters.price && typeof clientFilters.price === "object") {
+        const priceFilter = clientFilters.price as { min?: number; max?: number };
+        const price = item.price as number | undefined;
+        if (price === undefined) return false;
+        if (priceFilter.min !== undefined && price < priceFilter.min) return false;
+        if (priceFilter.max !== undefined && price > priceFilter.max) return false;
+      }
+      if (clientFilters.quantityAvailable && typeof clientFilters.quantityAvailable === "object") {
+        const qtyFilter = clientFilters.quantityAvailable as { min?: number; max?: number };
+        const qty = item.quantityAvailable as number;
+        if (qtyFilter.min !== undefined && qty < qtyFilter.min) return false;
+        if (qtyFilter.max !== undefined && qty > qtyFilter.max) return false;
+      }
+      if (clientFilters.quantityReserved && typeof clientFilters.quantityReserved === "object") {
+        const qtyFilter = clientFilters.quantityReserved as { min?: number; max?: number };
+        const qty = (item.quantityReserved as number) || 0;
+        if (qtyFilter.min !== undefined && qty < qtyFilter.min) return false;
+        if (qtyFilter.max !== undefined && qty > qtyFilter.max) return false;
+      }
+
+      // Date range filters
+      if (clientFilters.createdAt && typeof clientFilters.createdAt === "object") {
+        const dateFilter = clientFilters.createdAt as { start?: number; end?: number };
+        const timestamp = item.createdAt as number;
+        if (dateFilter.start !== undefined && timestamp < dateFilter.start) return false;
+        if (dateFilter.end !== undefined && timestamp > dateFilter.end) return false;
+      }
+      if (clientFilters.updatedAt && typeof clientFilters.updatedAt === "object") {
+        const dateFilter = clientFilters.updatedAt as { start?: number; end?: number };
+        const timestamp = (item.updatedAt as number | undefined) || item.createdAt;
+        if (dateFilter.start !== undefined && timestamp < dateFilter.start) return false;
+        if (dateFilter.end !== undefined && timestamp > dateFilter.end) return false;
+      }
+
+      // Enum filters
+      if (clientFilters.condition && typeof clientFilters.condition === "string") {
+        if (item.condition !== clientFilters.condition) return false;
+      }
+      if (clientFilters.location && typeof clientFilters.location === "string") {
+        if (item.location !== clientFilters.location) return false;
+      }
+
+      return true;
+    });
+
+    const sorted = [...filtered];
 
     // If no active sorts, use default sort by createdAt desc
     const activeSorts =
@@ -203,7 +274,7 @@ export function InventoryTableWrapper({
       return 0;
     });
     return sorted;
-  }, [data, result?.items, clientSorting]);
+  }, [data, result?.items, clientSorting, clientFilters]);
 
   // Use sorted data (client-side) or server-sorted data
   const tableData = sortedData;
@@ -248,83 +319,101 @@ export function InventoryTableWrapper({
     });
   }, []);
 
-  // Handle column filter changes
-  const handleColumnFilterChange = useCallback((columnId: string, value: unknown) => {
-    setQuerySpec((prev: QuerySpec) => {
-      const newFilters = { ...(prev.filters || {}) };
+  // Handle column filter changes (server-side or client-side)
+  const handleColumnFilterChange = useCallback(
+    (columnId: string, value: unknown) => {
+      if (data) {
+        // Client-side filtering
+        setClientFilters((prev) => {
+          const newFilters = { ...prev };
+          // Handle "__all__" from SelectFilterInline (means "no filter")
+          if (value === undefined || value === null || value === "" || value === "__all__") {
+            delete newFilters[columnId];
+          } else {
+            newFilters[columnId] = value;
+          }
+          return newFilters;
+        });
+      } else {
+        // Server-side filtering
+        setQuerySpec((prev: QuerySpec) => {
+          const newFilters = { ...(prev.filters || {}) };
 
-      // Text prefix filters
-      if (columnId === "partNumber" || columnId === "name" || columnId === "colorId") {
-        if (value && typeof value === "string") {
-          if (columnId === "partNumber") {
-            newFilters.partNumber = { kind: "prefix", value };
-          } else if (columnId === "name") {
-            newFilters.name = { kind: "prefix", value };
-          } else if (columnId === "colorId") {
-            newFilters.colorId = { kind: "prefix", value };
+          // Text prefix filters
+          if (columnId === "partNumber" || columnId === "name" || columnId === "colorId") {
+            if (value && typeof value === "string") {
+              if (columnId === "partNumber") {
+                newFilters.partNumber = { kind: "prefix", value };
+              } else if (columnId === "name") {
+                newFilters.name = { kind: "prefix", value };
+              } else if (columnId === "colorId") {
+                newFilters.colorId = { kind: "prefix", value };
+              }
+            } else {
+              if (columnId === "partNumber") delete newFilters.partNumber;
+              else if (columnId === "name") delete newFilters.name;
+              else if (columnId === "colorId") delete newFilters.colorId;
+            }
           }
-        } else {
-          if (columnId === "partNumber") delete newFilters.partNumber;
-          else if (columnId === "name") delete newFilters.name;
-          else if (columnId === "colorId") delete newFilters.colorId;
-        }
-      }
-      // Number range filters
-      else if (
-        columnId === "price" ||
-        columnId === "quantityAvailable" ||
-        columnId === "quantityReserved"
-      ) {
-        if (value && typeof value === "object") {
-          const rangeValue = value as { min?: number; max?: number };
-          if (columnId === "price") {
-            newFilters.price = { kind: "numberRange", ...rangeValue };
-          } else if (columnId === "quantityAvailable") {
-            newFilters.quantityAvailable = { kind: "numberRange", ...rangeValue };
-          } else if (columnId === "quantityReserved") {
-            newFilters.quantityReserved = { kind: "numberRange", ...rangeValue };
+          // Number range filters
+          else if (
+            columnId === "price" ||
+            columnId === "quantityAvailable" ||
+            columnId === "quantityReserved"
+          ) {
+            if (value && typeof value === "object") {
+              const rangeValue = value as { min?: number; max?: number };
+              if (columnId === "price") {
+                newFilters.price = { kind: "numberRange", ...rangeValue };
+              } else if (columnId === "quantityAvailable") {
+                newFilters.quantityAvailable = { kind: "numberRange", ...rangeValue };
+              } else if (columnId === "quantityReserved") {
+                newFilters.quantityReserved = { kind: "numberRange", ...rangeValue };
+              }
+            } else {
+              if (columnId === "price") delete newFilters.price;
+              else if (columnId === "quantityAvailable") delete newFilters.quantityAvailable;
+              else if (columnId === "quantityReserved") delete newFilters.quantityReserved;
+            }
           }
-        } else {
-          if (columnId === "price") delete newFilters.price;
-          else if (columnId === "quantityAvailable") delete newFilters.quantityAvailable;
-          else if (columnId === "quantityReserved") delete newFilters.quantityReserved;
-        }
-      }
-      // Date range filters
-      else if (columnId === "createdAt" || columnId === "updatedAt") {
-        if (value && typeof value === "object") {
-          const rangeValue = value as { start?: number; end?: number };
-          if (columnId === "createdAt") {
-            newFilters.createdAt = { kind: "dateRange", ...rangeValue };
-          } else if (columnId === "updatedAt") {
-            newFilters.updatedAt = { kind: "dateRange", ...rangeValue };
+          // Date range filters
+          else if (columnId === "createdAt" || columnId === "updatedAt") {
+            if (value && typeof value === "object") {
+              const rangeValue = value as { start?: number; end?: number };
+              if (columnId === "createdAt") {
+                newFilters.createdAt = { kind: "dateRange", ...rangeValue };
+              } else if (columnId === "updatedAt") {
+                newFilters.updatedAt = { kind: "dateRange", ...rangeValue };
+              }
+            } else {
+              if (columnId === "createdAt") delete newFilters.createdAt;
+              else if (columnId === "updatedAt") delete newFilters.updatedAt;
+            }
           }
-        } else {
-          if (columnId === "createdAt") delete newFilters.createdAt;
-          else if (columnId === "updatedAt") delete newFilters.updatedAt;
-        }
-      }
-      // Enum filters
-      else if (columnId === "condition" || columnId === "location") {
-        if (value && typeof value === "string") {
-          if (columnId === "condition") {
-            newFilters.condition = { kind: "enum", value };
-          } else if (columnId === "location") {
-            newFilters.location = { kind: "enum", value };
+          // Enum filters
+          else if (columnId === "condition" || columnId === "location") {
+            if (value && typeof value === "string") {
+              if (columnId === "condition") {
+                newFilters.condition = { kind: "enum", value };
+              } else if (columnId === "location") {
+                newFilters.location = { kind: "enum", value };
+              }
+            } else {
+              if (columnId === "condition") delete newFilters.condition;
+              else if (columnId === "location") delete newFilters.location;
+            }
           }
-        } else {
-          if (columnId === "condition") delete newFilters.condition;
-          else if (columnId === "location") delete newFilters.location;
-        }
-      }
 
-      return {
-        ...prev,
-        filters: Object.keys(newFilters).length > 0 ? newFilters : undefined,
-        pagination: { ...prev.pagination, cursor: undefined }, // Reset to first page
-      };
-    });
-  }, []);
+          return {
+            ...prev,
+            filters: Object.keys(newFilters).length > 0 ? newFilters : undefined,
+            pagination: { ...prev.pagination, cursor: undefined }, // Reset to first page
+          };
+        });
+      }
+    },
+    [data],
+  );
 
   // Pagination handlers
   const handlePageSizeChange = useCallback((size: number) => {
@@ -354,6 +443,12 @@ export function InventoryTableWrapper({
 
   // Extract filter values for column filters prop
   const columnFilters = useMemo(() => {
+    if (data) {
+      // Client-side: return clientFilters directly
+      return clientFilters;
+    }
+
+    // Server-side: extract from querySpec
     const filters: Record<string, unknown> = {};
 
     // Text filters
@@ -407,7 +502,7 @@ export function InventoryTableWrapper({
     }
 
     return filters;
-  }, [querySpec.filters]);
+  }, [data, clientFilters, querySpec.filters]);
 
   // Selection state
   const [_selectedRows, setSelectedRows] = useState<InventoryItem[]>([]);
@@ -443,9 +538,9 @@ export function InventoryTableWrapper({
         }
         onSortChange={handleSortChange}
         onGlobalFilterChange={!data ? handleFilterChange : undefined}
-        enableFiltering={!data}
-        onColumnFilterChange={!data ? handleColumnFilterChange : undefined}
-        columnFilters={!data ? columnFilters : undefined}
+        enableFiltering={true}
+        onColumnFilterChange={handleColumnFilterChange}
+        columnFilters={columnFilters}
         toolbarPlaceholder="Search part numbers..."
         enableRowSelection={true}
         onRowSelect={setSelectedRows}

@@ -20,6 +20,14 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui";
 import { BrickLinkCredentialsForm } from "@/components/settings/BricklinkCredentialsForm";
 import { BrickOwlCredentialsForm } from "@/components/settings/BrickowlCredentialsForm";
@@ -52,6 +60,9 @@ export default function SettingsPage() {
   const updatePreferences = useMutation(api.users.mutations.updatePreferences);
   const updateSyncSettings = useMutation(api.marketplace.mutations.updateSyncSettings);
   const syncSettings = useQuery(api.marketplace.mutations.getSyncSettings);
+  const isDevEnvironment = useQuery(api.bricklink.testOrders.isDevelopmentEnvironment);
+  const createBulkTestOrders = useMutation(api.bricklink.testOrders.createBulkTestOrders);
+  const deleteAllOrders = useMutation(api.bricklink.testOrders.deleteAllOrders);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -73,6 +84,14 @@ export default function SettingsPage() {
   const [inviteResult, setInviteResult] = useState<string | null>(null);
   const [userError, setUserError] = useState<string | null>(null);
 
+  // Development tools state
+  const [isCreatingOrders, setIsCreatingOrders] = useState(false);
+  const [isDeletingOrders, setIsDeletingOrders] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [devMessage, setDevMessage] = useState<{ type: "success" | "error"; text: string } | null>(
+    null,
+  );
+
   // Tab state management with URL sync
   const [activeTab, setActiveTab] = useState(() => {
     return searchParams.get("tab") || "profile";
@@ -81,6 +100,47 @@ export default function SettingsPage() {
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     router.push(`/settings?tab=${value}`, { scroll: false });
+  };
+
+  // Development tools handlers
+  const handleCreateTestOrders = async () => {
+    setIsCreatingOrders(true);
+    setDevMessage(null);
+    try {
+      const result = await createBulkTestOrders();
+      setDevMessage({
+        type: "success",
+        text: result.message || `Created ${result.ordersCreated} test orders successfully`,
+      });
+      setTimeout(() => setDevMessage(null), 5000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create test orders";
+      setDevMessage({ type: "error", text: message });
+    } finally {
+      setIsCreatingOrders(false);
+    }
+  };
+
+  const handleDeleteAllOrders = async () => {
+    setIsDeletingOrders(true);
+    setDevMessage(null);
+    try {
+      const result = await deleteAllOrders();
+      setDeleteDialogOpen(false);
+      setDevMessage({
+        type: "success",
+        text:
+          result.message ||
+          `Deleted ${result.ordersDeleted} orders and ${result.itemsDeleted} items`,
+      });
+      setTimeout(() => setDevMessage(null), 5000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete orders";
+      setDevMessage({ type: "error", text: message });
+      setDeleteDialogOpen(false);
+    } finally {
+      setIsDeletingOrders(false);
+    }
   };
 
   useEffect(() => {
@@ -269,11 +329,12 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className={`grid w-full ${isDevEnvironment ? "grid-cols-5" : "grid-cols-4"}`}>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="team">Team</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          {isDevEnvironment && <TabsTrigger value="development">Development</TabsTrigger>}
         </TabsList>
 
         {/* Profile Tab */}
@@ -641,7 +702,97 @@ export default function SettingsPage() {
             </div>
           )}
         </TabsContent>
+
+        {/* Development Tab */}
+        {isDevEnvironment && (
+          <TabsContent value="development" className="space-y-6">
+            <section className="rounded-lg border bg-background p-6 shadow-sm">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Development Tools</h2>
+                <p className="text-sm text-muted-foreground">
+                  Tools for testing and development. Only available in development environments.
+                </p>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                {/* Create Test Orders */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-foreground">Test Orders</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Create 3 test Bricklink orders with random parts from your catalog.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handleCreateTestOrders}
+                    disabled={isCreatingOrders}
+                    data-testid="create-test-orders-button"
+                  >
+                    {isCreatingOrders ? "Creating..." : "Create Test Orders"}
+                  </Button>
+                </div>
+
+                {/* Delete All Orders */}
+                <div className="space-y-2 border-t pt-4">
+                  <h3 className="text-sm font-medium text-foreground text-destructive">
+                    Delete All Orders
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Permanently delete all Bricklink orders and order items for this business
+                    account. This action cannot be undone.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    disabled={isDeletingOrders}
+                    data-testid="delete-all-orders-button"
+                  >
+                    {isDeletingOrders ? "Deleting..." : "Delete All Orders"}
+                  </Button>
+                </div>
+
+                {/* Status Messages */}
+                {devMessage && (
+                  <div
+                    className={`mt-4 rounded-md p-3 text-sm ${
+                      devMessage.type === "success"
+                        ? "bg-green-50 text-green-800"
+                        : "bg-red-50 text-red-800"
+                    }`}
+                    data-testid="dev-message"
+                  >
+                    {devMessage.text}
+                  </div>
+                )}
+              </div>
+            </section>
+          </TabsContent>
+        )}
       </Tabs>
+
+      {/* Delete All Orders Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent data-testid="delete-orders-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete All Orders?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all Bricklink orders and order items for this business
+              account. This action cannot be undone. Are you sure you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingOrders}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="confirm-delete-orders-button"
+              onClick={handleDeleteAllOrders}
+              disabled={isDeletingOrders}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingOrders ? "Deleting..." : "Delete All Orders"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* User Invite Dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>

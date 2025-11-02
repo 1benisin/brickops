@@ -214,6 +214,7 @@ export function DataTable<TData>({
     // NOTE: getSortedRowModel() is NOT used because manualSorting: true
     // Data comes pre-sorted from server - TanStack Table only handles UI state
     enableSorting: enableSorting, // Enable sorting so getCanSort() works
+    enableColumnFilters: enableFiltering, // Enable column filtering so getCanFilter() works
     enableMultiSort: false, // Only allow single column sorting at a time
     manualSorting: true, // Server-side sorting - data must be pre-sorted
     getRowId: getRowIdFn,

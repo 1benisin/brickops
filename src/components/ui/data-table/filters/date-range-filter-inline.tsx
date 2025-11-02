@@ -14,34 +14,60 @@ interface DateRangeFilterInlineProps {
   onChange: (value: { start?: number; end?: number } | undefined) => void;
 }
 
-export function DateRangeFilterInline({
-  columnId,
-  value,
-  onChange,
-}: DateRangeFilterInlineProps) {
+export function DateRangeFilterInline({ columnId, value, onChange }: DateRangeFilterInlineProps) {
   const [from, setFrom] = React.useState<Date | undefined>(
-    value?.start ? new Date(value.start) : undefined
+    value?.start ? new Date(value.start) : undefined,
   );
   const [to, setTo] = React.useState<Date | undefined>(
-    value?.end ? new Date(value.end) : undefined
+    value?.end ? new Date(value.end) : undefined,
   );
 
-  // Sync with external value changes (e.g., when filter is cleared)
+  // Sync internal state with external value prop
   React.useEffect(() => {
-    setFrom(value?.start ? new Date(value.start) : undefined);
-    setTo(value?.end ? new Date(value.end) : undefined);
-  }, [value?.start, value?.end]);
+    const newFrom = value?.start ? new Date(value.start) : undefined;
+    const newTo = value?.end ? new Date(value.end) : undefined;
+
+    // Only update if actually different
+    if (newFrom?.getTime() !== from?.getTime()) {
+      setFrom(newFrom);
+    }
+    if (newTo?.getTime() !== to?.getTime()) {
+      setTo(newTo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.start, value?.end]); // Only depend on value prop, not from/to to avoid loops
+
+  // Store latest onChange in ref to avoid dependency issues
+  const onChangeRef = React.useRef(onChange);
+  React.useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  // Track previous computed values to avoid unnecessary onChange calls
+  const prevComputedRef = React.useRef<{ start?: number; end?: number } | undefined>(value);
 
   React.useEffect(() => {
-    if (from || to) {
-      onChange({
-        start: from ? from.getTime() : undefined,
-        end: to ? to.getTime() : undefined,
-      });
-    } else {
-      onChange(undefined);
+    const computed =
+      from || to
+        ? {
+            start: from ? from.getTime() : undefined,
+            end: to ? to.getTime() : undefined,
+          }
+        : undefined;
+
+    // Only call onChange if computed values actually changed
+    const prevComputed = prevComputedRef.current;
+    const hasChanged =
+      computed?.start !== prevComputed?.start ||
+      computed?.end !== prevComputed?.end ||
+      (computed === undefined) !== (prevComputed === undefined);
+
+    if (hasChanged) {
+      prevComputedRef.current = computed;
+      onChangeRef.current(computed);
     }
-  }, [from, to, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, to]); // Removed onChange from deps to prevent infinite loops
 
   return (
     <Popover>
@@ -83,4 +109,3 @@ export function DateRangeFilterInline({
     </Popover>
   );
 }
-

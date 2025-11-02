@@ -2,6 +2,7 @@ export * from "./button";
 export * from "./input";
 export * from "./card";
 export * from "./dialog";
+export * from "./AlertDialog";
 export * from "./sheet";
 export * from "./table";
 export * from "./tabs";
