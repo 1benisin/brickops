@@ -13,7 +13,7 @@ interface TextFilterProps {
   debounceMs?: number; // Default: 300
 }
 
-export function TextFilter({
+function TextFilterComponent({
   columnId,
   value,
   onChange,
@@ -84,3 +84,7 @@ export function TextFilter({
     </div>
   );
 }
+
+// Memoize to prevent unnecessary re-renders when parent re-renders but props haven't changed
+// React.memo's default shallow comparison is sufficient here
+export const TextFilter = React.memo(TextFilterComponent);

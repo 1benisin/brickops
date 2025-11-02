@@ -131,9 +131,33 @@ export const marketplaceTables = {
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_business_order", ["businessAccountId", "orderId"])
+    // Existing indexes
+    .index("by_business_order", ["businessAccountId", "orderId"]) // Also used for orderId sorting
     .index("by_business_status", ["businessAccountId", "status"])
-    .index("by_business_date", ["businessAccountId", "dateOrdered"]),
+    .index("by_business_date", ["businessAccountId", "dateOrdered"])
+    // Indexes for sorting and filtering
+    .index("by_business_buyerName", ["businessAccountId", "buyerName"])
+    .index("by_business_status_dateOrdered", ["businessAccountId", "status", "dateOrdered"])
+    .index("by_business_costGrandTotal", ["businessAccountId", "costGrandTotal"])
+    .index("by_business_totalCount", ["businessAccountId", "totalCount"])
+    .index("by_business_dateStatusChanged", ["businessAccountId", "dateStatusChanged"])
+    .index("by_business_paymentStatus", ["businessAccountId", "paymentStatus"])
+    .searchIndex("search_orders_orderId", {
+      searchField: "orderId",
+      filterFields: ["businessAccountId"],
+    })
+    .searchIndex("search_orders_buyerName", {
+      searchField: "buyerName",
+      filterFields: ["businessAccountId"],
+    })
+    .searchIndex("search_orders_paymentMethod", {
+      searchField: "paymentMethod",
+      filterFields: ["businessAccountId"],
+    })
+    .searchIndex("search_orders_shippingMethod", {
+      searchField: "shippingMethod",
+      filterFields: ["businessAccountId"],
+    }),
 
   // BrickLink order items (line items for orders)
   bricklinkOrderItems: defineTable({

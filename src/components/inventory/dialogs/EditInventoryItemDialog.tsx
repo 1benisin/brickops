@@ -36,7 +36,7 @@ import {
 
 import { ColorSelect } from "@/components/catalog/ColorSelect";
 import { PartPriceGuide } from "@/components/catalog/PartPriceGuide";
-import { UnitPriceInputGroup } from "./UnitPriceInputGroup";
+import { UnitPriceInputGroup } from "../shared/UnitPriceInputGroup";
 import { useGetPart } from "@/hooks/useGetPart";
 import { useGetPriceGuide } from "@/hooks/useGetPriceGuide";
 import { ColorPartImage } from "@/components/common/ColorPartImage";

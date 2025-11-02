@@ -2,7 +2,7 @@ import { useState } from "react";
 import type {
   UnifiedSearchResult,
   UnifiedResultItem,
-} from "@/components/inventory/SearchOrCaptureDialog";
+} from "@/components/inventory/dialogs/SearchOrCaptureDialog";
 
 export type AddItemWorkflowStage = "idle" | "capturing" | "viewing_results" | "adding_to_inventory";
 

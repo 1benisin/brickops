@@ -1,6 +1,6 @@
 "use client";
 
-import { Header, flexRender } from "@tanstack/react-table";
+import { Header, flexRender, type Table } from "@tanstack/react-table";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,9 +14,9 @@ interface DataTableHeaderProps<TData, TValue> {
   enableSorting?: boolean;
   enableFiltering?: boolean;
   onSort?: (columnId: string) => void;
-  onFilterChange?: (columnId: string, value: any) => void;
+  onFilterChange?: (columnId: string, value: any) => void; // Legacy callback
   filterValue?: any;
-  table?: any; // Table instance for header functions that need it
+  table?: Table<TData>; // Table instance for header functions that need it
 }
 
 export function DataTableHeader<TData, TValue>({
@@ -90,16 +90,30 @@ export function DataTableHeader<TData, TValue>({
           {filterType === "text" && (
             <TextFilter
               columnId={header.column.id}
-              value={filterValue}
-              onChange={(value) => onFilterChange?.(header.column.id, value)}
+              value={filterValue ?? header.column.getFilterValue()}
+              onChange={(value) => {
+                // Use TanStack Table's built-in filter API if table is available
+                if (table) {
+                  header.column.setFilterValue(value || undefined);
+                } else {
+                  // Fallback to legacy callback
+                  onFilterChange?.(header.column.id, value);
+                }
+              }}
               placeholder={(header.column.columnDef.meta as any)?.filterPlaceholder || "Search..."}
             />
           )}
           {filterType === "number" && (
             <NumberRangeFilterInline
               columnId={header.column.id}
-              value={filterValue}
-              onChange={(value) => onFilterChange?.(header.column.id, value)}
+              value={filterValue ?? header.column.getFilterValue()}
+              onChange={(value) => {
+                if (table) {
+                  header.column.setFilterValue(value || undefined);
+                } else {
+                  onFilterChange?.(header.column.id, value);
+                }
+              }}
               currency={filterConfig?.currency}
               step={filterConfig?.step}
             />
@@ -107,17 +121,27 @@ export function DataTableHeader<TData, TValue>({
           {filterType === "date" && (
             <DateRangeFilterInline
               columnId={header.column.id}
-              value={filterValue}
-              onChange={(value: { start?: number; end?: number } | undefined) =>
-                onFilterChange?.(header.column.id, value)
-              }
+              value={filterValue ?? header.column.getFilterValue()}
+              onChange={(value: { start?: number; end?: number } | undefined) => {
+                if (table) {
+                  header.column.setFilterValue(value || undefined);
+                } else {
+                  onFilterChange?.(header.column.id, value);
+                }
+              }}
             />
           )}
           {filterType === "select" && filterOptions && (
             <SelectFilterInline
               columnId={header.column.id}
-              value={filterValue}
-              onChange={(value: string | undefined) => onFilterChange?.(header.column.id, value)}
+              value={filterValue ?? header.column.getFilterValue()}
+              onChange={(value: string | undefined) => {
+                if (table) {
+                  header.column.setFilterValue(value === "__all__" ? undefined : value || undefined);
+                } else {
+                  onFilterChange?.(header.column.id, value);
+                }
+              }}
               options={filterOptions}
             />
           )}

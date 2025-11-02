@@ -7,6 +7,8 @@ import {
   ColumnSizingState,
   VisibilityState,
   SortingState,
+  ColumnFiltersState,
+  PaginationState,
   RowSelectionState,
   flexRender,
   getCoreRowModel,
@@ -43,7 +45,12 @@ interface DataTableProps<TData> {
   onGlobalFilterChange?: (value: string) => void;
   enableFiltering?: boolean;
   onColumnFilterChange?: (columnId: string, value: any) => void;
-  columnFilters?: Record<string, any>;
+  columnFilters?: Record<string, any>; // Legacy format (backward compatibility)
+  // TanStack Table controlled states (for useServerTableState hook)
+  columnFiltersState?: ColumnFiltersState;
+  onColumnFiltersChange?: (updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState)) => void;
+  paginationState?: PaginationState;
+  onPaginationChange?: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => void;
   pinnedStartColumns?: string[];
   pinnedEndColumns?: string[];
   className?: string;
@@ -82,7 +89,11 @@ export function DataTable<TData>({
   onGlobalFilterChange,
   enableFiltering = true,
   onColumnFilterChange,
-  columnFilters = {},
+  columnFilters = {}, // Legacy format
+  columnFiltersState, // TanStack Table format (from useServerTableState)
+  onColumnFiltersChange, // TanStack Table handler (from useServerTableState)
+  paginationState, // TanStack Table format (from useServerTableState)
+  onPaginationChange, // TanStack Table handler (from useServerTableState)
   pinnedStartColumns = [],
   pinnedEndColumns = [],
   className,
@@ -207,16 +218,69 @@ export function DataTable<TData>({
     [getRowId],
   );
 
+  // Support controlled columnFilters state (from useServerTableState)
+  // Convert legacy Record format to ColumnFiltersState if needed
+  const internalColumnFilters = React.useMemo<ColumnFiltersState>(() => {
+    if (columnFiltersState !== undefined) {
+      // Use TanStack Table format if provided
+      return columnFiltersState;
+    }
+    // Convert legacy Record format to ColumnFiltersState
+    return Object.entries(columnFilters).map(([id, value]) => ({ id, value }));
+  }, [columnFilters, columnFiltersState]);
+
+  // Create adapter to convert legacy onColumnFilterChange to TanStack format
+  const handleColumnFiltersChangeAdapter = React.useCallback(
+    (updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState)) => {
+      if (onColumnFiltersChange) {
+        // Use new TanStack handler if provided
+        onColumnFiltersChange(updater);
+      } else if (onColumnFilterChange) {
+        // Convert to legacy format for backward compatibility
+        const newFilters = typeof updater === "function" ? updater(internalColumnFilters) : updater;
+        // Update each filter using legacy callback
+        const currentFilterMap = new Map(internalColumnFilters.map((f) => [f.id, f.value]));
+        const newFilterMap = new Map(newFilters.map((f) => [f.id, f.value]));
+        
+        // Find changed filters and call legacy callback
+        for (const [id, value] of newFilterMap.entries()) {
+          if (currentFilterMap.get(id) !== value) {
+            onColumnFilterChange(id, value);
+          }
+        }
+        // Find removed filters
+        for (const [id] of currentFilterMap.entries()) {
+          if (!newFilterMap.has(id)) {
+            onColumnFilterChange(id, undefined);
+          }
+        }
+      }
+    },
+    [onColumnFiltersChange, onColumnFilterChange, internalColumnFilters],
+  );
+
+  // Internal pagination state (fallback if not controlled)
+  const [internalPagination, setInternalPagination] = React.useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 25,
+  });
+
+  // Use controlled pagination if provided, otherwise use internal
+  const effectivePagination = paginationState ?? internalPagination;
+  const handlePaginationChange = onPaginationChange ?? setInternalPagination;
+
   const table = useReactTable({
     data,
     columns: memoizedColumns,
     getCoreRowModel: getCoreRowModel(),
-    // NOTE: getSortedRowModel() is NOT used because manualSorting: true
-    // Data comes pre-sorted from server - TanStack Table only handles UI state
+    // NOTE: No getSortedRowModel(), getFilteredRowModel(), or getPaginationRowModel()
+    // because we use manual modes - data comes pre-processed from server
     enableSorting: enableSorting, // Enable sorting so getCanSort() works
     enableColumnFilters: enableFiltering, // Enable column filtering so getCanFilter() works
     enableMultiSort: false, // Only allow single column sorting at a time
     manualSorting: true, // Server-side sorting - data must be pre-sorted
+    manualFiltering: true, // Server-side filtering - data must be pre-filtered
+    manualPagination: true, // Server-side pagination - data must be pre-paginated
     getRowId: getRowIdFn,
     enableRowSelection: enableRowSelection,
     onRowSelectionChange: setRowSelection,
@@ -225,12 +289,16 @@ export function DataTable<TData>({
       columnSizing: enableColumnSizing ? tableState.columnSizing : undefined,
       columnOrder: enableColumnOrdering ? tableState.columnOrder : undefined,
       sorting: enableSorting ? sorting : undefined,
+      columnFilters: enableFiltering ? internalColumnFilters : undefined,
+      pagination: effectivePagination,
       rowSelection: enableRowSelection ? rowSelection : undefined,
     },
     onColumnVisibilityChange: enableColumnVisibility ? setColumnVisibility : undefined,
     onColumnSizingChange: enableColumnSizing ? setColumnSizing : undefined,
     onColumnOrderChange: enableColumnOrdering ? setColumnOrder : undefined,
     onSortingChange: enableSorting ? setSorting : undefined,
+    onColumnFiltersChange: enableFiltering ? handleColumnFiltersChangeAdapter : undefined,
+    onPaginationChange: handlePaginationChange,
     enableColumnResizing: enableColumnSizing,
     columnResizeMode: "onChange",
   });
@@ -286,7 +354,7 @@ export function DataTable<TData>({
     }
   }, [rowSelection, table, onRowSelect, enableRowSelection]);
 
-  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const selectedCount = enableRowSelection ? table.getFilteredSelectedRowModel().rows.length : 0;
 
   // Initialize column order
   React.useEffect(() => {
@@ -420,7 +488,11 @@ export function DataTable<TData>({
                             enableFiltering={enableFiltering}
                             onSort={handleSort}
                             onFilterChange={onColumnFilterChange}
-                            filterValue={columnFilters[header.column.id]}
+                            filterValue={
+                              columnFiltersState !== undefined
+                                ? internalColumnFilters.find((f) => f.id === header.column.id)?.value
+                                : columnFilters[header.column.id]
+                            }
                           />
                         )}
                       </TableHead>

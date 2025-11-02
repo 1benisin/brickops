@@ -34,10 +34,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { FileSelector } from "./FileSelector";
+import { FileSelector } from "../files/FileSelector";
 import { ColorSelect } from "@/components/catalog/ColorSelect";
 import { PartPriceGuide } from "@/components/catalog/PartPriceGuide";
-import { UnitPriceInputGroup } from "./UnitPriceInputGroup";
+import { UnitPriceInputGroup } from "../shared/UnitPriceInputGroup";
 import { useGetPart } from "@/hooks/useGetPart";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { useGetPriceGuide } from "@/hooks/useGetPriceGuide";
