@@ -10,9 +10,11 @@ convex/
 │   ├── catalogClient.ts        # Global catalog queries (BrickOps credentials)
 │   ├── bricklinkMappers.ts     # Catalog data mappers
 │   ├── dataRefresher.ts        # Catalog refresh background jobs
+│   ├── notifications.ts        # BrickLink push notifications processing
 │   ├── oauth.ts                # Shared OAuth 1.0a signing helpers
 │   ├── storeClient.ts          # User store client (inventory + orders, BYOK credentials)
-│   └── storeMappers.ts         # Store data mappers (inventory + orders)
+│   ├── storeMappers.ts         # Store data mappers (inventory + orders)
+│   └── webhook.ts              # Webhook endpoint handlers
 │
 ├── brickowl/                   # BrickOwl marketplace integration (Story 3.3)
 │   ├── auth.ts                 # API key authentication helpers
@@ -20,9 +22,11 @@ convex/
 │   └── storeMappers.ts         # Store data mappers (inventory + orders)
 │
 ├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
+│   ├── actions.ts              # External API orchestration
 │   ├── helpers.ts              # Catalog business logic helpers
 │   ├── mutations.ts            # Catalog write operations
 │   ├── queries.ts              # Catalog read operations and search
+│   ├── refreshWorker.ts        # Catalog refresh outbox processing
 │   ├── schema.ts               # Catalog table schemas
 │   └── validators.ts           # Catalog input validation
 │
@@ -33,11 +37,19 @@ convex/
 │   └── schema.ts               # Identification table schemas
 │
 ├── inventory/                  # Inventory domain functions (Story 3.4)
+│   ├── files/                  # Inventory file upload subdomain
+│   │   ├── actions.ts          # File processing actions
+│   │   ├── helpers.ts          # File parsing helpers
+│   │   ├── mutations.ts        # File mutations
+│   │   ├── queries.ts          # File queries
+│   │   └── validators.ts       # File validation
 │   ├── helpers.ts              # Inventory business logic helpers
 │   ├── mutations.ts            # Inventory CRUD operations
 │   ├── queries.ts              # Inventory read operations
 │   ├── schema.ts               # Inventory table schemas
-│   └── sync.ts                 # Marketplace sync orchestration
+│   ├── sync.ts                 # Marketplace sync orchestration
+│   ├── syncWorker.ts           # Background sync processing
+│   └── validators.ts           # Inventory input validation
 │
 ├── marketplace/                # Marketplace orchestration domain (Stories 3.1-3.3)
 │   ├── actions.ts              # External marketplace API actions
@@ -54,6 +66,11 @@ convex/
 │   ├── mutations.ts            # User write operations
 │   ├── queries.ts              # User read operations
 │   └── schema.ts               # User table schemas
+│
+├── ratelimit/                  # Rate limiting domain
+│   ├── mutations.ts            # Rate limit write operations
+│   ├── rateLimitConfig.ts      # Rate limit configuration
+│   └── schema.ts               # Rate limit table schemas
 │
 ├── lib/                        # Shared utilities
 │   ├── dbRateLimiter.ts        # Database-backed rate limiting helpers
@@ -569,6 +586,144 @@ Background job or scheduled task?
 - [Convex Mutations](../external-documentation/convex/mutations.md)
 - [Convex Actions](../external-documentation/convex/actions.md)
 - [Convex Best Practices](../external-documentation/convex/best-practices.md)
+
+---
+
+## Validator Patterns and Type Safety
+
+**CRITICAL**: Validators are the single source of truth for all API contracts. They provide both runtime validation and type inference for end-to-end type safety.
+
+### Validator Organization
+
+Each domain should have a dedicated `validators.ts` file that exports:
+
+1. **Shared component validators** (reusable across functions)
+2. **Function argument validators** (for `args` property)
+3. **Function return validators** (for `returns` property)
+4. **TypeScript type exports** (convenience exports using `Infer<>`)
+
+### Example: Complete Validator Pattern
+
+```typescript
+// convex/inventory/validators.ts
+import { v } from "convex/values";
+import type { Infer } from "convex/values";
+
+// ============================================================================
+// SHARED COMPONENT VALIDATORS (Reusable)
+// ============================================================================
+
+export const itemCondition = v.union(v.literal("new"), v.literal("used"));
+export const syncStatus = v.union(
+  v.literal("pending"),
+  v.literal("syncing"),
+  v.literal("synced"),
+  v.literal("failed"),
+);
+
+// ============================================================================
+// FUNCTION ARGUMENT VALIDATORS
+// ============================================================================
+
+export const addInventoryItemArgs = v.object({
+  name: v.string(),
+  partNumber: v.string(),
+  colorId: v.string(),
+  location: v.string(),
+  quantityAvailable: v.number(),
+  condition: itemCondition, // Reuse shared validator
+  price: v.optional(v.number()),
+});
+
+// ============================================================================
+// FUNCTION RETURN VALIDATORS
+// ============================================================================
+
+export const listInventoryItemsReturns = v.array(
+  v.object({
+    _id: v.id("inventoryItems"),
+    name: v.string(),
+    partNumber: v.string(),
+    quantityAvailable: v.number(),
+    condition: itemCondition, // Reuse shared validator
+    // ... other fields
+  }),
+);
+
+// ============================================================================
+// TYPESCRIPT TYPE EXPORTS (Convenience)
+// ============================================================================
+
+export type AddInventoryItemArgs = Infer<typeof addInventoryItemArgs>;
+export type ItemCondition = Infer<typeof itemCondition>;
+```
+
+### Using Validators in Functions
+
+**CRITICAL**: Always define both `args` and `returns` validators:
+
+```typescript
+// convex/inventory/queries.ts
+import { query } from "../_generated/server";
+import { listInventoryItemsArgs, listInventoryItemsReturns } from "./validators";
+
+export const listInventoryItems = query({
+  args: listInventoryItemsArgs, // ✅ Always define args validator
+  returns: listInventoryItemsReturns, // ✅ Always define returns validator
+  handler: async (ctx, args) => {
+    // Implementation - TypeScript types are inferred from validators
+    const items = await ctx.db.query("inventoryItems").collect();
+    return items; // TypeScript ensures return matches validator
+  },
+});
+```
+
+### Frontend Type Derivation
+
+Frontend types MUST be derived from backend validators (never duplicated):
+
+```typescript
+// src/types/inventory.ts
+import type { Infer } from "convex/values";
+import type { listInventoryItemsReturns } from "@/convex/inventory/validators";
+
+// ✅ GOOD: Type derived from validator
+export type InventoryItem = Infer<typeof listInventoryItemsReturns>[0];
+
+// ❌ BAD: Manually defined (can drift)
+export type InventoryItem = { name: string /* ... */ };
+```
+
+For function return types, use `FunctionReturnType`:
+
+```typescript
+// src/types/inventory.ts
+import type { FunctionReturnType } from "convex/server";
+import { api } from "@/convex/_generated/api";
+
+export type ListInventoryItemsResult = FunctionReturnType<
+  typeof api.inventory.queries.listInventoryItems
+>;
+```
+
+### Validator Best Practices
+
+1. **Always define return validators**: Every public function should have a `returns` validator
+2. **Reuse shared validators**: Extract common patterns (e.g., `itemCondition`, `syncStatus`)
+3. **Validate at runtime**: Validators provide runtime safety, not just TypeScript types
+4. **Export types for convenience**: Backend can export `Infer<>` types for internal use
+5. **Organize by function**: Group validators logically (args, returns, shared components)
+
+### Domain Validator Files
+
+Each domain should have a `validators.ts` file:
+
+- `convex/catalog/validators.ts` - Catalog function validators
+- `convex/inventory/validators.ts` - Inventory function validators
+- `convex/users/validators.ts` - User function validators
+- `convex/marketplace/validators.ts` - Marketplace function validators
+
+See [Coding Standards - Type Safety](../development/coding-standards.md#type-safety-and-validator-patterns) for complete validator patterns and examples.
 
 ---
 
