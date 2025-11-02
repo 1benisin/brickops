@@ -21,6 +21,7 @@ import type * as bricklink_notifications from "../bricklink/notifications.js";
 import type * as bricklink_oauth from "../bricklink/oauth.js";
 import type * as bricklink_storeClient from "../bricklink/storeClient.js";
 import type * as bricklink_storeMappers from "../bricklink/storeMappers.js";
+import type * as bricklink_testOrders from "../bricklink/testOrders.js";
 import type * as bricklink_webhook from "../bricklink/webhook.js";
 import type * as brickowl_auth from "../brickowl/auth.js";
 import type * as brickowl_storeClient from "../brickowl/storeClient.js";
@@ -96,6 +97,7 @@ declare const fullApi: ApiFromModules<{
   "bricklink/oauth": typeof bricklink_oauth;
   "bricklink/storeClient": typeof bricklink_storeClient;
   "bricklink/storeMappers": typeof bricklink_storeMappers;
+  "bricklink/testOrders": typeof bricklink_testOrders;
   "bricklink/webhook": typeof bricklink_webhook;
   "brickowl/auth": typeof brickowl_auth;
   "brickowl/storeClient": typeof brickowl_storeClient;
