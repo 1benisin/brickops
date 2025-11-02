@@ -1,4 +1,4 @@
-# Source Tree
+# Project Structure
 
 ```text
 brickops/
@@ -7,17 +7,21 @@ brickops/
 │   │   ├── catalogClient.ts        # Catalog queries (BrickOps credentials)
 │   │   ├── bricklinkMappers.ts     # Catalog data mappers
 │   │   ├── dataRefresher.ts        # Catalog refresh jobs
+│   │   ├── notifications.ts       # BrickLink notifications processing
 │   │   ├── oauth.ts                # OAuth 1.0a signing helpers
 │   │   ├── storeClient.ts          # Store client (inventory + orders, user credentials)
-│   │   └── storeMappers.ts         # Store data mappers
+│   │   ├── storeMappers.ts         # Store data mappers
+│   │   └── webhook.ts              # Webhook endpoint handlers
 │   ├── brickowl/                   # BrickOwl marketplace integration (Story 3.3)
 │   │   ├── auth.ts                 # API key authentication helpers
 │   │   ├── storeClient.ts          # Store client (inventory + orders, user credentials)
 │   │   └── storeMappers.ts         # Store data mappers
 │   ├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
+│   │   ├── actions.ts              # External API orchestration
 │   │   ├── helpers.ts              # Catalog business logic helpers
 │   │   ├── mutations.ts            # Catalog write operations
-│   │   ├── queries.ts              # Catalog read operations
+│   │   ├── queries.ts              # Catalog read operations and search
+│   │   ├── refreshWorker.ts        # Catalog refresh outbox processing
 │   │   ├── schema.ts               # Catalog table schemas
 │   │   └── validators.ts           # Catalog input validation
 │   ├── identify/                   # Part identification domain (Story 2.1)
@@ -26,11 +30,19 @@ brickops/
 │   │   ├── mutations.ts            # Identification write operations
 │   │   └── schema.ts               # Identification table schemas
 │   ├── inventory/                  # Inventory domain functions (Story 3.4)
+│   │   ├── files/                  # Inventory file upload subdomain
+│   │   │   ├── actions.ts          # File processing actions
+│   │   │   ├── helpers.ts          # File parsing helpers
+│   │   │   ├── mutations.ts        # File mutations
+│   │   │   ├── queries.ts            # File queries
+│   │   │   └── validators.ts       # File validation
 │   │   ├── helpers.ts              # Inventory business logic helpers
 │   │   ├── mutations.ts            # Inventory write operations
 │   │   ├── queries.ts              # Inventory read operations
 │   │   ├── schema.ts               # Inventory table schemas
-│   │   └── sync.ts                 # Marketplace sync orchestration
+│   │   ├── sync.ts                 # Marketplace sync orchestration
+│   │   ├── syncWorker.ts           # Background sync processing
+│   │   └── validators.ts           # Inventory input validation
 │   ├── marketplace/                # Marketplace domain functions (Stories 3.1-3.3)
 │   │   ├── actions.ts              # External marketplace API actions
 │   │   ├── helpers.ts              # Marketplace business logic
@@ -39,6 +51,10 @@ brickops/
 │   │   ├── rateLimitConfig.ts      # Rate limit configurations per provider
 │   │   ├── schema.ts               # Marketplace table schemas
 │   │   └── types.ts                # Shared TypeScript interfaces
+│   ├── ratelimit/                  # Rate limiting domain
+│   │   ├── mutations.ts            # Rate limit write operations
+│   │   ├── rateLimitConfig.ts      # Rate limit configuration
+│   │   └── schema.ts               # Rate limit table schemas
 │   ├── users/                      # User management domain (Story 1.3)
 │   │   ├── actions.ts              # User-related actions (email, invitations)
 │   │   ├── helpers.ts              # User business logic and RBAC
@@ -47,7 +63,7 @@ brickops/
 │   │   └── schema.ts               # User table schemas
 │   ├── lib/                        # Shared utilities
 │   │   ├── dbRateLimiter.ts        # Database-backed rate limiting helpers
-│   │   ├── encryption.ts           # AES-GCM encryption for credentials (Story 3.1)
+│   │   ├── encryption.ts          # AES-GCM encryption for credentials (Story 3.1)
 │   │   ├── external/               # External API utilities
 │   │   │   ├── brickognize.ts      # Brickognize API client
 │   │   │   ├── brickowl.ts         # BrickOwl API client
@@ -68,17 +84,26 @@ brickops/
 │   ├── crons.ts                    # Scheduled functions (catalog refresh, inventory sync)
 │   ├── hello.ts                    # Example public functions
 │   ├── hello_impl.ts               # Example implementation helpers
-│   ├── http.ts                     # HTTP endpoints
+│   ├── http.ts                     # HTTP endpoints for webhooks
 │   └── schema.ts                   # Root database schema (aggregates domain schemas)
 ├── src/                            # Next.js frontend application
 │   ├── app/                        # App Router (Next.js 14+)
-│   │   ├── (auth)/                 # Auth pages (sign-in, sign-up)
+│   │   ├── (auth)/                 # Auth pages (sign-in, sign-up, reset-password, invite)
 │   │   ├── (authenticated)/        # Protected routes
+│   │   │   ├── catalog/            # Catalog browsing page
+│   │   │   ├── dashboard/          # Dashboard overview page
+│   │   │   ├── identify/          # Part identification page
+│   │   │   ├── inventory/          # Inventory management
+│   │   │   │   ├── files/          # Inventory file management
+│   │   │   │   └── history/        # Inventory change history
+│   │   │   ├── orders/            # Order processing (placeholder)
+│   │   │   └── settings/           # Settings page
 │   │   └── design-system/          # Design system showcase
 │   ├── components/                 # Reusable UI components
 │   │   ├── catalog/                # Catalog components
+│   │   ├── common/                 # Shared common components
 │   │   ├── dashboard/              # Dashboard components
-│   │   ├── identify/               # Part identification components
+│   │   ├── identify/                # Part identification components
 │   │   ├── inventory/              # Inventory components
 │   │   ├── layout/                 # Layout components (nav, toolbar, etc.)
 │   │   ├── providers/              # React context providers
@@ -116,7 +141,9 @@ BrickOps organizes backend code by business domain, with each domain following a
 - `catalog/` - Part catalog management (Story 2.2-2.3)
 - `identify/` - Part identification via Brickognize (Story 2.1)
 - `inventory/` - Inventory tracking and sync (Story 3.4)
+  - `inventory/files/` - Inventory file upload and processing subdomain
 - `marketplace/` - Marketplace integrations and orchestration (Stories 3.1-3.3)
+- `ratelimit/` - Rate limiting infrastructure
 - `users/` - User management and RBAC (Story 1.3)
 
 **Domain Module Pattern**:
@@ -125,7 +152,7 @@ Each domain typically contains:
 
 - `queries.ts` - Read-only operations
 - `mutations.ts` - Write operations
-- `actions.ts` - External API orchestration
+- `actions.ts` - External API orchestration (when needed)
 - `helpers.ts` - Business logic and utilities
 - `schema.ts` - Database table definitions
 - `validators.ts` - Input validation (when needed)
@@ -133,12 +160,15 @@ Each domain typically contains:
 **Marketplace Integration (Stories 3.1-3.3)**:
 
 - `bricklink/` - BrickLink marketplace integration with separate clients for catalog (BrickOps credentials) vs store (user credentials)
+  - Includes `notifications.ts` for processing BrickLink push notifications
+  - Includes `webhook.ts` for handling webhook events
 - `brickowl/` - BrickOwl marketplace integration following same pattern
 - `marketplace/` - Orchestration layer with shared types and configurations across all marketplace providers
 
 **Shared Infrastructure**:
 
 - `lib/` - Shared utilities (encryption, rate limiting, external API helpers)
+- `ratelimit/` - Global rate limiting domain for shared rate limit buckets
 - `auth.ts` / `auth.config.ts` - Authentication configuration
 - `crons.ts` - Scheduled background jobs
 - `http.ts` - HTTP endpoints for webhooks
@@ -149,3 +179,4 @@ Each domain typically contains:
 - `__tests__/backend/` - Convex function tests
 - `__tests__/frontend/` - React component tests
 - `__tests__/e2e/` - Playwright end-to-end tests
+

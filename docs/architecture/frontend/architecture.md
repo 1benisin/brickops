@@ -198,13 +198,15 @@ The following components are available for installation via the CLI:
 ```typescript
 // Component organization pattern
 src/components/
-├── ui/                    // Base UI components (Button, Input, Modal)
-├── forms/                 // Form-specific components with validation
-├── camera/                // Camera capture and part identification
+├── ui/                    // Base UI components (Button, Input, Modal) - shadcn/ui
+├── catalog/               // Catalog browsing components
+├── common/                // Shared common components
+├── dashboard/             // Dashboard display components
+├── identify/              // Part identification components
 ├── inventory/             // Inventory management components
-├── orders/                // Order processing and management
-├── picking/               // Pick session workflow components
-└── layout/                // Navigation, headers, sidebars
+├── layout/                // Navigation, headers, sidebars
+├── providers/             // React context providers
+└── settings/              // Settings forms (credentials, users)
 ```
 
 ### Component Template
@@ -268,11 +270,10 @@ BrickOps implements a hybrid state management strategy aligned with backend stat
 interface StateArchitecture {
   // SERVER STATE (Convex Real-time Subscriptions)
   serverState: {
-    inventory: "useQuery(api.inventory.getByUser)";
-    orders: "useQuery(api.orders.getByBusinessAccount)";
-    catalog: "useQuery(api.catalog.searchParts)";
-    pickSessions: "useQuery(api.picking.getActiveSessions)";
-    users: "useQuery(api.auth.getBusinessAccountUsers)";
+    inventory: "useQuery(api.inventory.queries.*)";
+    catalog: "useQuery(api.catalog.queries.*)";
+    users: "useQuery(api.users.queries.*)";
+    marketplace: "useQuery(api.marketplace.queries.*)";
   };
 
   // CLIENT UI STATE (React Built-in)
@@ -288,7 +289,6 @@ interface StateArchitecture {
   // COMPLEX CLIENT STATE (Zustand Stores)
   complexClientState: {
     inventorySelection: "useInventoryStore";
-    pickingWorkflow: "usePickingStore";
     searchFilters: "useSearchStore";
     userPreferences: "usePreferencesStore";
     cameraCapture: "useCameraStore";
@@ -307,16 +307,21 @@ interface StateArchitecture {
 ```typescript
 // Route organization using Next.js App Router
 app/
-├── (auth)/               // Route group for authentication
+├── (auth)/               // Auth pages
 │   ├── login/
-│   └── signup/
-├── dashboard/            // Main dashboard routes
-├── inventory/            // Inventory management
-├── identify/             // Part identification
-├── orders/               // Order management
-│   └── picking/          // Pick session routes
-├── catalog/              // Parts catalog
-└── settings/             // User and business settings
+│   ├── signup/
+│   ├── reset-password/
+│   └── invite/
+├── (authenticated)/      // Protected routes
+│   ├── catalog/          // Parts catalog
+│   ├── dashboard/        // Dashboard overview
+│   ├── identify/         // Part identification
+│   ├── inventory/        // Inventory management
+│   │   ├── files/        // Inventory file management
+│   │   └── history/      // Inventory change history
+│   ├── orders/           // Order processing (placeholder)
+│   └── settings/         // User and business settings
+└── design-system/        // Design system showcase
 ```
 
 ### Protected Route Pattern
@@ -332,11 +337,8 @@ app/
 import { NextRequest, NextResponse } from "next/server";
 
 const ROUTE_PERMISSIONS = {
-  public: ["/login", "/signup", "/"],
-  protected: ["/dashboard", "/inventory", "/orders", "/catalog", "/identify"],
-  ownerOnly: ["/settings/users", "/settings/billing"],
-  managerPlus: ["/orders/picking", "/inventory/upload"],
-  pickerPlus: ["/orders/picking/[sessionId]"],
+  public: ["/login", "/signup", "/reset-password", "/invite"],
+  protected: ["/dashboard", "/inventory", "/inventory/files", "/inventory/history", "/orders", "/catalog", "/identify", "/settings"],
 } as const;
 
 export async function middleware(request: NextRequest) {

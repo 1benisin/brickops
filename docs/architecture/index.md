@@ -1,108 +1,72 @@
-# BrickOps Fullstack Architecture Document
+# BrickOps Architecture Documentation
 
-## Table of Contents
+Welcome to the BrickOps architecture documentation. This documentation is organized to help you quickly understand the system and find the information you need.
 
-- [BrickOps Fullstack Architecture Document](#table-of-contents)
-  - [Introduction](./introduction.md)
-    - [Starter Template or Existing Project](./introduction.md#starter-template-or-existing-project)
-    - [Change Log](./introduction.md#change-log)
-  - [High Level Architecture](./high-level-architecture.md)
-    - [Technical Summary](./high-level-architecture.md#technical-summary)
-    - [Platform and Infrastructure Choice](./high-level-architecture.md#platform-and-infrastructure-choice)
-    - [Repository Structure](./high-level-architecture.md#repository-structure)
-    - [High Level Architecture Diagram](./high-level-architecture.md#high-level-architecture-diagram)
-    - [Architectural Patterns](./high-level-architecture.md#architectural-patterns)
-  - [Tech Stack](./tech-stack.md)
-  - [Data Models](./data-models.md)
-    - [User](./data-models.md#user)
-    - [BusinessAccount](./data-models.md#businessaccount)
-    - [LegoPartCatalog, InventoryItem, MarketplaceOrder, PickSession, TodoItem](./data-models.md#legopartcatalog-inventoryitem-marketplaceorder-picksession-todoitem)
-  - [Components](./components.md)
-    - [AuthenticationService](./components.md#authenticationservice)
-    - [CatalogService](./components.md#catalogservice)
-    - [InventoryService](./components.md#inventoryservice)
-    - [MarketplaceIntegrationService](./components.md#marketplaceintegrationservice)
-    - [OrderProcessingService](./components.md#orderprocessingservice)
-    - [PickSessionService](./components.md#picksessionservice)
-    - [PartIdentificationService](./components.md#partidentificationservice)
-    - [Component Relationships Diagram](./components.md#component-relationships-diagram)
-  - [External APIs](../external/apis/brickognize.md)
-    - [Brickognize API](../external/apis/brickognize.md)
-    - [Bricklink API](../external/apis/bricklink.md)
-    - [Brickowl API](../external/apis/brickowl.md)
-  - [External Documentation](../external-documentation/convex-auth/setup.md)
-    - [Convex Auth Setup](../external-documentation/convex-auth/setup.md)
-    - [Convex Auth Configuration](../external-documentation/convex-auth/configure-auth.md)
-    - [Convex Auth Authorization](../external-documentation/convex-auth/authorization.md)
-    - [Next.js Authorization](../external-documentation/convex-auth/authorization-nextjs.md)
-  - [Core Workflows](./core-workflows.md)
-    - [Order Processing and Inventory Sync](./core-workflows.md#order-processing-and-inventory-sync)
-    - [Part Identification and Inventory Addition](./core-workflows.md#part-identification-and-inventory-addition)
-    - [Pick Session Workflow with Issue Resolution](./core-workflows.md#pick-session-workflow-with-issue-resolution)
-  - [API Specification](./api-specification.md)
-  - [Database Schema](./database-schema.md)
-  - [Frontend Architecture](./frontend-architecture.md)
-    - [Component Architecture](./frontend-architecture.md#component-architecture)
-    - [State Management Architecture](./frontend-architecture.md#state-management-architecture)
-    - [Routing Architecture](./frontend-architecture.md#routing-architecture)
-    - [Frontend Services Layer](./frontend-architecture.md#frontend-services-layer)
-  - [Backend Architecture](./backend-architecture.md)
-    - [Service Architecture (Serverless)](./backend-architecture.md#service-architecture-serverless)
-    - [Authentication and Authorization](./backend-architecture.md#authentication-and-authorization)
-  - [Unified Project Structure](./unified-project-structure.md)
-  - [Development Workflow](./development-workflow.md)
-    - [Local Development Setup](./development-workflow.md#local-development-setup)
-    - [Environment Configuration](./development-workflow.md#environment-configuration)
-  - [Deployment Architecture](./deployment-architecture.md)
-    - [Deployment Strategy](./deployment-architecture.md#deployment-strategy)
-    - [CI/CD Pipeline](./deployment-architecture.md#cicd-pipeline)
-    - [Environments](./deployment-architecture.md#environments)
-  - [Security and Performance](./security-and-performance.md)
-    - [Security Requirements](./security-and-performance.md#security-requirements)
-    - [Performance Optimization](./security-and-performance.md#performance-optimization)
-  - [Testing Strategy](./testing-strategy.md)
-  - [Coding Standards](./coding-standards.md)
-    - [Critical Rules](./coding-standards.md#critical-rules)
-    - [Naming Conventions](./coding-standards.md#naming-conventions)
-  - [Error Handling Strategy](./error-handling-strategy.md)
-  - [Monitoring and Observability](./monitoring-and-observability.md)
-  - [Frontend Architecture](./frontend-architecture.md)
-    - [Component Architecture](./frontend-architecture.md#component-architecture)
-      - [Component Template](./frontend-architecture.md#component-template)
-    - [State Management Architecture](./frontend-architecture.md#state-management-architecture)
-    - [Routing Architecture](./frontend-architecture.md#routing-architecture)
-      - [Protected Route Pattern](./frontend-architecture.md#protected-route-pattern)
-    - [Frontend Services Layer](./frontend-architecture.md#frontend-services-layer)
-  - [Backend Architecture](./backend-architecture.md)
-    - [Service Architecture (Serverless)](./backend-architecture.md#service-architecture-serverless)
-      - [Function Template](./backend-architecture.md#function-template)
-    - [Authentication and Authorization](./backend-architecture.md#authentication-and-authorization)
-  - [Development Workflow](./development-workflow.md)
-    - [Local Development Setup](./development-workflow.md#local-development-setup)
-      - [Prerequisites](./development-workflow.md#prerequisites)
-      - [Initial Setup](./development-workflow.md#initial-setup)
-      - [Development Commands](./development-workflow.md#development-commands)
-    - [Environment Configuration](./development-workflow.md#environment-configuration)
-      - [Required Environment Variables](./development-workflow.md#required-environment-variables)
-  - [Deployment Architecture](./deployment-architecture.md)
-    - [Deployment Strategy](./deployment-architecture.md#deployment-strategy)
-    - [CI/CD Pipeline](./deployment-architecture.md#cicd-pipeline)
-    - [Environments](./deployment-architecture.md#environments)
-  - [Testing Strategy](./testing-strategy.md)
-    - [Testing Pyramid](./testing-strategy.md#testing-pyramid)
-    - [Test Organization](./testing-strategy.md#test-organization)
-      - [Frontend Tests](./testing-strategy.md#frontend-tests)
-      - [Backend Tests](./testing-strategy.md#backend-tests)
-      - [E2E Tests](./testing-strategy.md#e2e-tests)
-    - [Test Examples](./testing-strategy.md#test-examples)
-      - [Frontend Component Test](./testing-strategy.md#frontend-component-test)
-      - [Backend Function Test](./testing-strategy.md#backend-function-test)
-      - [E2E Test](./testing-strategy.md#e2e-test)
-  - [Monitoring and Observability](./monitoring-and-observability.md)
-    - [Monitoring Stack](./monitoring-and-observability.md#monitoring-stack)
-    - [Key Metrics](./monitoring-and-observability.md#key-metrics)
-  - [Checklist Results Report](./checklist-results-report.md)
-    - [Executive Summary](./checklist-results-report.md#executive-summary)
-    - [Architecture Completeness](./checklist-results-report.md#architecture-completeness)
-    - [Risk Assessment](./checklist-results-report.md#risk-assessment)
-    - [Final Assessment](./checklist-results-report.md#final-assessment)
+## Quick Start
+
+**New to the project?** Start here:
+1. [Introduction](./overview/introduction.md) - Project overview and change log
+2. [High Level Architecture](./overview/high-level-architecture.md) - System overview and architectural patterns
+3. [Tech Stack](./overview/tech-stack.md) - Technology choices and versions
+4. [Project Structure](./overview/project-structure.md) - Source code organization
+
+**Working on a specific area?** Jump to:
+- [Backend Architecture](./backend/architecture.md) - Convex serverless backend
+- [Frontend Architecture](./frontend/architecture.md) - Next.js frontend
+- [Development Workflow](./development/development-workflow.md) - Local setup and development
+
+## Documentation Structure
+
+### Overview
+High-level documentation for onboarding and understanding the system:
+- [Introduction](./overview/introduction.md) - Project context and history
+- [High Level Architecture](./overview/high-level-architecture.md) - System design and patterns
+- [Tech Stack](./overview/tech-stack.md) - Technology choices with versions
+- [Project Structure](./overview/project-structure.md) - Source code organization
+
+### Backend
+Convex serverless backend architecture and domains:
+- [Architecture](./backend/architecture.md) - Backend overview, domain organization, and patterns
+- [Database Schema](./backend/database-schema.md) - Full database schema documentation
+- [API Specification](./backend/api-specification.md) - Function specifications and contracts
+
+**Backend Domains:**
+- Catalog - Part catalog management
+- Identify - Part identification via Brickognize
+- Inventory - Inventory tracking and sync (includes file upload subdomain)
+- Marketplace - Marketplace integrations and orchestration
+- Users - User management and RBAC
+- Rate Limit - Global rate limiting infrastructure
+
+**Backend Integrations:**
+- BrickLink - Marketplace integration with OAuth 1.0a
+- BrickOwl - Marketplace integration with API keys
+
+### Frontend
+Next.js frontend architecture and components:
+- [Architecture](./frontend/architecture.md) - Frontend overview, components, state management, routing
+- [Components](./frontend/components.md) - Service layer and component structure
+- [Core Workflows](./frontend/core-workflows.md) - User workflow documentation
+
+### Development
+Developer-focused documentation:
+- [Development Workflow](./development/development-workflow.md) - Local setup, commands, environment
+- [Coding Standards](./development/coding-standards.md) - Code conventions and standards
+- [Testing Strategy](./development/testing-strategy.md) - Testing approach and organization
+- [Error Handling](./development/error-handling.md) - Error handling patterns
+
+### Operations
+Deployment, security, and monitoring:
+- [Deployment](./operations/deployment.md) - Deployment strategy and CI/CD
+- [Security and Performance](./operations/security-and-performance.md) - Security requirements and performance optimization
+- [Monitoring](./operations/monitoring.md) - Monitoring and observability setup
+
+### Data
+Data models and structures:
+- [Data Models](./data/data-models.md) - TypeScript interfaces and business entities
+
+## External Documentation
+
+- [External APIs](../external/apis/) - Brickognize, Bricklink, Brickowl API documentation
+- [Convex Auth Setup](../external-documentation/convex-auth/setup.md) - Authentication configuration
+- [Convex Auth Authorization](../external-documentation/convex-auth/authorization.md) - Authorization patterns
