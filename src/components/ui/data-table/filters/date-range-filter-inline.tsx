@@ -15,27 +15,36 @@ interface DateRangeFilterInlineProps {
 }
 
 export function DateRangeFilterInline({ columnId, value, onChange }: DateRangeFilterInlineProps) {
-  const [from, setFrom] = React.useState<Date | undefined>(
+  const [committedFrom, setCommittedFrom] = React.useState<Date | undefined>(
     value?.start ? new Date(value.start) : undefined,
   );
-  const [to, setTo] = React.useState<Date | undefined>(
+  const [committedTo, setCommittedTo] = React.useState<Date | undefined>(
     value?.end ? new Date(value.end) : undefined,
   );
+  const [draftFrom, setDraftFrom] = React.useState<Date | undefined>(committedFrom);
+  const [draftTo, setDraftTo] = React.useState<Date | undefined>(committedTo);
+  const [open, setOpen] = React.useState(false);
 
   // Sync internal state with external value prop
   React.useEffect(() => {
     const newFrom = value?.start ? new Date(value.start) : undefined;
     const newTo = value?.end ? new Date(value.end) : undefined;
 
-    // Only update if actually different
-    if (newFrom?.getTime() !== from?.getTime()) {
-      setFrom(newFrom);
+    if (newFrom?.getTime() !== committedFrom?.getTime()) {
+      setCommittedFrom(newFrom);
     }
-    if (newTo?.getTime() !== to?.getTime()) {
-      setTo(newTo);
+    if (newTo?.getTime() !== committedTo?.getTime()) {
+      setCommittedTo(newTo);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value?.start, value?.end]); // Only depend on value prop, not from/to to avoid loops
+  }, [value?.start, value?.end]);
+
+  React.useEffect(() => {
+    if (open) {
+      setDraftFrom(committedFrom);
+      setDraftTo(committedTo);
+    }
+  }, [open, committedFrom, committedTo]);
 
   // Store latest onChange in ref to avoid dependency issues
   const onChangeRef = React.useRef(onChange);
@@ -48,14 +57,13 @@ export function DateRangeFilterInline({ columnId, value, onChange }: DateRangeFi
 
   React.useEffect(() => {
     const computed =
-      from || to
+      committedFrom || committedTo
         ? {
-            start: from ? from.getTime() : undefined,
-            end: to ? to.getTime() : undefined,
+            start: committedFrom ? committedFrom.getTime() : undefined,
+            end: committedTo ? committedTo.getTime() : undefined,
           }
         : undefined;
 
-    // Only call onChange if computed values actually changed
     const prevComputed = prevComputedRef.current;
     const hasChanged =
       computed?.start !== prevComputed?.start ||
@@ -67,10 +75,37 @@ export function DateRangeFilterInline({ columnId, value, onChange }: DateRangeFi
       onChangeRef.current(computed);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to]); // Removed onChange from deps to prevent infinite loops
+  }, [committedFrom, committedTo]);
+
+  const handleApply = React.useCallback(() => {
+    setCommittedFrom(draftFrom);
+    setCommittedTo(draftTo);
+    setOpen(false);
+  }, [draftFrom, draftTo]);
+
+  const handleClear = React.useCallback(() => {
+    setDraftFrom(undefined);
+    setDraftTo(undefined);
+    setCommittedFrom(undefined);
+    setCommittedTo(undefined);
+    setOpen(false);
+  }, []);
+
+  const summaryLabel = React.useMemo(() => {
+    if (committedFrom && committedTo) {
+      return `${format(committedFrom, "MM/dd")} - ${format(committedTo, "MM/dd")}`;
+    }
+    if (committedFrom) {
+      return format(committedFrom, "MM/dd/yyyy");
+    }
+    if (committedTo) {
+      return format(committedTo, "MM/dd/yyyy");
+    }
+    return "Date range";
+  }, [committedFrom, committedTo]);
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           id={`${columnId}-date-filter-inline`}
@@ -78,33 +113,31 @@ export function DateRangeFilterInline({ columnId, value, onChange }: DateRangeFi
           size="sm"
           className={cn(
             "w-full h-7 justify-start text-left font-normal text-xs",
-            !from && !to && "text-muted-foreground",
+            !committedFrom && !committedTo && "text-muted-foreground",
           )}
         >
           <CalendarIcon className="mr-1 h-3 w-3" />
-          {from ? (
-            to ? (
-              <span className="truncate">
-                {format(from, "MM/dd")} - {format(to, "MM/dd")}
-              </span>
-            ) : (
-              format(from, "MM/dd/yyyy")
-            )
-          ) : (
-            <span>Date range</span>
-          )}
+          <span className="truncate">{summaryLabel}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="range"
-          selected={{ from, to }}
+          selected={{ from: draftFrom, to: draftTo }}
           onSelect={(range) => {
-            setFrom(range?.from);
-            setTo(range?.to);
+            setDraftFrom(range?.from);
+            setDraftTo(range?.to);
           }}
           numberOfMonths={2}
         />
+        <div className="flex items-center justify-end gap-2 border-t p-3">
+          <Button variant="ghost" size="sm" onClick={handleClear}>
+            Clear
+          </Button>
+          <Button size="sm" onClick={handleApply}>
+            Apply
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

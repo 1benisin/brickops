@@ -181,7 +181,7 @@ export const ordersQuerySpecValidator = v.object({
           max: v.optional(v.number()),
         }),
       ),
-      uniqueCount: v.optional(
+      lotCount: v.optional(
         v.object({
           kind: v.literal("numberRange"),
           min: v.optional(v.number()),
@@ -478,12 +478,12 @@ export const listOrdersFiltered = query({
         }
       }
 
-      if (remainingFilters?.uniqueCount?.kind === "numberRange") {
-        if (remainingFilters.uniqueCount.min !== undefined) {
-          filter = q.and(filter, q.gte(q.field("uniqueCount"), remainingFilters.uniqueCount.min));
+      if (remainingFilters?.lotCount?.kind === "numberRange") {
+        if (remainingFilters.lotCount.min !== undefined) {
+          filter = q.and(filter, q.gte(q.field("lotCount"), remainingFilters.lotCount.min));
         }
-        if (remainingFilters.uniqueCount.max !== undefined) {
-          filter = q.and(filter, q.lte(q.field("uniqueCount"), remainingFilters.uniqueCount.max));
+        if (remainingFilters.lotCount.max !== undefined) {
+          filter = q.and(filter, q.lte(q.field("lotCount"), remainingFilters.lotCount.max));
         }
       }
 

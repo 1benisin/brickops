@@ -99,7 +99,7 @@ export const marketplaceTables = {
     salesTaxCollectedByBl: v.boolean(),
     remarks: v.optional(v.string()),
     totalCount: v.number(),
-    uniqueCount: v.number(),
+    lotCount: v.number(),
     totalWeight: v.optional(v.number()),
     // Payment info
     paymentMethod: v.optional(v.string()),
