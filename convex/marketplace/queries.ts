@@ -181,6 +181,27 @@ export const ordersQuerySpecValidator = v.object({
           max: v.optional(v.number()),
         }),
       ),
+      uniqueCount: v.optional(
+        v.object({
+          kind: v.literal("numberRange"),
+          min: v.optional(v.number()),
+          max: v.optional(v.number()),
+        }),
+      ),
+      costSubtotal: v.optional(
+        v.object({
+          kind: v.literal("numberRange"),
+          min: v.optional(v.number()),
+          max: v.optional(v.number()),
+        }),
+      ),
+      costShipping: v.optional(
+        v.object({
+          kind: v.literal("numberRange"),
+          min: v.optional(v.number()),
+          max: v.optional(v.number()),
+        }),
+      ),
 
       // Date range filters
       dateOrdered: v.optional(
@@ -454,6 +475,33 @@ export const listOrdersFiltered = query({
         }
         if (remainingFilters.totalCount.max !== undefined) {
           filter = q.and(filter, q.lte(q.field("totalCount"), remainingFilters.totalCount.max));
+        }
+      }
+
+      if (remainingFilters?.uniqueCount?.kind === "numberRange") {
+        if (remainingFilters.uniqueCount.min !== undefined) {
+          filter = q.and(filter, q.gte(q.field("uniqueCount"), remainingFilters.uniqueCount.min));
+        }
+        if (remainingFilters.uniqueCount.max !== undefined) {
+          filter = q.and(filter, q.lte(q.field("uniqueCount"), remainingFilters.uniqueCount.max));
+        }
+      }
+
+      if (remainingFilters?.costSubtotal?.kind === "numberRange") {
+        if (remainingFilters.costSubtotal.min !== undefined) {
+          filter = q.and(filter, q.gte(q.field("costSubtotal"), remainingFilters.costSubtotal.min));
+        }
+        if (remainingFilters.costSubtotal.max !== undefined) {
+          filter = q.and(filter, q.lte(q.field("costSubtotal"), remainingFilters.costSubtotal.max));
+        }
+      }
+
+      if (remainingFilters?.costShipping?.kind === "numberRange") {
+        if (remainingFilters.costShipping.min !== undefined) {
+          filter = q.and(filter, q.gte(q.field("costShipping"), remainingFilters.costShipping.min));
+        }
+        if (remainingFilters.costShipping.max !== undefined) {
+          filter = q.and(filter, q.lte(q.field("costShipping"), remainingFilters.costShipping.max));
         }
       }
 

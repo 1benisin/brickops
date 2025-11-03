@@ -2,6 +2,10 @@
 
 import * as React from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { SlidersHorizontal } from "lucide-react";
 
 interface NumberRangeFilterInlineProps {
   columnId: string;
@@ -20,21 +24,26 @@ export function NumberRangeFilterInline({
 }: NumberRangeFilterInlineProps) {
   const [min, setMin] = React.useState<string>(value?.min?.toString() || "");
   const [max, setMax] = React.useState<string>(value?.max?.toString() || "");
+  const [draftMin, setDraftMin] = React.useState<string>(min);
+  const [draftMax, setDraftMax] = React.useState<string>(max);
+  const [open, setOpen] = React.useState(false);
 
-  // Sync internal state with external value prop
+  // Sync committed filter value from external state
   React.useEffect(() => {
-    if (value?.min !== undefined && value.min.toString() !== min) {
-      setMin(value.min.toString());
-    } else if (!value && min !== "") {
-      setMin("");
+    const nextMin = value?.min !== undefined ? value.min.toString() : "";
+    const nextMax = value?.max !== undefined ? value.max.toString() : "";
+
+    setMin(nextMin);
+    setMax(nextMax);
+  }, [value?.min, value?.max]);
+
+  // When the popover opens, copy committed values into draft inputs
+  React.useEffect(() => {
+    if (open) {
+      setDraftMin(min);
+      setDraftMax(max);
     }
-    if (value?.max !== undefined && value.max.toString() !== max) {
-      setMax(value.max.toString());
-    } else if (!value && max !== "") {
-      setMax("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]); // Only depend on value prop, not min/max to avoid loops
+  }, [open, min, max]);
 
   // Store latest onChange in ref to avoid dependency issues
   const onChangeRef = React.useRef(onChange);
@@ -71,26 +80,87 @@ export function NumberRangeFilterInline({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [min, max]); // Removed onChange from deps to prevent infinite loops
 
+  const handleApply = React.useCallback(() => {
+    setMin(draftMin.trim());
+    setMax(draftMax.trim());
+    setOpen(false);
+  }, [draftMin, draftMax]);
+
+  const handleClear = React.useCallback(() => {
+    setDraftMin("");
+    setDraftMax("");
+    setMin("");
+    setMax("");
+    setOpen(false);
+  }, []);
+
+  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+  }, []);
+
+  const hasMin = min !== "";
+  const hasMax = max !== "";
+  const summary =
+    hasMin || hasMax
+      ? `${hasMin ? `≥ ${min}` : ""}${hasMin && hasMax ? " · " : ""}${hasMax ? `≤ ${max}` : ""}`
+      : "Range";
+
   return (
-    <div className="flex gap-1">
-      <Input
-        id={`${columnId}-min`}
-        type="number"
-        step={step}
-        value={min}
-        onChange={(e) => setMin(e.target.value)}
-        placeholder="Min"
-        className="h-7 text-xs"
-      />
-      <Input
-        id={`${columnId}-max`}
-        type="number"
-        step={step}
-        value={max}
-        onChange={(e) => setMax(e.target.value)}
-        placeholder="Max"
-        className="h-7 text-xs"
-      />
-    </div>
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button variant={hasMin || hasMax ? "default" : "outline"} size="sm" className="h-8 gap-2">
+          <SlidersHorizontal className="h-4 w-4" />
+          <span className="text-xs font-medium">{summary}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 space-y-4 p-4">
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor={`${columnId}-popover-min`}>Min</Label>
+            <Input
+              id={`${columnId}-popover-min`}
+              type="number"
+              inputMode="decimal"
+              step={step}
+              value={draftMin}
+              onChange={(e) => setDraftMin(e.target.value)}
+              placeholder="Min"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleApply();
+                }
+              }}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`${columnId}-popover-max`}>Max</Label>
+            <Input
+              id={`${columnId}-popover-max`}
+              type="number"
+              inputMode="decimal"
+              step={step}
+              value={draftMax}
+              onChange={(e) => setDraftMax(e.target.value)}
+              placeholder="Max"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleApply();
+                }
+              }}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={handleClear}>
+            Clear
+          </Button>
+          <Button size="sm" onClick={handleApply}>
+            Apply
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

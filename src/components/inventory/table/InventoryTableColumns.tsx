@@ -19,6 +19,7 @@ import { formatRelativeTime, bestTextOn } from "@/lib/utils";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { ColorPartImage } from "@/components/common/ColorPartImage";
 import { createColumn } from "@/components/ui/data-table/column-definitions";
+import { manualNumberRangeFilter, manualDateRangeFilter } from "@/components/ui/data-table/utils/filter-state";
 
 // Type for marketplace sync configuration
 export type MarketplaceSyncConfig = {
@@ -254,6 +255,7 @@ export const createInventoryColumns = (
         label: "Available",
         filterType: "number",
       },
+      filterFn: manualNumberRangeFilter<InventoryItem>(),
       header: () => <div className="text-right">Available</div>,
       enableSorting: true,
       enableColumnFilter: true,
@@ -273,6 +275,7 @@ export const createInventoryColumns = (
         label: "Date Created",
         filterType: "date",
       },
+      filterFn: manualDateRangeFilter<InventoryItem>(),
       header: "Date Created",
       enableSorting: true,
       enableColumnFilter: true,
@@ -292,6 +295,7 @@ export const createInventoryColumns = (
         label: "Reserved",
         filterType: "number",
       },
+      filterFn: manualNumberRangeFilter<InventoryItem>(),
       header: () => <div className="text-right">Reserved</div>,
       enableSorting: true,
       enableColumnFilter: true,
@@ -318,6 +322,7 @@ export const createInventoryColumns = (
           step: 0.01,
         },
       },
+      filterFn: manualNumberRangeFilter<InventoryItem>(),
       header: () => <div className="text-right">Unit Price</div>,
       enableSorting: true,
       enableColumnFilter: true,
@@ -361,6 +366,7 @@ export const createInventoryColumns = (
         label: "Last Updated",
         filterType: "date",
       },
+      filterFn: manualDateRangeFilter<InventoryItem>(),
       header: "Last Updated",
       enableSorting: true,
       enableColumnFilter: true,

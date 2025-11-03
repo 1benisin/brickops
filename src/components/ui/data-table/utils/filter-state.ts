@@ -5,8 +5,7 @@
  * Handles different filter types based on column metadata (text, numberRange, dateRange, enum).
  */
 
-import type { ColumnFiltersState } from "@tanstack/react-table";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnFiltersState, ColumnDef, FilterFn } from "@tanstack/react-table";
 import type { EnhancedColumnMeta } from "../column-definitions";
 
 /**
@@ -214,3 +213,12 @@ export function querySpecToColumnFilters<TData>(
 export function shouldDebounceFilter(filterType?: string): boolean {
   return filterType === "text";
 }
+
+const buildManualRangeFilter = <TData,>(): FilterFn<TData> => {
+  const fn: FilterFn<TData> = () => true;
+  fn.autoRemove = () => false;
+  return fn;
+};
+
+export const manualNumberRangeFilter = <TData,>() => buildManualRangeFilter<TData>();
+export const manualDateRangeFilter = <TData,>() => buildManualRangeFilter<TData>();

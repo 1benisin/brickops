@@ -9,8 +9,10 @@ import { api } from "@/convex/_generated/api";
 import type { OrdersQuerySpec } from "@/convex/marketplace/queries";
 import { useServerTableState } from "@/components/ui/data-table/hooks/use-server-table-state";
 
+const ORDERS_COLUMNS = createOrdersColumns();
+
 export function OrdersTableWrapper() {
-  const columns = useMemo(() => createOrdersColumns(), []);
+  const columns = useMemo(() => ORDERS_COLUMNS, []);
 
   // Use the new server table state hook
   const {
@@ -72,18 +74,56 @@ export function OrdersTableWrapper() {
 
       // Number range filters
       if (filters.costGrandTotal && filters.costGrandTotal.kind === "numberRange") {
-        ordersFilters.costGrandTotal = {
-          kind: "numberRange",
-          min: filters.costGrandTotal.min,
-          max: filters.costGrandTotal.max,
-        };
+        const range = filters.costGrandTotal;
+        // Only include if at least min or max is defined
+        if (range.min !== undefined || range.max !== undefined) {
+          ordersFilters.costGrandTotal = {
+            kind: "numberRange",
+            min: range.min,
+            max: range.max,
+          };
+        }
       }
       if (filters.totalCount && filters.totalCount.kind === "numberRange") {
-        ordersFilters.totalCount = {
-          kind: "numberRange",
-          min: filters.totalCount.min,
-          max: filters.totalCount.max,
-        };
+        const range = filters.totalCount;
+        // Only include if at least min or max is defined
+        if (range.min !== undefined || range.max !== undefined) {
+          ordersFilters.totalCount = {
+            kind: "numberRange",
+            min: range.min,
+            max: range.max,
+          };
+        }
+      }
+      if (filters.uniqueCount && filters.uniqueCount.kind === "numberRange") {
+        const range = filters.uniqueCount;
+        if (range.min !== undefined || range.max !== undefined) {
+          ordersFilters.uniqueCount = {
+            kind: "numberRange",
+            min: range.min,
+            max: range.max,
+          };
+        }
+      }
+      if (filters.costSubtotal && filters.costSubtotal.kind === "numberRange") {
+        const range = filters.costSubtotal;
+        if (range.min !== undefined || range.max !== undefined) {
+          ordersFilters.costSubtotal = {
+            kind: "numberRange",
+            min: range.min,
+            max: range.max,
+          };
+        }
+      }
+      if (filters.costShipping && filters.costShipping.kind === "numberRange") {
+        const range = filters.costShipping;
+        if (range.min !== undefined || range.max !== undefined) {
+          ordersFilters.costShipping = {
+            kind: "numberRange",
+            min: range.min,
+            max: range.max,
+          };
+        }
       }
 
       // Date range filters
