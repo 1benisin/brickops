@@ -41,7 +41,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
     <div className="flex min-h-screen flex-col bg-muted/20">
       <AuthenticatedHeader navigation={NAVIGATION} onSignOut={handleSignOut} />
       <main className="flex-1">
-        <div className="mx-auto w-full px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+        <div className="mx-auto w-full px-4 py-6 sm:px-6 lg:px-8 print:p-0">{children}</div>
       </main>
     </div>
   );

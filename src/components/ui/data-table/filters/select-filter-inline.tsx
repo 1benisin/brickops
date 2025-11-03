@@ -45,7 +45,7 @@ export function SelectFilterInline({
 
   return (
     <Select value={selectValue} onValueChange={handleValueChange}>
-      <SelectTrigger id={`${columnId}-select-inline`} className="h-7 text-xs">
+      <SelectTrigger id={`${columnId}-select-inline`} className="w-full h-7 text-xs">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>

@@ -126,3 +126,58 @@ export function formatRelativeTime(timestamp: number): string {
     return `${days}d ago`;
   }
 }
+
+/**
+ * Formats a timestamp as a readable date (e.g., "Jan 15, 2024")
+ * @param timestamp - Unix timestamp in milliseconds
+ * @returns Formatted date string
+ */
+export function formatDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * Formats a phone number for display (e.g., "(123) 456-7890")
+ * @param phoneNumber - Phone number string (may include formatting characters)
+ * @returns Formatted phone number string or original if invalid
+ */
+export function formatPhoneNumber(phoneNumber: string | undefined | null): string {
+  if (!phoneNumber) return "";
+  
+  // Remove all non-digit characters
+  const digits = phoneNumber.replace(/\D/g, "");
+  
+  // Format as (XXX) XXX-XXXX if 10 digits, otherwise return original
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  
+  return phoneNumber;
+}
+
+/**
+ * Decodes HTML entities in a string
+ * @param html - HTML string with entities
+ * @returns Decoded string
+ */
+export function decodeHTML(html: string): string {
+  if (typeof document === "undefined") {
+    // Server-side: simple replacement (may not handle all entities)
+    return html
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  }
+  
+  // Client-side: use DOM parser for complete entity decoding
+  const txt = document.createElement("textarea");
+  txt.innerHTML = html;
+  return txt.value;
+}

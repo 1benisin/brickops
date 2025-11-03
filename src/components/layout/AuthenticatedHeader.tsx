@@ -25,7 +25,7 @@ export function AuthenticatedHeader({ navigation, onSignOut }: AuthenticatedHead
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 print:hidden">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold">

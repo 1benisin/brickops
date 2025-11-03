@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import React, { ReactNode, useEffect, useState, useCallback, useMemo } from "react";
 import {
   ColumnDef,
   ColumnOrderState,
@@ -48,22 +48,26 @@ interface DataTableProps<TData> {
   columnFilters?: Record<string, any>; // Legacy format (backward compatibility)
   // TanStack Table controlled states (for useServerTableState hook)
   columnFiltersState?: ColumnFiltersState;
-  onColumnFiltersChange?: (updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState)) => void;
+  onColumnFiltersChange?: (
+    updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState),
+  ) => void;
   paginationState?: PaginationState;
-  onPaginationChange?: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => void;
+  onPaginationChange?: (
+    updater: PaginationState | ((old: PaginationState) => PaginationState),
+  ) => void;
   pinnedStartColumns?: string[];
   pinnedEndColumns?: string[];
   className?: string;
   // Row selection props
   enableRowSelection?: boolean;
   onRowSelect?: (rows: TData[]) => void;
-  bulkActions?: (props: { selectedRows: TData[] }) => React.ReactNode;
+  bulkActions?: (props: { selectedRows: TData[] }) => ReactNode;
   // State persistence flags
   persistSelection?: boolean;
   // Loading and empty states
   isLoading?: boolean;
-  loadingState?: React.ReactNode;
-  emptyState?: React.ReactNode;
+  loadingState?: ReactNode;
+  emptyState?: ReactNode;
   // Get row ID function (for server-side pagination persistence)
   getRowId?: (row: TData) => string;
 }
@@ -107,16 +111,16 @@ export function DataTable<TData>({
   getRowId,
 }: DataTableProps<TData>) {
   // Add sorting state (for UI indication only - actual sorting is server-side)
-  const [sorting, setSorting] = React.useState<SortingState>(sortingProp || []);
+  const [sorting, setSorting] = useState<SortingState>(sortingProp || []);
 
   // Sync external sorting prop to internal state
-  React.useEffect(() => {
+  useEffect(() => {
     if (sortingProp !== undefined) {
       setSorting(sortingProp);
     }
   }, [sortingProp]);
 
-  const handleSort = React.useCallback(
+  const handleSort = useCallback(
     (columnId: string) => {
       setSorting((prev) => {
         const current = prev.find((s) => s.id === columnId);
@@ -149,7 +153,7 @@ export function DataTable<TData>({
   });
 
   // State setters with localStorage persistence
-  const setColumnVisibility = React.useCallback(
+  const setColumnVisibility = useCallback(
     (updater: VisibilityState | ((old: VisibilityState) => VisibilityState)) => {
       setTableState((prev) => ({
         ...prev,
@@ -159,7 +163,7 @@ export function DataTable<TData>({
     [setTableState],
   );
 
-  const setColumnSizing = React.useCallback(
+  const setColumnSizing = useCallback(
     (updater: ColumnSizingState | ((old: ColumnSizingState) => ColumnSizingState)) => {
       setTableState((prev) => ({
         ...prev,
@@ -169,7 +173,7 @@ export function DataTable<TData>({
     [setTableState],
   );
 
-  const setColumnOrder = React.useCallback(
+  const setColumnOrder = useCallback(
     (updater: ColumnOrderState | ((old: ColumnOrderState) => ColumnOrderState)) => {
       setTableState((prev) => {
         const currentOrder = prev.columnOrder;
@@ -184,12 +188,12 @@ export function DataTable<TData>({
   );
 
   // Memoize columns for performance
-  const memoizedColumns = React.useMemo(() => columns, [columns]);
+  const memoizedColumns = useMemo(() => columns, [columns]);
 
   // Row selection state management
   // For server-side tables, we track selected IDs (not row indices)
   // because row indices change between pages
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Row selection state (by row ID for current page)
   // Always call both hooks unconditionally (React rules)
@@ -197,7 +201,7 @@ export function DataTable<TData>({
     `${storageKey}-selection`,
     {},
   );
-  const [rowSelectionState, setRowSelectionState] = React.useState<RowSelectionState>({});
+  const [rowSelectionState, setRowSelectionState] = useState<RowSelectionState>({});
 
   // Choose which state to use based on persistence setting
   const [rowSelection, setRowSelection] =
@@ -206,7 +210,7 @@ export function DataTable<TData>({
       : [rowSelectionState, setRowSelectionState];
 
   // Get row ID helper function
-  const getRowIdFn = React.useCallback(
+  const getRowIdFn = useCallback(
     (row: TData) => {
       if (getRowId) {
         return getRowId(row);
@@ -220,7 +224,7 @@ export function DataTable<TData>({
 
   // Support controlled columnFilters state (from useServerTableState)
   // Convert legacy Record format to ColumnFiltersState if needed
-  const internalColumnFilters = React.useMemo<ColumnFiltersState>(() => {
+  const internalColumnFilters = useMemo<ColumnFiltersState>(() => {
     if (columnFiltersState !== undefined) {
       // Use TanStack Table format if provided
       return columnFiltersState;
@@ -230,7 +234,7 @@ export function DataTable<TData>({
   }, [columnFilters, columnFiltersState]);
 
   // Create adapter to convert legacy onColumnFilterChange to TanStack format
-  const handleColumnFiltersChangeAdapter = React.useCallback(
+  const handleColumnFiltersChangeAdapter = useCallback(
     (updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState)) => {
       if (onColumnFiltersChange) {
         // Use new TanStack handler if provided
@@ -241,15 +245,15 @@ export function DataTable<TData>({
         // Update each filter using legacy callback
         const currentFilterMap = new Map(internalColumnFilters.map((f) => [f.id, f.value]));
         const newFilterMap = new Map(newFilters.map((f) => [f.id, f.value]));
-        
+
         // Find changed filters and call legacy callback
-        for (const [id, value] of newFilterMap.entries()) {
+        for (const [id, value] of Array.from(newFilterMap.entries())) {
           if (currentFilterMap.get(id) !== value) {
             onColumnFilterChange(id, value);
           }
         }
         // Find removed filters
-        for (const [id] of currentFilterMap.entries()) {
+        for (const [id] of Array.from(currentFilterMap.entries())) {
           if (!newFilterMap.has(id)) {
             onColumnFilterChange(id, undefined);
           }
@@ -260,7 +264,7 @@ export function DataTable<TData>({
   );
 
   // Internal pagination state (fallback if not controlled)
-  const [internalPagination, setInternalPagination] = React.useState<PaginationState>({
+  const [internalPagination, setInternalPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
   });
@@ -304,7 +308,7 @@ export function DataTable<TData>({
   });
 
   // Update selected IDs when selection changes (for server-side pagination)
-  React.useEffect(() => {
+  useEffect(() => {
     if (!enableRowSelection || !getRowIdFn) return;
 
     const newSelectedIds = new Set<string>();
@@ -319,7 +323,7 @@ export function DataTable<TData>({
 
   // Restore selection from IDs when data changes (e.g., new page)
   // Note: We intentionally don't include rowSelection in deps to avoid loops
-  React.useEffect(() => {
+  useEffect(() => {
     if (!enableRowSelection || !getRowIdFn || selectedIds.size === 0) return;
 
     const newSelection: RowSelectionState = {};
@@ -347,7 +351,7 @@ export function DataTable<TData>({
   }, [data, selectedIds, enableRowSelection, getRowIdFn, table]);
 
   // Notify parent of selection changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (onRowSelect && enableRowSelection) {
       const selectedRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
       onRowSelect(selectedRows);
@@ -357,7 +361,7 @@ export function DataTable<TData>({
   const selectedCount = enableRowSelection ? table.getFilteredSelectedRowModel().rows.length : 0;
 
   // Initialize column order
-  React.useEffect(() => {
+  useEffect(() => {
     const leafIds = table.getAllLeafColumns().map((c) => c.id);
     if (tableState.columnOrder.length === 0) {
       const sanitized = sanitizeOrder(leafIds, leafIds, pinnedStartColumns, pinnedEndColumns);
@@ -379,7 +383,7 @@ export function DataTable<TData>({
   }, [table, tableState.columnOrder, pinnedStartColumns, pinnedEndColumns, setTableState]);
 
   // Memoize row rendering for performance
-  const renderRow = React.useCallback(
+  const renderRow = useCallback(
     (row: ReturnType<typeof table.getRowModel>["rows"][number]) => {
       return (
         <TableRow
@@ -490,7 +494,8 @@ export function DataTable<TData>({
                             onFilterChange={onColumnFilterChange}
                             filterValue={
                               columnFiltersState !== undefined
-                                ? internalColumnFilters.find((f) => f.id === header.column.id)?.value
+                                ? internalColumnFilters.find((f) => f.id === header.column.id)
+                                    ?.value
                                 : columnFilters[header.column.id]
                             }
                           />

@@ -718,3 +718,94 @@ export const listOrdersFiltered = query({
     };
   },
 });
+
+/**
+ * Get orders by orderIds
+ * Returns orders matching the provided orderIds
+ * Available to all authenticated users (not just owners)
+ */
+export const getOrdersByIds = query({
+  args: {
+    orderIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Authentication required");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || !user.businessAccountId) {
+      throw new ConvexError("User not found or not linked to business account");
+    }
+
+    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+
+    if (args.orderIds.length === 0) {
+      return [];
+    }
+
+    // Fetch all matching orders
+    const orders: Doc<"bricklinkOrders">[] = [];
+    
+    for (const orderId of args.orderIds) {
+      const order = await ctx.db
+        .query("bricklinkOrders")
+        .withIndex("by_business_order", (q) =>
+          q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
+        )
+        .first();
+
+      if (order) {
+        orders.push(order);
+      }
+    }
+
+    return orders;
+  },
+});
+
+/**
+ * Get order items for multiple orders
+ * Returns order items grouped by orderId
+ * Available to all authenticated users (not just owners)
+ */
+export const getOrderItemsForOrders = query({
+  args: {
+    orderIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Authentication required");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || !user.businessAccountId) {
+      throw new ConvexError("User not found or not linked to business account");
+    }
+
+    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+
+    if (args.orderIds.length === 0) {
+      return {};
+    }
+
+    // Fetch all order items for the given order IDs
+    // Group by orderId for efficient access
+    const itemsByOrderId: Record<string, Doc<"bricklinkOrderItems">[]> = {};
+
+    for (const orderId of args.orderIds) {
+      const items = await ctx.db
+        .query("bricklinkOrderItems")
+        .withIndex("by_order", (q) =>
+          q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
+        )
+        .collect();
+
+      itemsByOrderId[orderId] = items;
+    }
+
+    return itemsByOrderId;
+  },
+});
