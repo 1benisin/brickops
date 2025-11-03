@@ -338,7 +338,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ROUTE_PERMISSIONS = {
   public: ["/login", "/signup", "/reset-password", "/invite"],
-  protected: ["/dashboard", "/inventory", "/inventory/files", "/inventory/history", "/orders", "/catalog", "/identify", "/settings"],
+  protected: [
+    "/dashboard",
+    "/inventory",
+    "/inventory/files",
+    "/inventory/history",
+    "/orders",
+    "/catalog",
+    "/identify",
+    "/settings",
+  ],
 } as const;
 
 export async function middleware(request: NextRequest) {
@@ -390,3 +399,47 @@ export class InventoryService {
   }
 }
 ```
+
+## Data Table Architecture
+
+> Applies to all pages that use `src/components/ui/data-table/*` (orders, inventory, future server-driven tables).
+
+### Building Blocks
+
+- **DataTable** (`data-table.tsx`) – Thin wrapper around TanStack Table configured for manual (server-side) sorting, filtering, and pagination. Uses local storage to persist column visibility/sizing.
+- **useServerTableState** – Converts TanStack column filter/sort state into our normalized `QuerySpec` contract. Debounces text filters, resets pagination when filters/sorts change, and exposes the current `querySpec` for Convex queries.
+- **Filter utilities** (`utils/filter-state.ts`) – Maps between TanStack filter values and our query contract. Exposes helper filters:
+  - `manualNumberRangeFilter` – Required for any numeric column so TanStack keeps `{min, max}` objects.
+  - `manualDateRangeFilter` – Required for date columns so `{start, end}` ranges are not auto-removed.
+
+### Server-Side Flow
+
+1. Column metadata (`meta.filterType` + optional `filterConfig`) is defined in the column factory (e.g. `createOrdersColumns`, `createInventoryColumns`).
+2. Column state is controlled via `useServerTableState`, which emits a normalized `QuerySpec` object whenever filters or sorts change.
+3. Page wrappers (e.g. `OrdersTableWrapper`, `InventoryTableWrapper`) pass that `QuerySpec` to Convex queries (`listOrdersFiltered`, `listInventoryItemsFiltered`), translate the response, and feed it back into the table.
+4. Filter state coming back from the server is translated through `querySpecToColumnFilters` to keep UI in sync.
+
+### Filter UI Patterns
+
+- **Number ranges** use `NumberRangeFilterInline`, which now renders a popover trigger. Always pass a column id that matches the column definition and ensure the column uses `manualNumberRangeFilter`.
+  - Popover summary shows `≥ min` / `≤ max` when set.
+  - `Apply` commits the draft values; `Clear` sends `undefined` back through TanStack and Convex.
+- **Date ranges** use `DateRangeFilterInline`. When adding new date columns, remember to:
+  - Set `meta.filterType: "date"`.
+  - Attach `manualDateRangeFilter` to prevent TanStack from discarding the `{start, end}` object before it reaches `useServerTableState`.
+- **Text filters** still use debounce. Avoid forcing synchronous updates so that server requests remain batched.
+
+### Implementation Checklist for New Tables/Columns
+
+1. Define columns via `createColumn` with explicit `id` (or `accessorKey`) and `meta.filterType`.
+2. Assign the appropriate manual filter function (`manualNumberRangeFilter`, `manualDateRangeFilter`, or leave default for text/select).
+3. Use `useServerTableState` in the wrapper to translate TanStack state into Convex `QuerySpec` objects.
+4. Convert incoming server filters back into TanStack format using `querySpecToColumnFilters` so pagination/filter UI stays hydrated on refresh.
+5. When introducing custom filter UI (e.g. popovers), keep internal draft state separate from committed filter state to avoid update loops.
+6. Update the backend query validators/handlers to honor any new filter keys before wiring them through the table.
+
+### Additional Documentation Backlog
+
+- **Testing Matrix** – Document how we validate filters/sorts (unit tests around `columnFiltersToQuerySpec` plus integration checks on wrapper components).
+- **Performance Guardrails** – Clarify page-size limits, debounce defaults, and when to prefer contains vs prefix searches to protect Convex query costs.
+- **Extensibility Guide** – Provide a worked example for adding a new table (catalog or reports) so future devs can follow a repeatable pattern without re-discovering server/table wiring details.

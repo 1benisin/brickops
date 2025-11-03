@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 interface NumberRangeFilterProps {
   columnId: string;
   value?: { min?: number; max?: number };
-  onChange: (value: { min?: number; max?: number }) => void;
+  onChange: (value: { min?: number; max?: number } | undefined) => void;
   placeholder?: { min?: string; max?: string };
   currency?: boolean;
   step?: number;
@@ -21,12 +21,8 @@ export function NumberRangeFilter({
   currency = false,
   step = 1,
 }: NumberRangeFilterProps) {
-  const [min, setMin] = React.useState<string>(
-    value?.min?.toString() || ""
-  );
-  const [max, setMax] = React.useState<string>(
-    value?.max?.toString() || ""
-  );
+  const [min, setMin] = React.useState<string>(value?.min?.toString() || "");
+  const [max, setMax] = React.useState<string>(value?.max?.toString() || "");
 
   React.useEffect(() => {
     const minNum = min === "" ? undefined : parseFloat(min);
@@ -37,7 +33,12 @@ export function NumberRangeFilter({
       return; // Don't update if invalid
     }
 
-    onChange({ min: minNum, max: maxNum });
+    // Only pass filter value if at least one is defined, otherwise pass undefined to clear filter
+    if (minNum !== undefined || maxNum !== undefined) {
+      onChange({ min: minNum, max: maxNum });
+    } else {
+      onChange(undefined); // Clear filter when both are empty
+    }
   }, [min, max, onChange]);
 
   const formatDisplayValue = (val: string) => {
@@ -58,6 +59,7 @@ export function NumberRangeFilter({
           value={formatDisplayValue(min)}
           onChange={(e) => setMin(e.target.value)}
           placeholder={placeholder?.min || "Min"}
+          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </div>
       <div className="space-y-1">
@@ -69,9 +71,9 @@ export function NumberRangeFilter({
           value={formatDisplayValue(max)}
           onChange={(e) => setMax(e.target.value)}
           placeholder={placeholder?.max || "Max"}
+          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </div>
     </div>
   );
 }
-

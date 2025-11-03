@@ -2,9 +2,20 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
-import { createColumn } from "@/components/ui/data-table/column-definitions";
+import {
+  createColumn,
+  type EnhancedColumnMeta,
+} from "@/components/ui/data-table/column-definitions";
+import {
+  manualNumberRangeFilter,
+  manualDateRangeFilter,
+} from "@/components/ui/data-table/utils/filter-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Doc } from "@/convex/_generated/dataModel";
+
+const createOrderColumn = <TValue = unknown,>(
+  config: ColumnDef<Order, TValue> & { meta?: EnhancedColumnMeta<Order, TValue> },
+) => createColumn<Order, TValue>(config);
 
 // Type definition for Order from Convex schema
 export type Order = Doc<"bricklinkOrders">;
@@ -64,7 +75,7 @@ const PaymentStatusBadge = ({ status }: { status?: string }) => {
 export const createOrdersColumns = (): ColumnDef<Order>[] => {
   return [
     // Order ID column
-    createColumn({
+    createOrderColumn({
       id: "orderId",
       accessorKey: "orderId",
       meta: {
@@ -82,13 +93,14 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       cell: ({ row }) => <div className="font-medium font-mono">{row.getValue("orderId")}</div>,
     }),
     // Date Ordered column
-    createColumn({
+    createOrderColumn({
       id: "dateOrdered",
       accessorKey: "dateOrdered",
       meta: {
         label: "Date Ordered",
         filterType: "date",
       },
+      filterFn: manualDateRangeFilter<Order>(),
       header: "Date Ordered",
       enableSorting: true,
       enableColumnFilter: true,
@@ -101,7 +113,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Buyer Name column
-    createColumn({
+    createOrderColumn({
       id: "buyerName",
       accessorKey: "buyerName",
       meta: {
@@ -123,7 +135,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       ),
     }),
     // Status column
-    createColumn({
+    createOrderColumn({
       id: "status",
       accessorKey: "status",
       meta: {
@@ -146,13 +158,14 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       cell: ({ row }) => <StatusBadge status={row.getValue("status")} />,
     }),
     // Total Count column
-    createColumn({
+    createOrderColumn({
       id: "totalCount",
       accessorKey: "totalCount",
       meta: {
         label: "Items",
         filterType: "number",
       },
+      filterFn: manualNumberRangeFilter<Order>(),
       header: () => <div className="text-right">Items</div>,
       enableSorting: true,
       enableColumnFilter: true,
@@ -165,13 +178,14 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Unique Count column
-    createColumn({
+    createOrderColumn({
       id: "uniqueCount",
       accessorKey: "uniqueCount",
       meta: {
         label: "Unique Items",
         filterType: "number",
       },
+      filterFn: manualNumberRangeFilter<Order>(),
       header: () => <div className="text-right">Unique</div>,
       enableSorting: true,
       enableColumnFilter: true,
@@ -184,7 +198,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Grand Total column
-    createColumn({
+    createOrderColumn({
       id: "costGrandTotal",
       accessorFn: (row) => row.costGrandTotal,
       meta: {
@@ -195,6 +209,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
           step: 0.01,
         },
       },
+      filterFn: manualNumberRangeFilter<Order>(),
       header: () => <div className="text-right">Grand Total</div>,
       enableSorting: true,
       enableColumnFilter: true,
@@ -209,7 +224,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Payment Status column
-    createColumn({
+    createOrderColumn({
       id: "paymentStatus",
       accessorKey: "paymentStatus",
       meta: {
@@ -231,7 +246,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       cell: ({ row }) => <PaymentStatusBadge status={row.getValue("paymentStatus")} />,
     }),
     // Payment Method column
-    createColumn({
+    createOrderColumn({
       id: "paymentMethod",
       accessorKey: "paymentMethod",
       meta: {
@@ -257,7 +272,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Shipping Method column
-    createColumn({
+    createOrderColumn({
       id: "shippingMethod",
       accessorKey: "shippingMethod",
       meta: {
@@ -283,13 +298,14 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Date Status Changed column
-    createColumn({
+    createOrderColumn({
       id: "dateStatusChanged",
       accessorKey: "dateStatusChanged",
       meta: {
         label: "Status Changed",
         filterType: "date",
       },
+      filterFn: manualDateRangeFilter<Order>(),
       header: "Status Changed",
       enableSorting: true,
       enableColumnFilter: true,
@@ -302,7 +318,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Subtotal column
-    createColumn({
+    createOrderColumn({
       id: "costSubtotal",
       accessorFn: (row) => row.costSubtotal,
       meta: {
@@ -313,6 +329,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
           step: 0.01,
         },
       },
+      filterFn: manualNumberRangeFilter<Order>(),
       header: () => <div className="text-right">Subtotal</div>,
       enableSorting: true,
       enableColumnFilter: true,
@@ -331,7 +348,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
       },
     }),
     // Shipping Cost column
-    createColumn({
+    createOrderColumn({
       id: "costShipping",
       accessorFn: (row) => row.costShipping,
       meta: {
@@ -342,6 +359,7 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
           step: 0.01,
         },
       },
+      filterFn: manualNumberRangeFilter<Order>(),
       header: () => <div className="text-right">Shipping</div>,
       enableSorting: true,
       enableColumnFilter: true,

@@ -106,6 +106,10 @@ export function useServerTableState<TData>({
       const newFilters = typeof updater === "function" ? updater(columnFilters) : updater;
       setColumnFilters(newFilters);
 
+      if (newFilters.length > 0) {
+        console.log("useServerTableState newFilters", newFilters);
+      }
+
       // Check if any text filters changed (need debouncing)
       const hasTextFilters = newFilters.some((filter) => {
         const columnDef = columnMap.get(filter.id);
