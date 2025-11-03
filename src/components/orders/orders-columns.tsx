@@ -177,24 +177,99 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
         return <div className="text-right font-mono font-medium">{count.toLocaleString()}</div>;
       },
     }),
-    // Unique Count column
+    // Lot Count column
     createOrderColumn({
-      id: "uniqueCount",
-      accessorKey: "uniqueCount",
+      id: "lotCount",
+      accessorFn: (row) => {
+        // Handle migration: fallback to uniqueCount if lotCount doesn't exist yet
+        return (row.lotCount ?? (row as { uniqueCount?: number }).uniqueCount ?? 0) as number;
+      },
       meta: {
-        label: "Unique Items",
+        label: "Lot Count",
         filterType: "number",
       },
       filterFn: manualNumberRangeFilter<Order>(),
-      header: () => <div className="text-right">Unique</div>,
+      header: () => <div className="text-right">Lots</div>,
       enableSorting: true,
       enableColumnFilter: true,
       size: 100,
       minSize: 80,
       maxSize: 150,
       cell: ({ row }) => {
-        const count = row.getValue("uniqueCount") as number;
+        const count = row.getValue("lotCount") as number;
         return <div className="text-right font-mono">{count.toLocaleString()}</div>;
+      },
+    }),
+    // Price per Lot column
+    createOrderColumn({
+      id: "pricePerLot",
+      accessorFn: (row) => {
+        const subtotal = row.costSubtotal ?? 0;
+        const lotCount = row.lotCount ?? (row as { uniqueCount?: number }).uniqueCount ?? 0;
+        return lotCount > 0 ? subtotal / lotCount : 0;
+      },
+      meta: {
+        label: "Price per Lot",
+        filterType: "number",
+        filterConfig: {
+          currency: true,
+          step: 0.01,
+        },
+      },
+      filterFn: manualNumberRangeFilter<Order>(),
+      header: () => <div className="text-right">Price/Lot</div>,
+      enableSorting: true,
+      enableColumnFilter: true,
+      size: 110,
+      minSize: 90,
+      maxSize: 150,
+      cell: ({ row }) => {
+        const order = row.original;
+        const subtotal = order.costSubtotal ?? 0;
+        const lotCount = order.lotCount ?? (order as { uniqueCount?: number }).uniqueCount ?? 0;
+        const pricePerLot = lotCount > 0 ? subtotal / lotCount : 0;
+        const currencyCode = order.costCurrencyCode || "USD";
+        return (
+          <div className="text-right text-sm font-mono">
+            {formatCurrency(pricePerLot, currencyCode)}
+          </div>
+        );
+      },
+    }),
+    // Price per Part column
+    createOrderColumn({
+      id: "pricePerPart",
+      accessorFn: (row) => {
+        const subtotal = row.costSubtotal ?? 0;
+        const totalCount = row.totalCount ?? 0;
+        return totalCount > 0 ? subtotal / totalCount : 0;
+      },
+      meta: {
+        label: "Price per Part",
+        filterType: "number",
+        filterConfig: {
+          currency: true,
+          step: 0.01,
+        },
+      },
+      filterFn: manualNumberRangeFilter<Order>(),
+      header: () => <div className="text-right">Price/Part</div>,
+      enableSorting: true,
+      enableColumnFilter: true,
+      size: 110,
+      minSize: 90,
+      maxSize: 150,
+      cell: ({ row }) => {
+        const order = row.original;
+        const subtotal = order.costSubtotal ?? 0;
+        const totalCount = order.totalCount ?? 0;
+        const pricePerPart = totalCount > 0 ? subtotal / totalCount : 0;
+        const currencyCode = order.costCurrencyCode || "USD";
+        return (
+          <div className="text-right text-sm font-mono">
+            {formatCurrency(pricePerPart, currencyCode)}
+          </div>
+        );
       },
     }),
     // Grand Total column

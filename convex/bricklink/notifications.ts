@@ -316,7 +316,7 @@ export const upsertOrder = internalMutation({
       salesTaxCollectedByBl: order.salesTax_collected_by_bl,
       remarks: order.remarks,
       totalCount: order.total_count,
-      uniqueCount: order.unique_count,
+      lotCount: order.unique_count,
       totalWeight: order.total_weight ? parseFloat(order.total_weight) : undefined,
       paymentMethod: order.payment?.method,
       paymentCurrencyCode: order.payment?.currency_code,

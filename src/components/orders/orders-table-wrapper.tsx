@@ -95,10 +95,10 @@ export function OrdersTableWrapper() {
           };
         }
       }
-      if (filters.uniqueCount && filters.uniqueCount.kind === "numberRange") {
-        const range = filters.uniqueCount;
+      if (filters.lotCount && filters.lotCount.kind === "numberRange") {
+        const range = filters.lotCount;
         if (range.min !== undefined || range.max !== undefined) {
-          ordersFilters.uniqueCount = {
+          ordersFilters.lotCount = {
             kind: "numberRange",
             min: range.min,
             max: range.max,

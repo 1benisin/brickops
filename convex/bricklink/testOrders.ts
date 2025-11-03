@@ -481,7 +481,7 @@ export const listTestOrders = query({
       status: order.status,
       dateOrdered: order.dateOrdered,
       totalCount: order.totalCount,
-      uniqueCount: order.uniqueCount,
+      lotCount: order.lotCount,
       costGrandTotal: order.costGrandTotal,
     }));
   },
