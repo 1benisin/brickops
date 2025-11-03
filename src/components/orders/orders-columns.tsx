@@ -2,6 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   createColumn,
   type EnhancedColumnMeta,
@@ -74,6 +75,40 @@ const PaymentStatusBadge = ({ status }: { status?: string }) => {
 
 export const createOrdersColumns = (): ColumnDef<Order>[] => {
   return [
+    // Selection column
+    createColumn({
+      id: "select",
+      meta: { label: "Select" },
+      size: 40,
+      minSize: 40,
+      maxSize: 40,
+      enableResizing: false,
+      enableHiding: false,
+      enableSorting: false,
+      header: (info) => {
+        const { table, column } = info;
+        if (!table || !column) {
+          return <Checkbox checked={false} aria-label="Select all" disabled />;
+        }
+        return (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all"
+          />
+        );
+      },
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      ),
+    }),
     // Order ID column
     createOrderColumn({
       id: "orderId",

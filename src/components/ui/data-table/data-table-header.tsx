@@ -54,12 +54,12 @@ export function DataTableHeader<TData, TValue>({
   return (
     <div className="flex flex-col">
       {/* Header with sort button */}
-      <div className="flex items-center space-x-2">
+      <div className="w-full">
         {canSort ? (
           <Button
             variant="ghost"
             className={cn(
-              "h-8 data-[state=open]:bg-accent -ml-3 hover:bg-accent",
+              "w-full h-7 justify-between px-3 text-left font-normal text-xs hover:bg-accent",
               sortDirection && "bg-accent",
             )}
             onClick={() => {
@@ -68,19 +68,19 @@ export function DataTableHeader<TData, TValue>({
               onSort?.(header.column.id);
             }}
           >
-            <span>{headerContent}</span>
-            <span className="ml-2">
+            <span className="truncate">{headerContent}</span>
+            <span className="ml-2 flex-shrink-0">
               {sortDirection === "asc" ? (
-                <ArrowUp className="h-4 w-4" />
+                <ArrowUp className="h-3 w-3" />
               ) : sortDirection === "desc" ? (
-                <ArrowDown className="h-4 w-4" />
+                <ArrowDown className="h-3 w-3" />
               ) : (
-                <ArrowUpDown className="h-4 w-4 opacity-50" />
+                <ArrowUpDown className="h-3 w-3 opacity-50" />
               )}
             </span>
           </Button>
         ) : (
-          <div>{headerContent}</div>
+          <div className="h-7 flex items-center px-3 text-xs font-normal">{headerContent}</div>
         )}
       </div>
 

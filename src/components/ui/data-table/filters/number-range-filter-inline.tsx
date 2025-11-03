@@ -108,9 +108,13 @@ export function NumberRangeFilterInline({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant={hasMin || hasMax ? "default" : "outline"} size="sm" className="h-8 gap-2">
-          <SlidersHorizontal className="h-4 w-4" />
-          <span className="text-xs font-medium">{summary}</span>
+        <Button
+          variant={hasMin || hasMax ? "default" : "outline"}
+          size="sm"
+          className="w-full h-7 justify-start text-left font-normal text-xs gap-2"
+        >
+          <SlidersHorizontal className="h-3 w-3" />
+          <span className="truncate">{summary}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 space-y-4 p-4">

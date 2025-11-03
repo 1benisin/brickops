@@ -4,15 +4,14 @@ import { useMemo, useCallback, useState, useEffect } from "react";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTablePagination } from "@/components/ui/data-table/data-table-pagination";
 import { createOrdersColumns, type Order } from "./orders-columns";
+import { OrdersBulkActions } from "./orders-bulk-actions";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { OrdersQuerySpec } from "@/convex/marketplace/queries";
 import { useServerTableState } from "@/components/ui/data-table/hooks/use-server-table-state";
 
-const ORDERS_COLUMNS = createOrdersColumns();
-
 export function OrdersTableWrapper() {
-  const columns = useMemo(() => ORDERS_COLUMNS, []);
+  const columns = useMemo(() => createOrdersColumns(), []);
 
   // Use the new server table state hook
   const {
@@ -258,11 +257,15 @@ export function OrdersTableWrapper() {
         onPaginationChange={onPaginationChange}
         // Legacy props for backward compatibility (will be removed after migration)
         columnFilters={legacyColumnFilters}
-        toolbarPlaceholder="Search order IDs..."
+        enableToolbar={false}
         enableColumnVisibility={true}
         enableColumnOrdering={true}
         enableColumnSizing={true}
+        enableRowSelection={true}
+        persistSelection={true}
+        pinnedStartColumns={["select"]}
         getRowId={getRowId}
+        bulkActions={(props) => <OrdersBulkActions selectedRows={props.selectedRows} />}
         isLoading={isInitialLoading}
         loadingState={
           <div className="flex items-center justify-center h-48">

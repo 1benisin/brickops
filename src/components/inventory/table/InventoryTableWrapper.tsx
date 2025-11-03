@@ -302,23 +302,6 @@ export function InventoryTableWrapper({
     [data],
   );
 
-  // Handle filter changes (text prefix search for part number)
-  const handleFilterChange = useCallback((value: string) => {
-    setQuerySpec((prev: QuerySpec) => {
-      const newFilters = { ...prev.filters };
-      if (value) {
-        newFilters.partNumber = { kind: "prefix", value };
-      } else {
-        delete newFilters.partNumber;
-      }
-      return {
-        ...prev,
-        filters: Object.keys(newFilters).length > 0 ? newFilters : undefined,
-        pagination: { ...prev.pagination, cursor: undefined }, // Reset to first page
-      };
-    });
-  }, []);
-
   // Handle column filter changes (server-side or client-side)
   const handleColumnFilterChange = useCallback(
     (columnId: string, value: unknown) => {
@@ -537,11 +520,10 @@ export function InventoryTableWrapper({
               }))
         }
         onSortChange={handleSortChange}
-        onGlobalFilterChange={!data ? handleFilterChange : undefined}
+        enableToolbar={false}
         enableFiltering={true}
         onColumnFilterChange={handleColumnFilterChange}
         columnFilters={columnFilters}
-        toolbarPlaceholder="Search part numbers..."
         enableRowSelection={true}
         onRowSelect={setSelectedRows}
         bulkActions={(props) => <InventoryBulkActions selectedRows={props.selectedRows} />}
