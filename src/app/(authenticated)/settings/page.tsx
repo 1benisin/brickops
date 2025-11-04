@@ -63,6 +63,9 @@ export default function SettingsPage() {
   const isDevEnvironment = useQuery(api.bricklink.testOrders.isDevelopmentEnvironment);
   const createBulkTestOrders = useMutation(api.bricklink.testOrders.createBulkTestOrders);
   const deleteAllOrders = useMutation(api.bricklink.testOrders.deleteAllOrders);
+  const triggerTestWebhook = useMutation(api.bricklink.testWebhooks.triggerTestWebhookNotification);
+  const generateMockInventory = useMutation(api.inventory.testInventory.generateMockInventoryItems);
+  const deleteAllInventory = useMutation(api.inventory.testInventory.deleteAllInventoryItems);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -87,10 +90,15 @@ export default function SettingsPage() {
   // Development tools state
   const [isCreatingOrders, setIsCreatingOrders] = useState(false);
   const [isDeletingOrders, setIsDeletingOrders] = useState(false);
+  const [isTriggeringWebhook, setIsTriggeringWebhook] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [devMessage, setDevMessage] = useState<{ type: "success" | "error"; text: string } | null>(
     null,
   );
+  const [mockInventoryCount, setMockInventoryCount] = useState(30);
+  const [isGeneratingInventory, setIsGeneratingInventory] = useState(false);
+  const [isDeletingInventory, setIsDeletingInventory] = useState(false);
+  const [inventoryDeleteDialogOpen, setInventoryDeleteDialogOpen] = useState(false);
 
   // Tab state management with URL sync
   const [activeTab, setActiveTab] = useState(() => {
@@ -103,6 +111,24 @@ export default function SettingsPage() {
   };
 
   // Development tools handlers
+  const handleTriggerTestWebhook = async () => {
+    setIsTriggeringWebhook(true);
+    setDevMessage(null);
+    try {
+      const result = await triggerTestWebhook();
+      setDevMessage({
+        type: "success",
+        text: result.message || "Test webhook notification processed successfully",
+      });
+      setTimeout(() => setDevMessage(null), 5000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to trigger test webhook";
+      setDevMessage({ type: "error", text: message });
+    } finally {
+      setIsTriggeringWebhook(false);
+    }
+  };
+
   const handleCreateTestOrders = async () => {
     setIsCreatingOrders(true);
     setDevMessage(null);
@@ -140,6 +166,45 @@ export default function SettingsPage() {
       setDeleteDialogOpen(false);
     } finally {
       setIsDeletingOrders(false);
+    }
+  };
+
+  const handleGenerateMockInventory = async () => {
+    setIsGeneratingInventory(true);
+    setDevMessage(null);
+    try {
+      const result = await generateMockInventory({ count: mockInventoryCount });
+      setDevMessage({
+        type: "success",
+        text: `Successfully created ${result.created} of ${result.requested} mock inventory items.${
+          result.errors ? ` ${result.errors.length} errors occurred.` : ""
+        }`,
+      });
+      setTimeout(() => setDevMessage(null), 5000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to generate mock inventory";
+      setDevMessage({ type: "error", text: message });
+    } finally {
+      setIsGeneratingInventory(false);
+    }
+  };
+
+  const handleDeleteAllInventory = async () => {
+    setIsDeletingInventory(true);
+    setDevMessage(null);
+    setInventoryDeleteDialogOpen(false);
+    try {
+      const result = await deleteAllInventory({});
+      setDevMessage({
+        type: "success",
+        text: `Successfully deleted ${result.deletedItems} inventory items, ${result.deletedQuantityLedgerEntries} quantity ledger entries, and ${result.deletedLocationLedgerEntries} location ledger entries.`,
+      });
+      setTimeout(() => setDevMessage(null), 5000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete inventory";
+      setDevMessage({ type: "error", text: message });
+    } finally {
+      setIsDeletingInventory(false);
     }
   };
 
@@ -731,6 +796,23 @@ export default function SettingsPage() {
                   </Button>
                 </div>
 
+                {/* Trigger Test Webhook Notification */}
+                <div className="space-y-2 border-t pt-4">
+                  <h3 className="text-sm font-medium text-foreground">Test Webhook Notification</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Simulate a BrickLink webhook notification. Creates a test order through the full
+                    webhook processing flow using items from your inventory.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handleTriggerTestWebhook}
+                    disabled={isTriggeringWebhook}
+                    data-testid="trigger-test-webhook-button"
+                  >
+                    {isTriggeringWebhook ? "Processing..." : "Trigger Test BrickLink Order"}
+                  </Button>
+                </div>
+
                 {/* Delete All Orders */}
                 <div className="space-y-2 border-t pt-4">
                   <h3 className="text-sm font-medium text-foreground text-destructive">
@@ -748,6 +830,55 @@ export default function SettingsPage() {
                     data-testid="delete-all-orders-button"
                   >
                     {isDeletingOrders ? "Deleting..." : "Delete All Orders"}
+                  </Button>
+                </div>
+
+                {/* Mock Inventory Generation */}
+                <div className="space-y-2 border-t pt-4">
+                  <h3 className="text-sm font-medium text-foreground">Mock Inventory</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Generate mock inventory items using random parts and colors from your catalog.
+                    Items will have random locations (A1-Z9), quantities (1-100), and prices
+                    ($0.01-$10.00).
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={mockInventoryCount}
+                      onChange={(e) => setMockInventoryCount(parseInt(e.target.value) || 30)}
+                      className="w-24"
+                      data-testid="mock-inventory-count-input"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleGenerateMockInventory}
+                      disabled={isGeneratingInventory}
+                      data-testid="generate-mock-inventory-button"
+                    >
+                      {isGeneratingInventory ? "Generating..." : "Generate Mock Inventory"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Delete All Inventory */}
+                <div className="space-y-2 border-t pt-4">
+                  <h3 className="text-sm font-medium text-foreground text-destructive">
+                    Delete All Inventory
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Permanently delete all inventory items and ledger entries for this business
+                    account. This action cannot be undone.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setInventoryDeleteDialogOpen(true)}
+                    disabled={isDeletingInventory}
+                    data-testid="delete-all-inventory-button"
+                  >
+                    {isDeletingInventory ? "Deleting..." : "Delete All Inventory"}
                   </Button>
                 </div>
 
@@ -789,6 +920,30 @@ export default function SettingsPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeletingOrders ? "Deleting..." : "Delete All Orders"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete All Inventory Confirmation Dialog */}
+      <AlertDialog open={inventoryDeleteDialogOpen} onOpenChange={setInventoryDeleteDialogOpen}>
+        <AlertDialogContent data-testid="delete-inventory-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete All Inventory?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all inventory items and ledger entries for this business
+              account. This action cannot be undone. Are you sure you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingInventory}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="confirm-delete-inventory-button"
+              onClick={handleDeleteAllInventory}
+              disabled={isDeletingInventory}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingInventory ? "Deleting..." : "Delete All Inventory"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
