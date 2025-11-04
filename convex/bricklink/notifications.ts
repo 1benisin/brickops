@@ -14,6 +14,7 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { createBricklinkStoreClient } from "../marketplace/helpers";
 import type { BricklinkOrderResponse, BricklinkOrderItemResponse } from "./storeClient";
+import { getNextSeqForItem, getCurrentAvailableFromLedger } from "../inventory/helpers";
 
 const MAX_PROCESSING_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 60000; // 1 minute
@@ -271,10 +272,13 @@ export const updateNotificationStatus = internalMutation({
 export const upsertOrder = internalMutation({
   args: {
     businessAccountId: v.id("businessAccounts"),
-    orderData: v.any(), // BricklinkOrderResponse
-    orderItemsData: v.any(), // BricklinkOrderItemResponse[][]
+    // Note: Using v.any() for complex external API types - these are validated at API boundaries
+    // Type assertions below ensure type safety in handler
+    orderData: v.any(), // BricklinkOrderResponse - complex nested object from BrickLink API
+    orderItemsData: v.any(), // BricklinkOrderItemResponse[][] - array of batches from BrickLink API
   },
   handler: async (ctx, args) => {
+    // Type assertions for external API data (validated at API call site)
     const order = args.orderData as BricklinkOrderResponse;
     const items = args.orderItemsData as BricklinkOrderItemResponse[][];
 
@@ -367,8 +371,75 @@ export const upsertOrder = internalMutation({
     }
 
     // Insert order items (flatten nested arrays - batches)
+    // Generate correlation ID once for all items in this order
+    const correlationId = crypto.randomUUID();
+
     for (const batch of items) {
       for (const item of batch) {
+        // Get location from order item remarks (BrickLink API provides location in remarks field)
+        const location = item.remarks || "UNKNOWN";
+
+        // Match with inventory item using partNumber, colorId, condition, AND location
+        const matchedInventoryItem = await ctx.db
+          .query("inventoryItems")
+          .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", args.businessAccountId))
+          .filter((q) =>
+            q.and(
+              q.eq(q.field("partNumber"), item.item.no),
+              q.eq(q.field("colorId"), item.color_id.toString()),
+              q.eq(q.field("condition"), item.new_or_used === "N" ? "new" : "used"),
+              q.eq(q.field("location"), location),
+            ),
+          )
+          .first();
+
+        // Update inventory quantities if matched
+        if (matchedInventoryItem) {
+          const quantityOrdered = item.quantity;
+
+          // Update inventory item
+          await ctx.db.patch(matchedInventoryItem._id, {
+            quantityAvailable: matchedInventoryItem.quantityAvailable - quantityOrdered,
+            quantityReserved: (matchedInventoryItem.quantityReserved || 0) + quantityOrdered,
+            updatedAt: now,
+          });
+
+          // Write to quantity ledger
+          const seq = await getNextSeqForItem(ctx.db, matchedInventoryItem._id);
+          const preAvailable = await getCurrentAvailableFromLedger(
+            ctx.db,
+            matchedInventoryItem._id,
+          );
+          const postAvailable = preAvailable - quantityOrdered;
+
+          await ctx.db.insert("inventoryQuantityLedger", {
+            businessAccountId: args.businessAccountId,
+            itemId: matchedInventoryItem._id,
+            timestamp: now,
+            seq,
+            preAvailable,
+            postAvailable,
+            deltaAvailable: -quantityOrdered,
+            reason: "order_sale",
+            source: "bricklink",
+            orderId: order.order_id,
+            correlationId,
+          });
+
+          // TODO: Sync inventory quantity changes to OTHER marketplaces (not BrickLink)
+          // Since this order originated from BrickLink, BrickLink already knows about the quantity change.
+          // We need to sync this change to other configured marketplaces (e.g., BrickOwl)
+          // to keep their inventory quantities in sync.
+          // Implementation should:
+          // 1. Get all configured providers (excluding "bricklink")
+          // 2. For each provider, call enqueueMarketplaceSync with:
+          //    - provider: "brickowl" (or other non-bricklink provider)
+          //    - kind: "update"
+          //    - lastSyncedSeq: matchedInventoryItem.marketplaceSync?.[provider]?.lastSyncedSeq ?? 0
+          //    - currentSeq: seq
+          // Example pattern from inventory/mutations.ts lines 156-169
+        }
+
         await ctx.db.insert("bricklinkOrderItems", {
           businessAccountId: args.businessAccountId,
           orderId: order.order_id,
@@ -388,6 +459,8 @@ export const upsertOrder = internalMutation({
           remarks: item.remarks,
           description: item.description,
           weight: item.weight ? parseFloat(item.weight) : undefined,
+          location,
+          status: "unpicked",
           createdAt: now,
           updatedAt: now,
         });

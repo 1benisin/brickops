@@ -11,6 +11,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { BricklinkOrderResponse, BricklinkOrderItemResponse } from "./storeClient";
 import { requireActiveUser } from "../users/helpers";
+import type { Id } from "../_generated/dataModel";
 
 /**
  * Check if we're in development mode
@@ -223,10 +224,165 @@ async function getRandomColors(
 }
 
 /**
+ * Create default test inventory items if none exist
+ * This ensures test orders can always be created
+ */
+async function createDefaultTestInventoryItems(
+  ctx: MutationCtx,
+  businessAccountId: Id<"businessAccounts">,
+  userId: Id<"users">,
+): Promise<void> {
+  const now = Date.now();
+
+  // Default test inventory items with common LEGO parts
+  const defaultItems = [
+    {
+      partNumber: "3001",
+      name: "Brick 2 x 4",
+      colorId: "0", // Black
+      location: "A-1",
+      condition: "new" as const,
+      quantityAvailable: 50,
+    },
+    {
+      partNumber: "3002",
+      name: "Brick 2 x 3",
+      colorId: "1", // Blue
+      location: "A-2",
+      condition: "new" as const,
+      quantityAvailable: 30,
+    },
+    {
+      partNumber: "3004",
+      name: "Brick 1 x 2",
+      colorId: "4", // Red
+      location: "A-3",
+      condition: "new" as const,
+      quantityAvailable: 40,
+    },
+    {
+      partNumber: "3020",
+      name: "Plate 2 x 4",
+      colorId: "85", // Dark Bluish Gray
+      location: "B-1",
+      condition: "new" as const,
+      quantityAvailable: 35,
+    },
+    {
+      partNumber: "3622",
+      name: "Brick 1 x 3",
+      colorId: "86", // Light Bluish Gray
+      location: "B-2",
+      condition: "new" as const,
+      quantityAvailable: 25,
+    },
+    {
+      partNumber: "3710",
+      name: "Plate 1 x 4",
+      colorId: "0", // Black
+      location: "B-3",
+      condition: "new" as const,
+      quantityAvailable: 45,
+    },
+  ];
+
+  // Create inventory items
+  for (const item of defaultItems) {
+    await ctx.db.insert("inventoryItems", {
+      businessAccountId,
+      name: item.name,
+      partNumber: item.partNumber,
+      colorId: item.colorId,
+      location: item.location,
+      quantityAvailable: item.quantityAvailable,
+      quantityReserved: 0,
+      condition: item.condition,
+      createdBy: userId,
+      createdAt: now,
+      marketplaceSync: {
+        bricklink: {
+          status: "synced",
+          lastSyncAttempt: now,
+        },
+        brickowl: {
+          status: "synced",
+          lastSyncAttempt: now,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Get random inventory items from database for test order generation
+ * If no inventory items exist, creates default test inventory items
+ */
+async function getRandomInventoryItems(
+  ctx: MutationCtx,
+  businessAccountId: Id<"businessAccounts">,
+  userId: Id<"users">,
+  count: number,
+): Promise<
+  Array<{
+    _id: string;
+    partNumber: string;
+    name: string;
+    colorId: string;
+    colorName?: string;
+    condition: "new" | "used";
+    location: string;
+    quantityAvailable: number;
+  }>
+> {
+  // Query all inventory items for the business account
+  // Note: We don't filter by isArchived since it's optional and may not be set on existing items
+  const allItems = await ctx.db
+    .query("inventoryItems")
+    .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
+    .collect();
+
+  // If no items exist, create default test inventory items
+  if (allItems.length === 0) {
+    await createDefaultTestInventoryItems(ctx, businessAccountId, userId);
+    // Query again after creating defaults
+    const newItems = await ctx.db
+      .query("inventoryItems")
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
+      .collect();
+
+    const shuffled = [...newItems].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, Math.min(count, shuffled.length)).map((item) => ({
+      _id: item._id.toString(),
+      partNumber: item.partNumber,
+      name: item.name,
+      colorId: item.colorId,
+      condition: item.condition,
+      location: item.location,
+      quantityAvailable: item.quantityAvailable,
+    }));
+  }
+
+  // Shuffle and pick random items
+  const shuffled = [...allItems].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(count, shuffled.length)).map((item) => ({
+    _id: item._id.toString(),
+    partNumber: item.partNumber,
+    name: item.name,
+    colorId: item.colorId,
+    condition: item.condition,
+    location: item.location,
+    quantityAvailable: item.quantityAvailable,
+  }));
+}
+
+/**
  * Create test order data with random parts from database
+ * IMPORTANT: Only creates order items from existing inventory items to ensure matching
  */
 async function createTestOrderDataWithParts(
   ctx: MutationCtx,
+  businessAccountId: Id<"businessAccounts">,
+  userId: Id<"users">,
   overrides?: {
     orderId?: string;
     buyerName?: string;
@@ -243,9 +399,20 @@ async function createTestOrderDataWithParts(
   const status = overrides?.status || "PENDING";
   const itemCount = overrides?.itemCount || 3;
 
-  // Get random parts and colors from database
-  const parts = await getRandomParts(ctx, itemCount + 5); // Get a few extra in case we need more
-  const colors = await getRandomColors(ctx, itemCount + 5);
+  // Get random inventory items from database (ensures we have matching items)
+  // This will automatically create default test inventory items if none exist
+  const inventoryItems = await getRandomInventoryItems(
+    ctx,
+    businessAccountId,
+    userId,
+    itemCount + 5,
+  );
+
+  if (inventoryItems.length === 0) {
+    throw new Error(
+      "Failed to create or find inventory items. Please ensure you have inventory items or check the logs.",
+    );
+  }
 
   // Create realistic test order
   const orderData: BricklinkOrderResponse = {
@@ -299,33 +466,56 @@ async function createTestOrderDataWithParts(
     },
   };
 
-  // Create test order items using real parts from database
+  // Create test order items from existing inventory items
+  // This ensures we have matching inventory items for picking
   const items: BricklinkOrderItemResponse[] = [];
 
-  for (let i = 0; i < itemCount; i++) {
-    const part = parts[i % parts.length];
-    const color = colors[i % colors.length];
-    const quantity = Math.floor(Math.random() * 5) + 1; // 1-5
+  for (let i = 0; i < itemCount && i < inventoryItems.length; i++) {
+    const inventoryItem = inventoryItems[i % inventoryItems.length];
+
+    // Generate random positive quantity (1-10), not bounded by available
+    const quantity = Math.floor(Math.random() * 10) + 1;
+
+    // Get the actual inventory item document to update it
+    const inventoryItemId = inventoryItem._id as Id<"inventoryItems">;
+    const inventoryItemDoc = await ctx.db.get(inventoryItemId);
+
+    if (inventoryItemDoc) {
+      // Set reserved quantity to 0 so after upsertOrder adds quantity,
+      // reserved will equal the order quantity
+      await ctx.db.patch(inventoryItemId, {
+        quantityReserved: 0,
+        updatedAt: Date.now(),
+      });
+    }
+
     const basePrice = 0.5 + Math.random() * 4.5; // $0.50-$5.00
+
+    // Get color name from colors table if available
+    const color = await ctx.db
+      .query("colors")
+      .filter((q) => q.eq(q.field("colorId"), parseInt(inventoryItem.colorId)))
+      .first();
 
     items.push({
       inventory_id: 1000000 + i,
       item: {
-        no: part.no,
-        name: part.name,
+        no: inventoryItem.partNumber,
+        name: inventoryItem.name,
         type: "PART",
-        category_id: part.categoryId,
+        category_id: undefined, // Will be set from parts table if needed
       },
-      color_id: color.colorId,
-      color_name: color.colorName,
+      color_id: parseInt(inventoryItem.colorId),
+      color_name: color?.colorName,
       quantity: quantity,
-      new_or_used: Math.random() > 0.3 ? "N" : "U", // 70% new, 30% used
+      new_or_used: inventoryItem.condition === "new" ? "N" : "U",
       completeness: "C",
       unit_price: basePrice.toFixed(2),
       unit_price_final: basePrice.toFixed(2),
       currency_code: "USD",
-      description: `${color.colorName} ${part.name}`,
+      description: `${color?.colorName || `Color ${inventoryItem.colorId}`} ${inventoryItem.name}`,
       weight: (0.1 * quantity).toFixed(2),
+      remarks: inventoryItem.location, // CRITICAL: Set remarks to inventory item location
     });
   }
 
@@ -380,13 +570,21 @@ export const create = mutation({
       throw new Error("Test orders can only be created in development environments");
     }
 
-    // Generate test order data
-    const { orderData, orderItemsData } = createTestOrderData({
-      orderId: args.orderId,
-      buyerName: args.buyerName,
-      status: args.status,
-      itemCount: args.itemCount,
-    });
+    // Get userId from auth context
+    const { userId } = await requireActiveUser(ctx);
+
+    // Generate test order data using existing inventory items
+    const { orderData, orderItemsData } = await createTestOrderDataWithParts(
+      ctx,
+      args.businessAccountId,
+      userId,
+      {
+        orderId: args.orderId,
+        buyerName: args.buyerName,
+        status: args.status,
+        itemCount: args.itemCount,
+      },
+    );
 
     // Use existing upsertOrder mutation (same flow as real orders)
     await ctx.runMutation(internal.bricklink.notifications.upsertOrder, {
@@ -509,8 +707,8 @@ export const createBulkTestOrders = mutation({
       throw new Error("Test orders can only be created in development environments");
     }
 
-    // Get businessAccountId from auth context
-    const { businessAccountId } = await requireActiveUser(ctx);
+    // Get businessAccountId and userId from auth context
+    const { businessAccountId, userId } = await requireActiveUser(ctx);
 
     const orders = [
       { status: "PENDING", buyerName: "Alice Johnson", itemCount: 3 },
@@ -524,12 +722,17 @@ export const createBulkTestOrders = mutation({
       const orderConfig = orders[i];
       // Create unique order ID with timestamp and index to ensure uniqueness
       const orderId = `TEST-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 9)}`;
-      const { orderData, orderItemsData } = await createTestOrderDataWithParts(ctx, {
-        orderId,
-        buyerName: orderConfig.buyerName,
-        status: orderConfig.status,
-        itemCount: orderConfig.itemCount,
-      });
+      const { orderData, orderItemsData } = await createTestOrderDataWithParts(
+        ctx,
+        businessAccountId,
+        userId,
+        {
+          orderId,
+          buyerName: orderConfig.buyerName,
+          status: orderConfig.status,
+          itemCount: orderConfig.itemCount,
+        },
+      );
 
       await ctx.runMutation(internal.bricklink.notifications.upsertOrder, {
         businessAccountId,

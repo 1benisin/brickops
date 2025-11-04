@@ -81,4 +81,3 @@ export function PackagingSlipItemsList({ items }: PackagingSlipItemsListProps) {
     </table>
   );
 }
-
