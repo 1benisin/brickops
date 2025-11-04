@@ -364,7 +364,9 @@ export const listOrdersFiltered = query({
       queryBuilder = ctx.db
         .query("bricklinkOrders")
         .withSearchIndex(searchIndexMap[textFilterField], (q) =>
-          q.search(searchFieldMap[textFilterField], textFilterValue).eq("businessAccountId", businessAccountId),
+          q
+            .search(searchFieldMap[textFilterField], textFilterValue)
+            .eq("businessAccountId", businessAccountId),
         );
     } else {
       // Index selection logic
@@ -747,7 +749,7 @@ export const getOrdersByIds = query({
 
     // Fetch all matching orders
     const orders: Doc<"bricklinkOrders">[] = [];
-    
+
     for (const orderId of args.orderIds) {
       const order = await ctx.db
         .query("bricklinkOrders")
@@ -807,5 +809,133 @@ export const getOrderItemsForOrders = query({
     }
 
     return itemsByOrderId;
+  },
+});
+
+/**
+ * Get all order items for selected orders, sorted by location
+ * Returns all order items (including picked ones) with inventory matching info
+ * Frontend will use status value to display items appropriately
+ * Available to all authenticated users (not just owners)
+ */
+export const getPickableItemsForOrders = query({
+  args: {
+    orderIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Authentication required");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || !user.businessAccountId) {
+      throw new ConvexError("User not found or not linked to business account");
+    }
+
+    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+
+    if (args.orderIds.length === 0) {
+      return [];
+    }
+
+    // Get all order items for the given orderIds
+    const allOrderItems: Doc<"bricklinkOrderItems">[] = [];
+
+    for (const orderId of args.orderIds) {
+      const items = await ctx.db
+        .query("bricklinkOrderItems")
+        .withIndex("by_order", (q) =>
+          q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
+        )
+        .collect();
+
+      allOrderItems.push(...items);
+    }
+
+    // Match each order item with inventory item to get remaining quantity info
+    // Return ALL items (including picked ones) - frontend will handle display based on status
+    const items = await Promise.all(
+      allOrderItems.map(async (orderItem) => {
+        // Match inventory item using partNumber, colorId, condition, AND location
+        const inventoryItem = await ctx.db
+          .query("inventoryItems")
+          .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
+          .filter((q) =>
+            q.and(
+              q.eq(q.field("partNumber"), orderItem.itemNo),
+              q.eq(q.field("colorId"), orderItem.colorId.toString()),
+              q.eq(q.field("condition"), orderItem.newOrUsed === "N" ? "new" : "used"),
+              q.eq(q.field("location"), orderItem.location || "UNKNOWN"),
+            ),
+          )
+          .first();
+
+        // Handle migration: if document has isPicked instead of status, convert it
+        const itemDoc = orderItem as Record<string, unknown>;
+        let status: "picked" | "unpicked" | "skipped" | "issue";
+
+        if ("status" in itemDoc) {
+          status = orderItem.status;
+        } else if ("isPicked" in itemDoc) {
+          // Old schema - convert isPicked to status
+          const isPicked = itemDoc.isPicked as boolean;
+          status = isPicked ? "picked" : "unpicked";
+          // Migrate the document on-the-fly
+          try {
+            await ctx.db.patch(orderItem._id, {
+              status: status,
+            });
+          } catch (error) {
+            console.error(`Failed to migrate order item ${orderItem._id}:`, error);
+          }
+        } else {
+          // Missing both - default to unpicked
+          status = "unpicked";
+          try {
+            await ctx.db.patch(orderItem._id, {
+              status: "unpicked",
+            });
+          } catch (error) {
+            console.error(`Failed to set status on order item ${orderItem._id}:`, error);
+          }
+        }
+
+        // Calculate remaining after pick based on status
+        // For unpicked/skipped: what will remain after picking (quantityAvailable + quantityReserved - orderItem.quantity)
+        // For picked/issue: current remaining (quantityAvailable + quantityReserved, already adjusted)
+        let remainingAfterPick = 0;
+        if (inventoryItem) {
+          if (status === "unpicked" || status === "skipped") {
+            // Item not yet picked - show what will remain after picking
+            remainingAfterPick =
+              inventoryItem.quantityAvailable + inventoryItem.quantityReserved - orderItem.quantity;
+          } else {
+            // Item already picked/issue - reserved quantity already decreased, show current remaining
+            remainingAfterPick = inventoryItem.quantityAvailable + inventoryItem.quantityReserved;
+          }
+        }
+
+        return {
+          orderItemId: orderItem._id,
+          orderId: orderItem.orderId,
+          itemNo: orderItem.itemNo,
+          itemName: orderItem.itemName,
+          colorId: orderItem.colorId,
+          colorName: orderItem.colorName,
+          quantity: orderItem.quantity,
+          location: orderItem.location || "UNKNOWN",
+          status: status,
+          inventoryItemId: inventoryItem?._id,
+          remainingAfterPick,
+          imageUrl: undefined, // TODO: Add image URL if available
+        };
+      }),
+    );
+
+    // Sort by location (alphabetically)
+    items.sort((a, b) => a.location.localeCompare(b.location));
+
+    return items;
   },
 });

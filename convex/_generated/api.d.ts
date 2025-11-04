@@ -69,6 +69,7 @@ import type * as lib_rateLimiterAdapter from "../lib/rateLimiterAdapter.js";
 import type * as lib_webcrypto from "../lib/webcrypto.js";
 import type * as marketplace_actions from "../marketplace/actions.js";
 import type * as marketplace_helpers from "../marketplace/helpers.js";
+import type * as marketplace_migrations from "../marketplace/migrations.js";
 import type * as marketplace_mutations from "../marketplace/mutations.js";
 import type * as marketplace_queries from "../marketplace/queries.js";
 import type * as marketplace_rateLimitConfig from "../marketplace/rateLimitConfig.js";
@@ -145,6 +146,7 @@ declare const fullApi: ApiFromModules<{
   "lib/webcrypto": typeof lib_webcrypto;
   "marketplace/actions": typeof marketplace_actions;
   "marketplace/helpers": typeof marketplace_helpers;
+  "marketplace/migrations": typeof marketplace_migrations;
   "marketplace/mutations": typeof marketplace_mutations;
   "marketplace/queries": typeof marketplace_queries;
   "marketplace/rateLimitConfig": typeof marketplace_rateLimitConfig;

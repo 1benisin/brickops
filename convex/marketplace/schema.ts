@@ -179,6 +179,13 @@ export const marketplaceTables = {
     remarks: v.optional(v.string()),
     description: v.optional(v.string()),
     weight: v.optional(v.number()),
+    location: v.string(), // Location from inventory item or BrickLink API
+    status: v.union(
+      v.literal("picked"),
+      v.literal("unpicked"),
+      v.literal("skipped"),
+      v.literal("issue"),
+    ), // Picking status (default: "unpicked")
     createdAt: v.number(),
     updatedAt: v.number(),
   })
