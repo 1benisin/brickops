@@ -160,6 +160,7 @@ export const inventoryTables = {
   })
     .index("by_item", ["itemId"])
     .index("by_item_timestamp", ["itemId", "timestamp"])
+    .index("by_businessAccount", ["businessAccountId"])
     .index("by_business_timestamp", ["businessAccountId", "timestamp"])
     .index("by_order", ["orderId"])
     .index("by_correlation", ["correlationId"])
@@ -184,6 +185,7 @@ export const inventoryTables = {
   })
     .index("by_item", ["itemId"])
     .index("by_item_timestamp", ["itemId", "timestamp"])
+    .index("by_businessAccount", ["businessAccountId"])
     .index("by_business_timestamp", ["businessAccountId", "timestamp"])
     .index("by_location", ["businessAccountId", "toLocation"])
     .index("by_correlation", ["correlationId"]),

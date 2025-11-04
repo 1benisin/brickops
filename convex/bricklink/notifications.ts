@@ -212,6 +212,44 @@ async function processOrderNotification(
 }
 
 /**
+ * Process test order notification: use provided test data instead of API calls
+ * Development only - bypasses BrickLink API calls
+ * Internal mutation (not action) since it doesn't need to make external API calls
+ */
+export const processTestOrderNotification = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    orderData: v.any(), // BricklinkOrderResponse
+    orderItemsData: v.any(), // BricklinkOrderItemResponse[][]
+  },
+  handler: async (ctx, args) => {
+    // Validate development mode
+    const deploymentName = process.env.CONVEX_DEPLOYMENT;
+    const isDevelopment =
+      !deploymentName ||
+      deploymentName.startsWith("dev:") ||
+      deploymentName.includes("development");
+
+    if (!isDevelopment) {
+      throw new Error(
+        "Test webhook notifications can only be processed in development environments",
+      );
+    }
+
+    // Type assertions for test data
+    const orderData = args.orderData as BricklinkOrderResponse;
+    const orderItemsData = args.orderItemsData as BricklinkOrderItemResponse[][];
+
+    // Upsert order and items using the same mutation as real orders
+    await ctx.runMutation(internal.bricklink.notifications.upsertOrder, {
+      businessAccountId: args.businessAccountId,
+      orderData,
+      orderItemsData,
+    });
+  },
+});
+
+/**
  * Get notification by ID (internal query)
  */
 export const getNotification = internalQuery({
