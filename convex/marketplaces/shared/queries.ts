@@ -131,3 +131,24 @@ export const getMarketplaceSyncConfig = query({
     };
   },
 });
+
+/**
+ * Get sync settings for all configured providers
+ */
+export const getSyncSettings = query({
+  args: {},
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireOwner(ctx);
+
+    const credentials = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
+      .collect();
+
+    return credentials.map((cred) => ({
+      provider: cred.provider,
+      syncEnabled: cred.syncEnabled ?? true, // Default to true
+      isActive: cred.isActive,
+    }));
+  },
+});

@@ -124,6 +124,84 @@ export const updateOrderStatusIfFullyPicked = mutation({
 });
 
 /**
+ * Mark multiple orders as "Packed" if all items are either "picked" or "issue" (no skipped or unpicked items)
+ * Only updates orders that are currently "Paid" status
+ */
+export const markOrdersAsPicked = mutation({
+  args: {
+    orderIds: v.array(v.string()),
+    forceUpdate: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+
+    const updatedOrderIds: string[] = [];
+    const skippedOrderIds: string[] = [];
+    const skipReasons: Record<string, string> = {};
+    const now = Date.now();
+
+    for (const orderId of args.orderIds) {
+      // Get order
+      const order = await ctx.db
+        .query("bricklinkOrders")
+        .withIndex("by_business_order", (q) =>
+          q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
+        )
+        .first();
+
+      if (!order) {
+        skippedOrderIds.push(orderId);
+        skipReasons[orderId] = "Order not found";
+        continue;
+      }
+
+      // Only update orders that are currently "Paid", unless forceUpdate is true
+      if (order.status !== "Paid" && !args.forceUpdate) {
+        skippedOrderIds.push(orderId);
+        skipReasons[orderId] = `Order status is "${order.status}", expected "Paid"`;
+        continue;
+      }
+
+      // Get all order items for this order
+      const orderItems = await ctx.db
+        .query("bricklinkOrderItems")
+        .withIndex("by_order", (q) =>
+          q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
+        )
+        .collect();
+
+      // Check if all items are either "picked" or "issue" (no skipped or unpicked)
+      const allReady =
+        orderItems.length > 0 &&
+        orderItems.every((item) => item.status === "picked" || item.status === "issue");
+
+      if (allReady) {
+        // Update order status to "Packed"
+        await ctx.db.patch(order._id, {
+          status: "Packed",
+          updatedAt: now,
+        });
+        updatedOrderIds.push(orderId);
+      } else {
+        skippedOrderIds.push(orderId);
+        const unpickedCount = orderItems.filter((item) => item.status === "unpicked").length;
+        const skippedCount = orderItems.filter((item) => item.status === "skipped").length;
+        skipReasons[orderId] =
+          `Order has ${unpickedCount} unpicked and ${skippedCount} skipped items`;
+      }
+    }
+
+    return {
+      updatedCount: updatedOrderIds.length,
+      updatedOrderIds,
+      skippedOrderIds,
+      skipReasons,
+    };
+  },
+});
+
+/**
  * Mark an order item as having an issue and update inventory reserved quantity
  * Only updates reserved quantity, not available quantity (already decreased during order ingestion)
  */
@@ -300,7 +378,7 @@ export const markOrderItemAsUnpicked = mutation({
       .first();
 
     if (order && order.status === "Packed") {
-      // Check if all items are still picked
+      // Check if all items are still picked or issue (no skipped or unpicked)
       const orderItems = await ctx.db
         .query("bricklinkOrderItems")
         .withIndex("by_order", (q) =>
@@ -308,10 +386,12 @@ export const markOrderItemAsUnpicked = mutation({
         )
         .collect();
 
-      const allPicked = orderItems.length > 0 && orderItems.every((item) => item.status === "picked");
+      const allReady =
+        orderItems.length > 0 &&
+        orderItems.every((item) => item.status === "picked" || item.status === "issue");
 
-      // If not all items are picked, revert status to "Paid"
-      if (!allPicked) {
+      // If not all items are picked or issue, revert status to "Paid"
+      if (!allReady) {
         await ctx.db.patch(order._id, {
           status: "Paid",
           updatedAt: now,
@@ -327,4 +407,3 @@ export const markOrderItemAsUnpicked = mutation({
     };
   },
 });
-

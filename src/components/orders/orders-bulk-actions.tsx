@@ -46,7 +46,7 @@ export function OrdersBulkActions({ selectedRows }: OrdersBulkActionsProps) {
         disabled={selectedRows.length === 0}
       >
         <Package className="mr-2 h-4 w-4" />
-        Pick Orders {selectedRows.length > 0 && `(${selectedRows.length})`}
+        Pick Orders ({selectedRows.length})
       </Button>
       <Button
         variant="outline"
@@ -55,7 +55,7 @@ export function OrdersBulkActions({ selectedRows }: OrdersBulkActionsProps) {
         disabled={selectedRows.length === 0}
       >
         <Printer className="mr-2 h-4 w-4" />
-        Print Pick Slips {selectedRows.length > 0 && `(${selectedRows.length})`}
+        Print Pick Slips ({selectedRows.length})
       </Button>
     </div>
   );

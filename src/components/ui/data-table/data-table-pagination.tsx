@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Table } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -9,12 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { DataTableViewOptions } from "./data-table-view-options";
 
-interface DataTablePaginationProps {
+interface DataTablePaginationProps<TData> {
   pageSize: number;
   hasMore: boolean;
   isLoading?: boolean;
@@ -22,9 +21,12 @@ interface DataTablePaginationProps {
   onNextPage: () => void;
   onPreviousPage: () => void;
   pageSizeOptions?: number[];
+  table?: Table<TData>;
+  onResetAll?: () => void;
+  enableColumnVisibility?: boolean;
 }
 
-export function DataTablePagination({
+export function DataTablePagination<TData>({
   pageSize,
   hasMore,
   isLoading = false,
@@ -32,7 +34,10 @@ export function DataTablePagination({
   onNextPage,
   onPreviousPage,
   pageSizeOptions = [10, 25, 50, 100],
-}: DataTablePaginationProps) {
+  table,
+  onResetAll,
+  enableColumnVisibility = false,
+}: DataTablePaginationProps<TData>) {
   return (
     <div className="flex items-center justify-between px-2 py-4">
       <div className="flex-1 text-sm text-muted-foreground">
@@ -41,10 +46,7 @@ export function DataTablePagination({
       <div className="flex items-center space-x-6 lg:space-x-8">
         <div className="flex items-center space-x-2">
           <p className="text-sm font-medium">Rows per page</p>
-          <Select
-            value={`${pageSize}`}
-            onValueChange={(value) => onPageSizeChange(Number(value))}
-          >
+          <Select value={`${pageSize}`} onValueChange={(value) => onPageSizeChange(Number(value))}>
             <SelectTrigger className="h-8 w-[70px]">
               <SelectValue placeholder={pageSize} />
             </SelectTrigger>
@@ -57,6 +59,11 @@ export function DataTablePagination({
             </SelectContent>
           </Select>
         </div>
+        {enableColumnVisibility && table && onResetAll && (
+          <div className="flex items-center">
+            <DataTableViewOptions table={table} onResetAll={onResetAll} className="h-8" />
+          </div>
+        )}
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"
@@ -81,4 +88,3 @@ export function DataTablePagination({
     </div>
   );
 }
-

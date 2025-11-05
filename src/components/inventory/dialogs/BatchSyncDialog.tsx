@@ -51,7 +51,7 @@ export function BatchSyncDialog({ fileId, onOpenChange }: BatchSyncDialogProps) 
     api.inventory.files.queries.validateBatchSync,
     fileId ? { fileId } : "skip",
   );
-  const syncSettings = useQuery(api.marketplace.mutations.getSyncSettings);
+  const syncSettings = useQuery(api.marketplace.queries.getSyncSettings);
 
   // Batch sync action
   const batchSyncFile = useAction(api.inventory.files.actions.batchSyncFile);
