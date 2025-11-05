@@ -15,6 +15,9 @@ export interface EnhancedColumnMeta<TData, TValue = unknown> {
     currency?: boolean; // For number filters
   };
   textFilterMode?: "prefix" | "contains";
+  headerWrapperClassName?: string;
+  headerContainerClassName?: string;
+  headerButtonClassName?: string;
   [key: string]: unknown;
 }
 

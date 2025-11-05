@@ -60,12 +60,11 @@ export function PackagingSlipItemsList({ items }: PackagingSlipItemsListProps) {
                   <PartImage itemNo={item.itemNo} colorId={item.colorId} />
                   <div className="mx-2 w-3/4 flex-none text-sm">
                     <div className="flex justify-between">
-                      <span>{item.colorName || `Color ${item.colorId}`}</span>
-                      {/* Location not available in order items - would need to query inventory */}
-                      <span></span>
                       <span>
                         <strong>{item.quantity}</strong> x
                       </span>
+                      <span>{item.colorName || `Color ${item.colorId}`}</span>
+                      <span>{item.location || "—"}</span>
                     </div>
                     <hr style={{ margin: 0, padding: 0 }} />
                     <div>

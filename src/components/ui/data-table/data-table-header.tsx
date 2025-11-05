@@ -33,12 +33,17 @@ export function DataTableHeader<TData, TValue>({
     return null;
   }
 
+  const columnMeta = header.column.columnDef.meta as any;
+
   const canSort = enableSorting && header.column.getCanSort();
   const sortDirection = header.column.getIsSorted();
   const canFilter = enableFiltering && header.column.getCanFilter();
-  const filterType = (header.column.columnDef.meta as any)?.filterType;
-  const filterOptions = (header.column.columnDef.meta as any)?.filterOptions;
-  const filterConfig = (header.column.columnDef.meta as any)?.filterConfig;
+  const filterType = columnMeta?.filterType;
+  const filterOptions = columnMeta?.filterOptions;
+  const filterConfig = columnMeta?.filterConfig;
+  const headerWrapperClassName = columnMeta?.headerWrapperClassName;
+  const headerContainerClassName = columnMeta?.headerContainerClassName;
+  const headerButtonClassName = columnMeta?.headerButtonClassName;
 
   // Guard: ensure column definition exists before rendering
   if (!header.column?.columnDef) {
@@ -52,7 +57,7 @@ export function DataTableHeader<TData, TValue>({
   const headerContent = flexRender(header.column.columnDef.header, headerContext);
 
   return (
-    <div className="flex flex-col">
+    <div className={cn("flex flex-col", headerWrapperClassName)}>
       {/* Header with sort button */}
       <div className="w-full">
         {canSort ? (
@@ -61,6 +66,7 @@ export function DataTableHeader<TData, TValue>({
             className={cn(
               "w-full h-7 justify-between px-3 text-left font-normal text-xs hover:bg-accent",
               sortDirection && "bg-accent",
+              headerButtonClassName,
             )}
             onClick={() => {
               // Only call parent callback - parent handles both UI state and sorting
@@ -80,7 +86,14 @@ export function DataTableHeader<TData, TValue>({
             </span>
           </Button>
         ) : (
-          <div className="h-7 flex items-center px-3 text-xs font-normal">{headerContent}</div>
+          <div
+            className={cn(
+              "h-7 flex items-center px-3 text-xs font-normal",
+              headerContainerClassName,
+            )}
+          >
+            {headerContent}
+          </div>
         )}
       </div>
 
@@ -137,7 +150,9 @@ export function DataTableHeader<TData, TValue>({
               value={filterValue ?? header.column.getFilterValue()}
               onChange={(value: string | undefined) => {
                 if (table) {
-                  header.column.setFilterValue(value === "__all__" ? undefined : value || undefined);
+                  header.column.setFilterValue(
+                    value === "__all__" ? undefined : value || undefined,
+                  );
                 } else {
                   onFilterChange?.(header.column.id, value);
                 }

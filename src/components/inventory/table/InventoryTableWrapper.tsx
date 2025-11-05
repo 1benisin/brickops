@@ -596,7 +596,7 @@ export function InventoryTableWrapper({
         enableColumnOrdering={true}
         enableColumnSizing={true}
         onTableReady={setTableInstance}
-        onResetAllReady={setResetAllCallback}
+        onResetAllReady={(resetAll) => setResetAllCallback(() => resetAll)}
       />
       {(data || result) && (
         <DataTablePagination

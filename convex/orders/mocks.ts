@@ -29,8 +29,11 @@ function isDevelopmentMode(): boolean {
 
 /**
  * Generate realistic test order data
+ * @param overrides - Optional overrides for order data
+ * @param overrides.status - Valid BrickLink order status (PENDING, UPDATED, PROCESSING, READY, PAID, PACKED, SHIPPED, RECEIVED, COMPLETED, CANCELLED, HOLD)
+ *                           Alert statuses (OCR, NPB, NPX, NRS, NSS) will be automatically mapped to HOLD during ingestion
  */
-function createTestOrderData(overrides?: {
+function _createTestOrderData(overrides?: {
   orderId?: string;
   buyerName?: string;
   status?: string;
@@ -42,6 +45,8 @@ function createTestOrderData(overrides?: {
   const orderId = overrides?.orderId || `TEST-${Date.now()}`;
   const now = new Date().toISOString();
   const buyerName = overrides?.buyerName || "Test Buyer";
+  // Valid status values: PENDING, UPDATED, PROCESSING, READY, PAID, PACKED, SHIPPED, RECEIVED, COMPLETED, CANCELLED, HOLD
+  // Alert statuses (OCR, NPB, NPX, NRS, NSS) will be mapped to HOLD during ingestion
   const status = overrides?.status || "PENDING";
   const itemCount = overrides?.itemCount || 3;
 
@@ -156,7 +161,7 @@ function createTestOrderData(overrides?: {
 /**
  * Get random parts from the parts table for test order generation
  */
-async function getRandomParts(
+async function _getRandomParts(
   ctx: MutationCtx,
   count: number,
 ): Promise<
@@ -196,7 +201,7 @@ async function getRandomParts(
 /**
  * Get random colors from the colors table
  */
-async function getRandomColors(
+async function _getRandomColors(
   ctx: MutationCtx,
   count: number,
 ): Promise<
@@ -381,6 +386,9 @@ async function getRandomInventoryItems(
 /**
  * Create test order data with random parts from database
  * IMPORTANT: Only creates order items from existing inventory items to ensure matching
+ * @param overrides - Optional overrides for order data
+ * @param overrides.status - Valid BrickLink order status (PENDING, UPDATED, PROCESSING, READY, PAID, PACKED, SHIPPED, RECEIVED, COMPLETED, CANCELLED, HOLD)
+ *                           Alert statuses (OCR, NPB, NPX, NRS, NSS) will be automatically mapped to HOLD during ingestion
  */
 async function createTestOrderDataWithParts(
   ctx: MutationCtx,
@@ -399,6 +407,8 @@ async function createTestOrderDataWithParts(
   const orderId = overrides?.orderId || `TEST-${Date.now()}`;
   const now = new Date().toISOString();
   const buyerName = overrides?.buyerName || "Test Buyer";
+  // Valid status values: PENDING, UPDATED, PROCESSING, READY, PAID, PACKED, SHIPPED, RECEIVED, COMPLETED, CANCELLED, HOLD
+  // Alert statuses (OCR, NPB, NPX, NRS, NSS) will be mapped to HOLD during ingestion
   const status = overrides?.status || "PENDING";
   const itemCount = overrides?.itemCount || 3;
 
@@ -548,7 +558,8 @@ async function createTestOrderDataWithParts(
  *   businessAccountId: "businessAccounts:...",
  *   orderId: "TEST-123", // optional (auto-generated if not provided)
  *   buyerName: "John Doe", // optional
- *   status: "PENDING", // optional: PENDING, READY, COMPLETED, etc.
+ *   status: "PENDING", // optional: Valid values are PENDING, UPDATED, PROCESSING, READY, PAID, PACKED, SHIPPED, RECEIVED, COMPLETED, CANCELLED, HOLD
+ *                       // Alert statuses (OCR, NPB, NPX, NRS, NSS) will be mapped to HOLD during ingestion
  *   itemCount: 3, // optional (defaults to 3)
  * });
  *
@@ -701,6 +712,7 @@ export const isDevelopmentEnvironment = query({
 /**
  * Create bulk test orders (3 orders automatically)
  * Creates 3 test orders with random parts from the database
+ * Uses valid status values: PENDING, READY, COMPLETED
  */
 export const createBulkTestOrders = mutation({
   args: {},
@@ -713,6 +725,7 @@ export const createBulkTestOrders = mutation({
     // Get businessAccountId and userId from auth context
     const { businessAccountId, userId } = await requireActiveUser(ctx);
 
+    // Valid status values: PENDING, UPDATED, PROCESSING, READY, PAID, PACKED, SHIPPED, RECEIVED, COMPLETED, CANCELLED, HOLD
     const orders = [
       { status: "PENDING", buyerName: "Alice Johnson", itemCount: 3 },
       { status: "READY", buyerName: "Bob Smith", itemCount: 4 },

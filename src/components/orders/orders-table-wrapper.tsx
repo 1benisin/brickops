@@ -279,7 +279,7 @@ export function OrdersTableWrapper() {
         }
         emptyState={emptyState}
         onTableReady={setTableInstance}
-        onResetAllReady={setResetAllCallback}
+        onResetAllReady={(resetAll) => setResetAllCallback(() => resetAll)}
       />
       {isRefetching && (
         <div

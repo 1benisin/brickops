@@ -109,14 +109,14 @@ export const updateOrderStatusIfFullyPicked = mutation({
     // Check if all items are picked
     const allPicked = orderItems.length > 0 && orderItems.every((item) => item.status === "picked");
 
-    // Update status if fully picked and currently "Paid"
-    if (allPicked && order.status === "Paid") {
+    // Update status if fully picked and currently "PAID" (not HOLD or other statuses)
+    if (allPicked && order.status === "PAID") {
       await ctx.db.patch(order._id, {
-        status: "Packed",
+        status: "PACKED",
         updatedAt: Date.now(),
       });
 
-      return { updated: true, newStatus: "Packed" };
+      return { updated: true, newStatus: "PACKED" };
     }
 
     return { updated: false, currentStatus: order.status };
@@ -156,10 +156,11 @@ export const markOrdersAsPicked = mutation({
         continue;
       }
 
-      // Only update orders that are currently "Paid", unless forceUpdate is true
-      if (order.status !== "Paid" && !args.forceUpdate) {
+      // Only update orders that are currently "PAID", unless forceUpdate is true
+      // HOLD orders should not auto-transition
+      if (order.status !== "PAID" && !args.forceUpdate) {
         skippedOrderIds.push(orderId);
-        skipReasons[orderId] = `Order status is "${order.status}", expected "Paid"`;
+        skipReasons[orderId] = `Order status is "${order.status}", expected "PAID"`;
         continue;
       }
 
@@ -177,9 +178,9 @@ export const markOrdersAsPicked = mutation({
         orderItems.every((item) => item.status === "picked" || item.status === "issue");
 
       if (allReady) {
-        // Update order status to "Packed"
+        // Update order status to "PACKED"
         await ctx.db.patch(order._id, {
-          status: "Packed",
+          status: "PACKED",
           updatedAt: now,
         });
         updatedOrderIds.push(orderId);
@@ -367,7 +368,7 @@ export const markOrderItemAsUnpicked = mutation({
       });
     }
 
-    // Check if order status needs to be reverted from "Packed" to "Paid"
+    // Check if order status needs to be reverted from "PACKED" to "PAID"
     // if we unpicked an item from a fully picked order
     const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
     const order = await ctx.db
@@ -377,7 +378,7 @@ export const markOrderItemAsUnpicked = mutation({
       )
       .first();
 
-    if (order && order.status === "Packed") {
+    if (order && order.status === "PACKED") {
       // Check if all items are still picked or issue (no skipped or unpicked)
       const orderItems = await ctx.db
         .query("bricklinkOrderItems")
@@ -390,10 +391,10 @@ export const markOrderItemAsUnpicked = mutation({
         orderItems.length > 0 &&
         orderItems.every((item) => item.status === "picked" || item.status === "issue");
 
-      // If not all items are picked or issue, revert status to "Paid"
+      // If not all items are picked or issue, revert status to "PAID"
       if (!allReady) {
         await ctx.db.patch(order._id, {
-          status: "Paid",
+          status: "PAID",
           updatedAt: now,
         });
       }

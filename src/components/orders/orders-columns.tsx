@@ -33,14 +33,16 @@ const formatCurrency = (amount: number, currencyCode: string = "USD") => {
 const StatusBadge = ({ status }: { status: string }) => {
   const variants: Record<string, string> = {
     PENDING: "bg-yellow-500/10 text-yellow-700 border-yellow-200",
-    READY: "bg-blue-500/10 text-blue-700 border-blue-200",
-    COMPLETED: "bg-green-500/10 text-green-700 border-green-200",
     UPDATED: "bg-purple-500/10 text-purple-700 border-purple-200",
+    PROCESSING: "bg-blue-500/10 text-blue-700 border-blue-200",
+    READY: "bg-blue-500/10 text-blue-700 border-blue-200",
     PAID: "bg-green-500/10 text-green-700 border-green-200",
+    PACKED: "bg-indigo-500/10 text-indigo-700 border-indigo-200",
     SHIPPED: "bg-indigo-500/10 text-indigo-700 border-indigo-200",
     RECEIVED: "bg-teal-500/10 text-teal-700 border-teal-200",
+    COMPLETED: "bg-green-500/10 text-green-700 border-green-200",
     CANCELLED: "bg-red-500/10 text-red-700 border-red-200",
-    PURGED: "bg-gray-500/10 text-gray-700 border-gray-200",
+    HOLD: "bg-orange-500/10 text-orange-700 border-orange-200",
   };
 
   const variantClass = variants[status] || "bg-gray-500/10 text-gray-700 border-gray-200";
@@ -78,7 +80,10 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
     // Selection column
     createColumn({
       id: "select",
-      meta: { label: "Select" },
+      meta: {
+        label: "Select",
+        headerContainerClassName: "px-0",
+      },
       size: 40,
       minSize: 40,
       maxSize: 40,
@@ -178,10 +183,16 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
         filterType: "select",
         filterOptions: [
           { label: "Pending", value: "PENDING" },
+          { label: "Updated", value: "UPDATED" },
+          { label: "Processing", value: "PROCESSING" },
           { label: "Ready", value: "READY" },
-          { label: "Completed", value: "COMPLETED" },
+          { label: "Paid", value: "PAID" },
+          { label: "Packed", value: "PACKED" },
           { label: "Shipped", value: "SHIPPED" },
+          { label: "Received", value: "RECEIVED" },
+          { label: "Completed", value: "COMPLETED" },
           { label: "Cancelled", value: "CANCELLED" },
+          { label: "Hold", value: "HOLD" },
         ],
       },
       header: "Status",
