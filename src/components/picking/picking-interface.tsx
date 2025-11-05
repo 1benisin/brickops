@@ -5,6 +5,16 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { PickableItemCard } from "./pickable-item-card";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/AlertDialog";
 
 export type PickableItem = {
   orderItemId: Id<"bricklinkOrderItems">;
@@ -194,7 +204,13 @@ export function PickingInterface({ orderIds, pickableItems }: PickingInterfacePr
   const markAsIssue = useMutation(api.orders.mutations.markOrderItemAsIssue);
   const markAsSkipped = useMutation(api.orders.mutations.markOrderItemAsSkipped);
   const markAsUnpicked = useMutation(api.orders.mutations.markOrderItemAsUnpicked);
-  const updateOrderStatus = useMutation(api.orders.mutations.updateOrderStatusIfFullyPicked);
+  const markOrdersAsPicked = useMutation(api.orders.mutations.markOrdersAsPicked);
+  const [isMarkingOrders, setIsMarkingOrders] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState<
+    Array<{ orderId: string; currentStatus: string }>
+  >([]);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Keep all items - don't filter out picked items
   // Determine if item status using query data OR optimistic updates
@@ -205,6 +221,51 @@ export function PickingInterface({ orderIds, pickableItems }: PickingInterfacePr
 
   // Count unpicked items for header
   const unpickedCount = allItems.filter((item) => item.status === "unpicked").length;
+
+  // Group items by orderId
+  const itemsByOrder = useMemo(() => {
+    const grouped = new Map<string, PickableItem[]>();
+    allItems.forEach((item) => {
+      const existing = grouped.get(item.orderId) || [];
+      grouped.set(item.orderId, [...existing, item]);
+    });
+    return grouped;
+  }, [allItems]);
+
+  // Determine ready orders (all items picked or issue, no skipped/unpicked)
+  const readyOrders = useMemo(() => {
+    const ready: string[] = [];
+    itemsByOrder.forEach((items, orderId) => {
+      const allReady = items.every((item) => item.status === "picked" || item.status === "issue");
+      const hasUnpicked = items.some((item) => item.status === "unpicked");
+      const hasSkipped = items.some((item) => item.status === "skipped");
+
+      if (allReady && !hasUnpicked && !hasSkipped) {
+        ready.push(orderId);
+      }
+    });
+    return ready;
+  }, [itemsByOrder]);
+
+  // Count skipped items and orders
+  const skippedStats = useMemo(() => {
+    const skippedItems = allItems.filter((item) => item.status === "skipped");
+    const ordersWithSkipped = new Set(skippedItems.map((item) => item.orderId));
+    return {
+      itemCount: skippedItems.length,
+      orderCount: ordersWithSkipped.size,
+    };
+  }, [allItems]);
+
+  // Count issue items and orders
+  const issueStats = useMemo(() => {
+    const issueItems = allItems.filter((item) => item.status === "issue");
+    const ordersWithIssues = new Set(issueItems.map((item) => item.orderId));
+    return {
+      itemCount: issueItems.length,
+      orderCount: ordersWithIssues.size,
+    };
+  }, [allItems]);
 
   // Find first unpicked item index for initial focus
   const firstUnpickedIndex = allItems.findIndex((item) => item.status === "unpicked");
@@ -258,9 +319,6 @@ export function PickingInterface({ orderIds, pickableItems }: PickingInterfacePr
         orderItemId: item.orderItemId,
         inventoryItemId: item.inventoryItemId,
       });
-
-      // Check if order is fully picked and update status
-      await updateOrderStatus({ orderId: item.orderId });
 
       // Move focus to next unpicked item
       // Need to recalculate allItems with updated optimisticStatus
@@ -445,18 +503,108 @@ export function PickingInterface({ orderIds, pickableItems }: PickingInterfacePr
     }
   };
 
-  if (unpickedCount === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">All Items Picked!</h2>
-          <p className="text-muted-foreground">
-            All items for the selected orders have been picked.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const handleMarkOrders = async () => {
+    if (readyOrders.length === 0) {
+      return;
+    }
+
+    setMessage(null); // Clear any previous messages
+
+    const attemptUpdate = async (forceUpdate = false) => {
+      try {
+        setIsMarkingOrders(true);
+        const result = await markOrdersAsPicked({ orderIds: readyOrders, forceUpdate });
+
+        if (result.updatedCount > 0) {
+          // Show success message
+          setMessage({
+            type: "success",
+            text: `Successfully marked ${result.updatedCount} order${result.updatedCount !== 1 ? "s" : ""} as packed.`,
+          });
+          // Clear message after 5 seconds
+          setTimeout(() => setMessage(null), 5000);
+          return true;
+        } else {
+          // Check if there are status mismatches that we can force update
+          const statusMismatches = Object.entries(result.skipReasons || {}).filter(([_, reason]) =>
+            reason.includes("Order status is"),
+          );
+
+          if (statusMismatches.length > 0 && !forceUpdate) {
+            // Extract order details for the dialog
+            const ordersToConfirm = statusMismatches.map(([orderId, reason]) => {
+              const statusMatch = reason.match(/Order status is "([^"]+)"/);
+              const currentStatus = statusMatch ? statusMatch[1] : "unknown";
+              return { orderId, currentStatus };
+            });
+
+            setPendingOrders(ordersToConfirm);
+            setShowConfirmDialog(true);
+            return false; // Will be handled by dialog action
+          } else {
+            // Other errors - show error message
+            const reasons = Object.entries(result.skipReasons || {})
+              .map(([orderId, reason]) => `Order ${orderId}: ${reason}`)
+              .join(", ");
+            setMessage({
+              type: "error",
+              text: `No orders were updated. ${reasons || "Please check that orders have all items picked or marked as issue."}`,
+            });
+            return false;
+          }
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Failed to mark orders as picked:", error);
+        setMessage({
+          type: "error",
+          text: `Failed to mark orders as picked: ${errorMessage}`,
+        });
+        return false;
+      } finally {
+        setIsMarkingOrders(false);
+      }
+    };
+
+    await attemptUpdate();
+  };
+
+  // Handle confirmation from dialog
+  const handleConfirmUpdate = async () => {
+    setShowConfirmDialog(false);
+    setIsMarkingOrders(true);
+    setMessage(null);
+
+    try {
+      const result = await markOrdersAsPicked({ orderIds: readyOrders, forceUpdate: true });
+
+      if (result.updatedCount > 0) {
+        setMessage({
+          type: "success",
+          text: `Successfully marked ${result.updatedCount} order${result.updatedCount !== 1 ? "s" : ""} as packed.`,
+        });
+        setTimeout(() => setMessage(null), 5000);
+      } else {
+        const reasons = Object.entries(result.skipReasons || {})
+          .map(([orderId, reason]) => `Order ${orderId}: ${reason}`)
+          .join(", ");
+        setMessage({
+          type: "error",
+          text: `No orders were updated. ${reasons || "Please check that orders have all items picked or marked as issue."}`,
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Failed to mark orders as picked:", error);
+      setMessage({
+        type: "error",
+        text: `Failed to mark orders as picked: ${errorMessage}`,
+      });
+    } finally {
+      setIsMarkingOrders(false);
+      setPendingOrders([]);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
@@ -487,6 +635,87 @@ export function PickingInterface({ orderIds, pickableItems }: PickingInterfacePr
           </div>
         ))}
       </div>
+
+      {/* Footer with button and notifications */}
+      <div className="max-w-2xl mx-auto px-4 pb-6">
+        <div className="space-y-3">
+          {/* Success/Error Message */}
+          {message && (
+            <div
+              className={`rounded-lg px-4 py-2 border ${
+                message.type === "success"
+                  ? "bg-green-500/20 border-green-500/50 text-green-200"
+                  : "bg-red-500/20 border-red-500/50 text-red-200"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
+          {/* Notifications - side by side */}
+          {(skippedStats.itemCount > 0 || issueStats.itemCount > 0) && (
+            <div className="flex gap-3">
+              {skippedStats.itemCount > 0 && (
+                <div className="flex-1 bg-yellow-500/20 border border-yellow-500/50 rounded-lg px-4 py-2 text-yellow-200">
+                  {skippedStats.itemCount} skipped item{skippedStats.itemCount !== 1 ? "s" : ""} in{" "}
+                  {skippedStats.orderCount} order{skippedStats.orderCount !== 1 ? "s" : ""}
+                </div>
+              )}
+              {issueStats.itemCount > 0 && (
+                <div className="flex-1 bg-red-500/20 border border-red-500/50 rounded-lg px-4 py-2 text-red-200">
+                  {issueStats.itemCount} issue{issueStats.itemCount !== 1 ? "s" : ""} in{" "}
+                  {issueStats.orderCount} order{issueStats.orderCount !== 1 ? "s" : ""}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mark Orders Button */}
+          <button
+            onClick={handleMarkOrders}
+            disabled={readyOrders.length === 0 || isMarkingOrders}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+          >
+            {isMarkingOrders ? "Marking Orders..." : `Mark (${readyOrders.length}) Orders Picked`}
+          </button>
+        </div>
+      </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Order Status Update</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingOrders.length === 1 ? (
+                <>
+                  Order {pendingOrders[0].orderId} status is {pendingOrders[0].currentStatus}.
+                  Expected it to be Paid. Still update it to Packed?
+                </>
+              ) : (
+                <>
+                  The following {pendingOrders.length} orders have a different status than
+                  &quot;Paid&quot;:
+                  <ul className="mt-2 space-y-1 list-disc list-inside">
+                    {pendingOrders.map(({ orderId, currentStatus }) => (
+                      <li key={orderId}>
+                        Order {orderId}: Currently &quot;{currentStatus}&quot;
+                      </li>
+                    ))}
+                  </ul>
+                  Still update them to Packed?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowConfirmDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmUpdate}>Update Anyway</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

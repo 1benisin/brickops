@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
+import { Table } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTablePagination } from "@/components/ui/data-table/data-table-pagination";
 import { createInventoryColumns, type MarketplaceSyncConfig } from "./InventoryTableColumns";
@@ -48,6 +49,13 @@ export function InventoryTableWrapper({
     sort: [{ id: "createdAt", desc: true }],
     pagination: { pageSize: 25 },
   });
+
+  // Client-side pagination state (when data prop is provided)
+  const [clientPagination, setClientPagination] = useState({ pageIndex: 0, pageSize: 25 });
+
+  // Table instance and reset callback state
+  const [tableInstance, setTableInstance] = useState<Table<InventoryItem> | null>(null);
+  const [resetAllCallback, setResetAllCallback] = useState<(() => void) | null>(null);
 
   // Client-side sorting state (when data is provided)
   const [clientSorting, setClientSorting] = useState<Array<{ id: string; desc: boolean }>>([
@@ -277,7 +285,16 @@ export function InventoryTableWrapper({
   }, [data, result?.items, clientSorting, clientFilters]);
 
   // Use sorted data (client-side) or server-sorted data
-  const tableData = sortedData;
+  const tableData = useMemo(() => {
+    if (data) {
+      // Client-side pagination: slice the sorted/filtered data
+      const startIndex = clientPagination.pageIndex * clientPagination.pageSize;
+      const endIndex = startIndex + clientPagination.pageSize;
+      return sortedData.slice(startIndex, endIndex);
+    }
+    // Server-side: use result directly (already paginated)
+    return sortedData;
+  }, [data, sortedData, clientPagination]);
 
   const columns = useMemo(
     () => createInventoryColumns(syncConfig, handleEditItem),
@@ -288,8 +305,9 @@ export function InventoryTableWrapper({
   const handleSortChange = useCallback(
     (sort: Array<{ id: string; desc: boolean }>) => {
       if (data) {
-        // Client-side: update local sorting state
+        // Client-side: update local sorting state and reset pagination
         setClientSorting(sort);
+        setClientPagination({ pageIndex: 0, pageSize: clientPagination.pageSize });
       } else {
         // Server-side: update query spec
         setQuerySpec((prev: QuerySpec) => ({
@@ -299,14 +317,14 @@ export function InventoryTableWrapper({
         }));
       }
     },
-    [data],
+    [data, clientPagination.pageSize],
   );
 
   // Handle column filter changes (server-side or client-side)
   const handleColumnFilterChange = useCallback(
     (columnId: string, value: unknown) => {
       if (data) {
-        // Client-side filtering
+        // Client-side filtering and reset pagination
         setClientFilters((prev) => {
           const newFilters = { ...prev };
           // Handle "__all__" from SelectFilterInline (means "no filter")
@@ -317,6 +335,7 @@ export function InventoryTableWrapper({
           }
           return newFilters;
         });
+        setClientPagination({ pageIndex: 0, pageSize: clientPagination.pageSize });
       } else {
         // Server-side filtering
         setQuerySpec((prev: QuerySpec) => {
@@ -395,34 +414,59 @@ export function InventoryTableWrapper({
         });
       }
     },
-    [data],
+    [data, clientPagination.pageSize],
   );
 
   // Pagination handlers
-  const handlePageSizeChange = useCallback((size: number) => {
-    setQuerySpec((prev: QuerySpec) => ({
-      ...prev,
-      pagination: { ...prev.pagination, pageSize: size, cursor: undefined },
-    }));
-  }, []);
+  const handlePageSizeChange = useCallback(
+    (size: number) => {
+      if (data) {
+        // Client-side: update pageSize, reset to page 0
+        setClientPagination({ pageIndex: 0, pageSize: size });
+      } else {
+        // Server-side: update query spec
+        setQuerySpec((prev: QuerySpec) => ({
+          ...prev,
+          pagination: { ...prev.pagination, pageSize: size, cursor: undefined },
+        }));
+      }
+    },
+    [data],
+  );
 
   const handleNextPage = useCallback(() => {
-    if (result && !result.isDone) {
-      setQuerySpec((prev: QuerySpec) => ({
-        ...prev,
-        pagination: { ...prev.pagination, cursor: result.cursor },
-      }));
+    if (data) {
+      // Client-side: increment pageIndex if hasMore
+      const hasMore =
+        (clientPagination.pageIndex + 1) * clientPagination.pageSize < sortedData.length;
+      if (hasMore) {
+        setClientPagination((prev) => ({ ...prev, pageIndex: prev.pageIndex + 1 }));
+      }
+    } else {
+      // Server-side: use cursor-based pagination
+      if (result && !result.isDone) {
+        setQuerySpec((prev: QuerySpec) => ({
+          ...prev,
+          pagination: { ...prev.pagination, cursor: result.cursor },
+        }));
+      }
     }
-  }, [result]);
+  }, [data, clientPagination, sortedData, result]);
 
   const handlePreviousPage = useCallback(() => {
-    // For cursor-based pagination, we'd need to track previous cursors
-    // For now, reset to first page
-    setQuerySpec((prev: QuerySpec) => ({
-      ...prev,
-      pagination: { ...prev.pagination, cursor: undefined },
-    }));
-  }, []);
+    if (data) {
+      // Client-side: decrement pageIndex if > 0
+      if (clientPagination.pageIndex > 0) {
+        setClientPagination((prev) => ({ ...prev, pageIndex: prev.pageIndex - 1 }));
+      }
+    } else {
+      // Server-side: reset to first page
+      setQuerySpec((prev: QuerySpec) => ({
+        ...prev,
+        pagination: { ...prev.pagination, cursor: undefined },
+      }));
+    }
+  }, [data, clientPagination]);
 
   // Extract filter values for column filters prop
   const columnFilters = useMemo(() => {
@@ -499,6 +543,18 @@ export function InventoryTableWrapper({
     return row._id || `${row.partNumber}-${row.colorId}`;
   }, []);
 
+  // Compute pagination values
+  const paginationPageSize = data ? clientPagination.pageSize : querySpec.pagination.pageSize;
+  const paginationHasMore = useMemo(() => {
+    if (data) {
+      // Client-side: check if there are more items
+      return (clientPagination.pageIndex + 1) * clientPagination.pageSize < sortedData.length;
+    } else {
+      // Server-side: check result.isDone
+      return result ? !result.isDone : false;
+    }
+  }, [data, clientPagination, sortedData, result]);
+
   return (
     <>
       <DataTable<InventoryItem>
@@ -536,15 +592,23 @@ export function InventoryTableWrapper({
         emptyState={
           <div className="text-center text-muted-foreground">No inventory items found.</div>
         }
+        enableColumnVisibility={true}
+        enableColumnOrdering={true}
+        enableColumnSizing={true}
+        onTableReady={setTableInstance}
+        onResetAllReady={setResetAllCallback}
       />
-      {!data && result && (
+      {(data || result) && (
         <DataTablePagination
-          pageSize={querySpec.pagination.pageSize}
-          hasMore={!result.isDone}
+          pageSize={paginationPageSize}
+          hasMore={paginationHasMore}
           isLoading={isLoading}
           onPageSizeChange={handlePageSizeChange}
           onNextPage={handleNextPage}
           onPreviousPage={handlePreviousPage}
+          table={tableInstance ?? undefined}
+          onResetAll={resetAllCallback ?? undefined}
+          enableColumnVisibility={true}
         />
       )}
 

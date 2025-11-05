@@ -17,11 +17,13 @@ import { SortableColumnItem } from "./sortable-column-item";
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>;
   onResetAll: () => void;
+  className?: string;
 }
 
 export function DataTableViewOptions<TData>({
   table,
   onResetAll,
+  className,
 }: DataTableViewOptionsProps<TData>) {
   const allLeafColumns = table.getAllLeafColumns();
   const hideableColumns = allLeafColumns.filter((column) => column.getCanHide());
@@ -81,7 +83,7 @@ export function DataTableViewOptions<TData>({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto mb-2">
+        <Button variant="outline" size="sm" className={className || "ml-auto mb-2"}>
           <Settings2 className="mr-2 h-4 w-4" />
           Columns
         </Button>

@@ -13,9 +13,9 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
+  Table as TanStackTable,
 } from "@tanstack/react-table";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { DataTableViewOptions } from "./data-table-view-options";
 import { DataTableHeader } from "./data-table-header";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTableBulkActions } from "./data-table-bulk-actions";
@@ -70,6 +70,10 @@ interface DataTableProps<TData> {
   emptyState?: ReactNode;
   // Get row ID function (for server-side pagination persistence)
   getRowId?: (row: TData) => string;
+  // Callback to expose table instance to parent
+  onTableReady?: (table: TanStackTable<TData>) => void;
+  // Callback to expose reset function to parent
+  onResetAllReady?: (resetAll: () => void) => void;
 }
 
 interface TableState {
@@ -109,6 +113,8 @@ export function DataTable<TData>({
   loadingState,
   emptyState,
   getRowId,
+  onTableReady,
+  onResetAllReady,
 }: DataTableProps<TData>) {
   // Add sorting state (for UI indication only - actual sorting is server-side)
   const [sorting, setSorting] = useState<SortingState>(sortingProp || []);
@@ -307,6 +313,16 @@ export function DataTable<TData>({
     columnResizeMode: "onChange",
   });
 
+  // Expose table instance and reset function to parent component
+  useEffect(() => {
+    if (onTableReady) {
+      onTableReady(table);
+    }
+    if (onResetAllReady) {
+      onResetAllReady(removeTableState);
+    }
+  }, [onTableReady, onResetAllReady, table, removeTableState]);
+
   // Update selected IDs when selection changes (for server-side pagination)
   useEffect(() => {
     if (!enableRowSelection || !getRowIdFn) return;
@@ -430,21 +446,12 @@ export function DataTable<TData>({
 
       {/* Bulk Actions */}
       {enableRowSelection && (
-        <DataTableBulkActions
-          selectedCount={selectedCount}
-          onClearSelection={() => table.resetRowSelection()}
-        >
+        <DataTableBulkActions selectedCount={selectedCount}>
           {bulkActions &&
             bulkActions({
               selectedRows: table.getFilteredSelectedRowModel().rows.map((row) => row.original),
             })}
         </DataTableBulkActions>
-      )}
-
-      {enableColumnVisibility && (
-        <div className="flex justify-end mb-2">
-          <DataTableViewOptions table={table} onResetAll={removeTableState} />
-        </div>
       )}
 
       {isLoading ? (
