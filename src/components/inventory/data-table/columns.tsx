@@ -97,7 +97,10 @@ export const createColumns = (
     // Selection column
     {
       id: "select",
-      meta: { label: "Select" },
+      meta: {
+        label: "Select",
+        headerContainerClassName: "px-0",
+      },
       size: 40,
       minSize: 40,
       maxSize: 40,
@@ -133,7 +136,11 @@ export const createColumns = (
     {
       id: "partNumber",
       accessorKey: "partNumber",
-      meta: { label: "Part Number", filterType: "text", filterPlaceholder: "Search part numbers..." },
+      meta: {
+        label: "Part Number",
+        filterType: "text",
+        filterPlaceholder: "Search part numbers...",
+      },
       header: "Part Number",
       enableSorting: true,
       size: 120,

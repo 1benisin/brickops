@@ -14,7 +14,19 @@ export const ordersTables = {
     buyerEmail: v.string(),
     buyerOrderCount: v.number(),
     requireInsurance: v.boolean(),
-    status: v.string(), // PENDING, COMPLETED, etc.
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("UPDATED"),
+      v.literal("PROCESSING"),
+      v.literal("READY"),
+      v.literal("PAID"),
+      v.literal("PACKED"),
+      v.literal("SHIPPED"),
+      v.literal("RECEIVED"),
+      v.literal("COMPLETED"),
+      v.literal("CANCELLED"),
+      v.literal("HOLD"),
+    ), // BrickLink order status values. Alert statuses (OCR, NPB, NPX, NRS, NSS) are mapped to HOLD during ingestion.
     isInvoiced: v.boolean(),
     isFiled: v.boolean(),
     driveThruSent: v.boolean(),
@@ -114,4 +126,3 @@ export const ordersTables = {
     .index("by_order", ["businessAccountId", "orderId"])
     .index("by_business_item", ["businessAccountId", "itemNo", "colorId"]),
 };
-

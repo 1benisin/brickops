@@ -19,7 +19,10 @@ import { formatRelativeTime, bestTextOn } from "@/lib/utils";
 import { useGetPartColors } from "@/hooks/useGetPartColors";
 import { ColorPartImage } from "@/components/common/ColorPartImage";
 import { createColumn } from "@/components/ui/data-table/column-definitions";
-import { manualNumberRangeFilter, manualDateRangeFilter } from "@/components/ui/data-table/utils/filter-state";
+import {
+  manualNumberRangeFilter,
+  manualDateRangeFilter,
+} from "@/components/ui/data-table/utils/filter-state";
 
 // Type for marketplace sync configuration
 export type MarketplaceSyncConfig = {
@@ -99,7 +102,10 @@ export const createInventoryColumns = (
     // Selection column
     createColumn({
       id: "select",
-      meta: { label: "Select" },
+      meta: {
+        label: "Select",
+        headerContainerClassName: "px-0",
+      },
       size: 40,
       minSize: 40,
       maxSize: 40,

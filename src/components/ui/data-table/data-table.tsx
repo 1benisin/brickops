@@ -321,7 +321,8 @@ export function DataTable<TData>({
     if (onResetAllReady) {
       onResetAllReady(removeTableState);
     }
-  }, [onTableReady, onResetAllReady, table, removeTableState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, removeTableState]);
 
   // Update selected IDs when selection changes (for server-side pagination)
   useEffect(() => {

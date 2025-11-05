@@ -1,11 +1,66 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
 import type {
   BricklinkOrderResponse,
   BricklinkOrderItemResponse,
 } from "../marketplaces/bricklink/storeClient";
 import { getNextSeqForItem, getCurrentAvailableFromLedger } from "../inventory/helpers";
+
+/**
+ * Map BrickLink API status to Convex status enum
+ * Alert statuses (OCR, NPB, NPX, NRS, NSS) are mapped to HOLD
+ * Other statuses are normalized to uppercase
+ */
+function mapBricklinkStatusToConvexStatus(
+  bricklinkStatus: string,
+):
+  | "PENDING"
+  | "UPDATED"
+  | "PROCESSING"
+  | "READY"
+  | "PAID"
+  | "PACKED"
+  | "SHIPPED"
+  | "RECEIVED"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "HOLD" {
+  const normalizedStatus = bricklinkStatus.toUpperCase().trim();
+
+  // Map alert statuses to HOLD
+  if (
+    normalizedStatus === "OCR" ||
+    normalizedStatus === "NPB" ||
+    normalizedStatus === "NPX" ||
+    normalizedStatus === "NRS" ||
+    normalizedStatus === "NSS"
+  ) {
+    return "HOLD";
+  }
+
+  // Validate and return valid status values
+  const validStatuses = [
+    "PENDING",
+    "UPDATED",
+    "PROCESSING",
+    "READY",
+    "PAID",
+    "PACKED",
+    "SHIPPED",
+    "RECEIVED",
+    "COMPLETED",
+    "CANCELLED",
+    "HOLD",
+  ] as const;
+
+  if (validStatuses.includes(normalizedStatus as (typeof validStatuses)[number])) {
+    return normalizedStatus as (typeof validStatuses)[number];
+  }
+
+  throw new Error(
+    `Invalid BrickLink order status: ${bricklinkStatus}. Valid statuses are: ${validStatuses.join(", ")}`,
+  );
+}
 
 /**
  * Upsert order and order items (internal mutation)
@@ -54,7 +109,7 @@ export const upsertOrder = internalMutation({
       buyerEmail: order.buyer_email,
       buyerOrderCount: order.buyer_order_count,
       requireInsurance: order.require_insurance,
-      status: order.status,
+      status: mapBricklinkStatusToConvexStatus(order.status),
       isInvoiced: order.is_invoiced,
       isFiled: order.is_filed,
       driveThruSent: order.drive_thru_sent,
