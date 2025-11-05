@@ -39,20 +39,6 @@ const marketplaceSync = v.optional(
 );
 
 export const inventoryTables = {
-  // Inventory files for batch collections (Story 3.5)
-  inventoryFiles: defineTable({
-    businessAccountId: v.id("businessAccounts"),
-    name: v.string(),
-    description: v.optional(v.string()),
-    createdBy: v.id("users"),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    // Soft delete support
-    deletedAt: v.optional(v.number()),
-  })
-    .index("by_businessAccount", ["businessAccountId"])
-    .index("by_businessAccount_createdAt", ["businessAccountId", "createdAt"]),
-
   inventoryItems: defineTable({
     businessAccountId: v.id("businessAccounts"),
     name: v.string(),
@@ -71,14 +57,11 @@ export const inventoryTables = {
     // Soft delete support
     isArchived: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
-    // Inventory file association (Story 3.5)
-    fileId: v.optional(v.id("inventoryFiles")),
     // Consolidated marketplace sync tracking (refactored from individual fields)
     marketplaceSync: marketplaceSync,
   })
     // Existing indexes (keep these)
     .index("by_businessAccount", ["businessAccountId"])
-    .index("by_fileId", ["fileId"])
 
     // NEW: Composite indexes for common query patterns
     // Pattern: default listing (sort by createdAt desc)

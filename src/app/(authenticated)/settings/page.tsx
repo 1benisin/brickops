@@ -60,9 +60,9 @@ export default function SettingsPage() {
   const updatePreferences = useMutation(api.users.mutations.updatePreferences);
   const updateSyncSettings = useMutation(api.marketplace.mutations.updateSyncSettings);
   const syncSettings = useQuery(api.marketplace.mutations.getSyncSettings);
-  const isDevEnvironment = useQuery(api.bricklink.testOrders.isDevelopmentEnvironment);
-  const createBulkTestOrders = useMutation(api.bricklink.testOrders.createBulkTestOrders);
-  const deleteAllOrders = useMutation(api.bricklink.testOrders.deleteAllOrders);
+  const isDevEnvironment = useQuery(api.orders.mocks.isDevelopmentEnvironment);
+  const createBulkTestOrders = useMutation(api.orders.mocks.createBulkTestOrders);
+  const deleteAllOrders = useMutation(api.orders.mocks.deleteAllOrders);
   const triggerTestWebhook = useMutation(api.bricklink.testWebhooks.triggerTestWebhookNotification);
   const generateMockInventory = useMutation(api.inventory.testInventory.generateMockInventoryItems);
   const deleteAllInventory = useMutation(api.inventory.testInventory.deleteAllInventoryItems);

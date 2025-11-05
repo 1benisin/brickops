@@ -190,11 +190,11 @@ export function PickingInterface({ orderIds, pickableItems }: PickingInterfacePr
     Map<string, "picked" | "skipped" | "issue">
   >(new Map());
   const focusedItemRef = useRef<HTMLDivElement>(null);
-  const markAsPicked = useMutation(api.marketplace.mutations.markOrderItemAsPicked);
-  const markAsIssue = useMutation(api.marketplace.mutations.markOrderItemAsIssue);
-  const markAsSkipped = useMutation(api.marketplace.mutations.markOrderItemAsSkipped);
-  const markAsUnpicked = useMutation(api.marketplace.mutations.markOrderItemAsUnpicked);
-  const updateOrderStatus = useMutation(api.marketplace.mutations.updateOrderStatusIfFullyPicked);
+  const markAsPicked = useMutation(api.orders.mutations.markOrderItemAsPicked);
+  const markAsIssue = useMutation(api.orders.mutations.markOrderItemAsIssue);
+  const markAsSkipped = useMutation(api.orders.mutations.markOrderItemAsSkipped);
+  const markAsUnpicked = useMutation(api.orders.mutations.markOrderItemAsUnpicked);
+  const updateOrderStatus = useMutation(api.orders.mutations.updateOrderStatusIfFullyPicked);
 
   // Keep all items - don't filter out picked items
   // Determine if item status using query data OR optimistic updates

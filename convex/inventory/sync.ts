@@ -3,10 +3,16 @@ import { internal } from "../_generated/api";
 import { v, ConvexError } from "convex/values";
 import type { Id, Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import { createBricklinkStoreClient, createBrickOwlStoreClient } from "../marketplace/helpers";
+import {
+  createBricklinkStoreClient,
+  createBrickOwlStoreClient,
+} from "../marketplaces/shared/helpers";
 import { recordMetric } from "../lib/external/metrics";
-import { mapConvexToBricklinkCreate, mapConvexToBricklinkUpdate } from "../bricklink/storeMappers";
-import { mapConvexToBrickOwlCreate } from "../brickowl/storeMappers";
+import {
+  mapConvexToBricklinkCreate,
+  mapConvexToBricklinkUpdate,
+} from "../marketplaces/bricklink/storeMappers";
+import { mapConvexToBrickOwlCreate } from "../marketplaces/brickowl/storeMappers";
 import { partialInventoryItemData } from "./validators";
 
 /**
@@ -89,7 +95,7 @@ export const syncInventoryChange = internalAction({
 
     // Get configured providers
     const providers: Array<"bricklink" | "brickowl"> = await ctx.runQuery(
-      internal.marketplace.mutations.getConfiguredProviders,
+      internal.marketplaces.shared.mutations.getConfiguredProviders,
       {
         businessAccountId: args.businessAccountId,
       },

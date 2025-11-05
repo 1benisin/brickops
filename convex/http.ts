@@ -3,7 +3,7 @@ import { httpAction } from "./_generated/server";
 
 import { validateBricklink, validateBrickognize, validateBrickowl } from "./lib/external/validate";
 import { auth } from "./auth";
-import { bricklinkWebhook } from "./bricklink/webhook";
+import { bricklinkWebhook } from "./marketplaces/bricklink/webhook";
 
 const http = httpRouter();
 

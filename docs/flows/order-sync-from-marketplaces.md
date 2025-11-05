@@ -11,29 +11,34 @@ Background cron job periodically syncs orders from Bricklink and Brickowl market
 **Convex** - Queries all active `marketplaceCredentials` for each provider
 
 **Convex** - For each configured marketplace:
-  - **Bricklink**: Creates store client and calls `client.getOrders()` with filters
-  - **Brickowl**: Creates store client and calls `client.getOrders()` with filters
+
+- **Bricklink**: Creates store client and calls `client.getOrders()` with filters
+- **Brickowl**: Creates store client and calls `client.getOrders()` with filters
 
 **Marketplace API** - Returns list of new/updated orders since last sync
 
 **Convex** - For each returned order:
-  - Checks if order already exists in `bricklinkOrders` or `brickowlOrders` table
-  - If new: Creates order document
-  - If existing: Updates order document with latest data
+
+- Checks if order already exists in `bricklinkOrders` or `brickowlOrders` table
+- If new: Creates order document
+- If existing: Updates order document with latest data
 
 **Convex** - For each order, fetches order items:
-  - **Bricklink**: Calls `client.getOrderItems(orderId)`
-  - **Brickowl**: Calls `client.getOrderItems(orderId)`
+
+- **Bricklink**: Calls `client.getOrderItems(orderId)`
+- **Brickowl**: Calls `client.getOrderItems(orderId)`
 
 **Convex** - Upserts order items:
-  - Matches items to inventory by `partNumber` + `colorId` + `condition` + `location`
-  - Retrieves location from matched inventory item
-  - Creates or updates `bricklinkOrderItems` or `brickowlOrderItems` documents
+
+- Matches items to inventory by `partNumber` + `colorId` + `condition` + `location`
+- Retrieves location from matched inventory item
+- Creates or updates `bricklinkOrderItems` or `brickowlOrderItems` documents
 
 **Convex** - Reserves inventory for order items:
-  - For each order item with matched inventory:
-    - Updates `quantityReserved` on inventory item
-    - Creates reservation ledger entry
+
+- For each order item with matched inventory:
+  - Updates `quantityReserved` on inventory item
+  - Creates reservation ledger entry
 
 **Convex** - Updates last sync timestamp for each marketplace
 
@@ -44,9 +49,9 @@ Background cron job periodically syncs orders from Bricklink and Brickowl market
 ## Related Files
 
 - `convex/crons.ts` - Cron job definitions (if implemented)
-- `convex/marketplace/actions.ts` - Order sync action (if implemented)
-- `convex/bricklink/storeClient.ts::getOrders` - Bricklink orders API
-- `convex/brickowl/storeClient.ts::getOrders` - Brickowl orders API
+- `convex/marketplaces/shared/actions.ts` - Order sync action (if implemented)
+- `convex/marketplaces/bricklink/storeClient.ts::getOrders` - Bricklink orders API
+- `convex/marketplaces/brickowl/storeClient.ts::getOrders` - Brickowl orders API
 - `docs/architecture/frontend/core-workflows.md` - Mentions 15-minute cron
 
 ## Notes
@@ -57,4 +62,3 @@ Background cron job periodically syncs orders from Bricklink and Brickowl market
 - Order matching logic is same as webhook notification flow
 - Inventory reservation happens automatically on order sync
 - Sync frequency (15 minutes) balances freshness with API rate limits
-

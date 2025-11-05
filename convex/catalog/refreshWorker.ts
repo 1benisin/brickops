@@ -3,7 +3,7 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import { catalogClient } from "../bricklink/catalogClient";
+import { catalogClient } from "../marketplaces/bricklink/catalogClient";
 
 /**
  * Query to get pending outbox messages ready for processing
@@ -205,7 +205,9 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
       });
     } else if (message.tableName === "colors") {
       const colorData = await catalogClient.getRefreshedColor(parseInt(message.primaryKey));
-      await ctx.runMutation(internal.bricklink.dataRefresher.upsertColor, { data: colorData });
+      await ctx.runMutation(internal.marketplaces.bricklink.dataRefresher.upsertColor, {
+        data: colorData,
+      });
     } else if (message.tableName === "categories") {
       const categoryData = await catalogClient.getRefreshedCategory(parseInt(message.primaryKey));
       await ctx.runMutation(internal.catalog.mutations.upsertCategory, {

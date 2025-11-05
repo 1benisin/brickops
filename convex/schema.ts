@@ -6,7 +6,8 @@ import { usersTables } from "./users/schema";
 import { inventoryTables } from "./inventory/schema";
 import { catalogTables } from "./catalog/schema";
 import { identifyTables } from "./identify/schema";
-import { marketplaceTables } from "./marketplace/schema";
+import { marketplaceTables } from "./marketplaces/shared/schema";
+import { ordersTables } from "./orders/schema";
 import { ratelimitTables } from "./ratelimit/schema";
 
 // Root schema aggregator - combines all domain schemas
@@ -20,5 +21,6 @@ export default defineSchema({
   ...catalogTables,
   ...identifyTables,
   ...marketplaceTables,
+  ...ordersTables,
   ...ratelimitTables,
 });

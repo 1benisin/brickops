@@ -99,7 +99,6 @@ export const addInventoryItem = mutation({
       notes: args.notes,
       createdBy: user._id,
       createdAt: timestamp,
-      fileId: args.fileId, // TODO - remove file system
       // TODO - add tags
       marketplaceSync: {
         bricklink: {
@@ -462,80 +461,6 @@ export const deleteInventoryItem = mutation({
     // No immediate sync - worker will process outbox message within 30 seconds
 
     return { itemId: args.itemId, archived: true };
-  },
-});
-
-/**
- * Add an existing inventory item to a file
- * AC: 3.5.5 - Associate existing items with files
- */
-export const addItemToFile = mutation({
-  args: { itemId: v.id("inventoryItems"), fileId: v.id("inventoryFiles") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-
-    const item = await ctx.db.get(args.itemId);
-    if (!item) {
-      throw new ConvexError("Inventory item not found");
-    }
-
-    const file = await ctx.db.get(args.fileId);
-    if (!file) {
-      throw new ConvexError("File not found");
-    }
-
-    // Verify user has access to both item and file
-    assertBusinessMembership(user, item.businessAccountId);
-    assertBusinessMembership(user, file.businessAccountId);
-    requireOwnerRole(user); // AC: 3.5.12 - owner role required
-
-    // Verify item and file belong to same business account
-    if (item.businessAccountId !== file.businessAccountId) {
-      throw new ConvexError("Item and file must belong to the same business account");
-    }
-
-    if (file.deletedAt) {
-      throw new ConvexError("Cannot add items to deleted file");
-    }
-
-    await ctx.db.patch(args.itemId, {
-      fileId: args.fileId,
-      updatedAt: now(),
-    });
-
-    return null;
-  },
-});
-
-/**
- * Remove an item from a file (move to main inventory)
- * AC: 3.5.5 - Remove items from files
- */
-export const removeItemFromFile = mutation({
-  args: { itemId: v.id("inventoryItems") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-
-    const item = await ctx.db.get(args.itemId);
-    if (!item) {
-      throw new ConvexError("Inventory item not found");
-    }
-
-    assertBusinessMembership(user, item.businessAccountId);
-    requireOwnerRole(user); // AC: 3.5.12 - owner role required
-
-    if (!item.fileId) {
-      throw new ConvexError("Item is not associated with a file");
-    }
-
-    await ctx.db.patch(args.itemId, {
-      fileId: undefined,
-      updatedAt: now(),
-    });
-
-    return null;
   },
 });
 

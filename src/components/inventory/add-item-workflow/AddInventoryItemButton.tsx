@@ -1,7 +1,6 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import type { Id } from "@/convex/_generated/dataModel";
 import type { ButtonProps } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { SearchOrCaptureDialog } from "../dialogs/SearchOrCaptureDialog";
@@ -10,8 +9,6 @@ import { AddPartToInventoryDialog } from "../dialogs/AddPartToInventoryDialog";
 import { useAddItemWorkflow } from "@/hooks/useAddItemWorkflow";
 
 export interface AddInventoryItemButtonProps {
-  /** Optional file ID to add the item to a specific file */
-  fileId?: Id<"inventoryFiles">;
   /** Button styling variant */
   variant?: ButtonProps["variant"];
   /** Button size */
@@ -26,10 +23,8 @@ export interface AddInventoryItemButtonProps {
  *
  * Usage:
  * - General inventory: <AddInventoryItemButton onItemAdded={() => refetch()} />
- * - Specific file: <AddInventoryItemButton fileId={fileId} onItemAdded={() => refetch()} />
  */
 export function AddInventoryItemButton({
-  fileId,
   variant = "default",
   size = "default",
   className,
@@ -87,7 +82,6 @@ export function AddInventoryItemButton({
           if (!open) handleAddDialogClose();
         }}
         partNumber={partNumberForAdd}
-        defaultFileId={fileId}
       />
     </>
   );

@@ -89,44 +89,6 @@ so that **the frontend can manage our canonical inventory while the system relia
 > - Uses marketplace client factories from Stories 3.2-3.3 with database-backed rate limiting
 > - Change ID serves as idempotency key for marketplace operations to prevent duplicates on retry
 
-## Story 3.5: Inventory Files (Batch Collections)
-
-As a **user**,
-I want **to create and manage inventory files (collections) that I can batch-sync to marketplaces**,
-so that **I can organize inventory imports and selectively sync batches without automatic marketplace synchronization**.
-
-### Acceptance Criteria
-
-1. **3.5.1:** Provide inventory file management: create, read, update, delete inventory file collections with name, description, creation date, last modified timestamp, and item count.
-2. **3.5.2:** Display inventory files list view showing all files for the user's business account with summary stats (item count, creation date, last modified), search/filter capabilities, and quick action buttons (view, sync, delete).
-3. **3.5.3:** When adding a part to inventory, provide "Inventory File" field with dropdown to select existing file or "Create New" option; items added to files via `inventoryItems.fileId` reference are NOT automatically synced to `inventorySyncQueue`.
-4. **3.5.4:** Implement inventory file detail view displaying all items within the selected file (`inventoryItems` filtered by `fileId`) with standard inventory fields (part identifier, quantity, condition, price, location, notes, status).
-5. **3.5.5:** Support item CRUD operations within inventory files: add items with `fileId`, edit items in file, remove items from file (delete or clear `fileId`); changes update `inventoryItems` only without triggering sync queue.
-6. **3.5.6:** Provide "Sync to Marketplace" batch action that allows user to select target marketplace(s) (BrickLink and/or BrickOwl) and directly creates inventory lots via Convex actions to marketplace clients, respecting marketplace bulk API limits (batches of ~100 items per request).
-7. **3.5.7:** Implement batch processing with chunking: split inventory file items into batches respecting marketplace API limits (~100 items), process sequentially with progress tracking, handle partial batch failures gracefully.
-8. **3.5.8:** For each batch operation, track per-item sync results: on success, record entry in `inventoryHistory` table with marketplace reference; on failure, mark item with error status and capture error details for UI display.
-9. **3.5.9:** Display real-time sync progress with UI indicators: current batch X of Y, items processing/succeeded/failed counts, per-item status updates as batches complete.
-10. **3.5.10:** After sync completion, provide detailed summary report: total items attempted, successful syncs per marketplace with marketplace lot IDs, failed items list with actionable error messages and affected item identifiers.
-11. **3.5.11:** Validate prerequisites before sync: marketplace credentials configured, valid item data (required fields present), sufficient rate limit capacity; surface blocking issues with clear guidance before initiating sync.
-12. **3.5.12:** Enforce RBAC: only owner role can create files, modify file items, and execute marketplace sync operations; audit all sync actions with user, timestamp, marketplace, and result counts in `inventoryHistory`.
-13. **3.5.13:** Provide filtering and sorting within inventory file view: filter by condition, part type, sync status; sort by quantity, price, date added; support bulk selection for operations.
-14. **3.5.14:** After successful sync, update item sync metadata (marketplace IDs, last synced timestamp) in `inventoryItems` and offer option to move items from file to main inventory (clear `fileId`) or keep in file for reference.
-
-> Notes:
->
-> - Schema: `inventoryFiles` table with `_id`, `businessId`, `name`, `description`, `createdAt`, `updatedAt`, `itemCount` (computed)
-> - Use existing `inventoryItems` table with optional `fileId: v.optional(v.id("inventoryFiles"))` reference
-> - Items with `fileId` set are NOT processed by `inventorySyncQueue` mutations; they bypass the queue entirely
-> - Batch sync operation:
->   - Chunks items into batches of ~100 (respect BrickLink/BrickOwl bulk limits)
->   - Calls marketplace client `bulkCreateLots()` or similar bulk endpoint
->   - On success: creates `inventoryHistory` entries for each item with marketplace lot ID
->   - On batch failure: marks all items in failed batch with error status; if API provides partial results, mark individually
->   - Uses existing marketplace client rate limiting and retry logic from Stories 3.2-3.3
-> - Consider adding `syncStatus` field to `inventoryItems`: null (not synced), 'syncing', 'synced', 'failed'
-> - Add `marketplaceRefs` to `inventoryItems`: object with `bricklink.lotId`, `brickowl.lotId` for tracking
-> - Audit logging: record sync operations in `inventoryHistory` with operation type 'batch_sync', marketplace, item count, success/failure counts
-
 ## Story 3.6: Inventory Change History and Rollback UI
 
 As a **user**,

@@ -14,7 +14,7 @@ export default function PickPage() {
 
   // Fetch pickable items
   const pickableItems = useQuery(
-    api.marketplace.queries.getPickableItemsForOrders,
+    api.orders.queries.getPickableItemsForOrders,
     orderIds.length > 0 ? { orderIds } : "skip",
   );
 

@@ -94,7 +94,7 @@ Implement a complete picking workflow that allows warehouse workers to select or
 
 ### Order Ingestion Process
 
-**Current State (`convex/bricklink/notifications.ts`):**
+**Current State (`convex/marketplaces/bricklink/notifications.ts`):**
 
 - `upsertOrder` mutation handles order ingestion
 - Order items are inserted without location field
@@ -113,7 +113,7 @@ Implement a complete picking workflow that allows warehouse workers to select or
 
 #### Add Fields to `bricklinkOrderItems`
 
-**File:** `convex/marketplace/schema.ts`
+**File:** `convex/marketplaces/shared/schema.ts`
 
 ```typescript
 bricklinkOrderItems: defineTable({
@@ -139,7 +139,7 @@ bricklinkOrderItems: defineTable({
 
 ### 2. Order Ingestion Updates
 
-**File:** `convex/bricklink/notifications.ts` (function: `upsertOrder`)
+**File:** `convex/marketplaces/bricklink/notifications.ts` (function: `upsertOrder`)
 
 **Current Behavior:**
 
@@ -241,7 +241,7 @@ if (matchedInventoryItem) {
 
 ### 3. New Convex Queries
 
-**File:** `convex/marketplace/queries.ts`
+**File:** `convex/marketplaces/shared/queries.ts`
 
 #### Query: `getPickableItemsForOrders`
 
@@ -345,7 +345,7 @@ type PickableItem = {
 
 ### 4. New Convex Mutations
 
-**File:** `convex/marketplace/mutations.ts` (create if doesn't exist, or add to existing mutations file)
+**File:** `convex/marketplaces/shared/mutations.ts` (create if doesn't exist, or add to existing mutations file)
 
 #### Mutation: `markOrderItemAsPicked`
 
@@ -1106,13 +1106,13 @@ export function OrdersBulkActions({ selectedRows }: OrdersBulkActionsProps) {
 - `src/app/(authenticated)/pick/page.tsx`
 - `src/components/picking/picking-interface.tsx`
 - `src/components/picking/pickable-item-card.tsx`
-- `convex/marketplace/mutations.ts` (if doesn't exist)
+- `convex/marketplaces/shared/mutations.ts` (if doesn't exist)
 
 ### Modified Files:
 
-- `convex/marketplace/schema.ts` (add `location` and `isPicked` fields)
-- `convex/bricklink/notifications.ts` (update `upsertOrder` to populate location and update inventory)
-- `convex/marketplace/queries.ts` (add `getPickableItemsForOrders` query)
+- `convex/marketplaces/shared/schema.ts` (add `location` and `isPicked` fields)
+- `convex/marketplaces/bricklink/notifications.ts` (update `upsertOrder` to populate location and update inventory)
+- `convex/marketplaces/shared/queries.ts` (add `getPickableItemsForOrders` query)
 - `src/components/orders/orders-bulk-actions.tsx` (add "Pick Orders" button)
 
 ## Testing Checklist

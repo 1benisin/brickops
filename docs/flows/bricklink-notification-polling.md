@@ -11,24 +11,27 @@ Background cron job polls Bricklink API for new notifications as a safety net fo
 **Convex** - Queries all active `marketplaceCredentials` with provider "bricklink"
 
 **Convex** - For each business account:
-  - Calls `api.bricklink.notifications.pollNotificationsForBusiness` action
+
+- Calls `api.marketplaces.bricklink.notifications.pollNotificationsForBusiness` action
 
 **Convex** - Creates Bricklink store client with business credentials
 
 **Convex** - Calls `client.getNotifications()` to fetch unread notifications
 
 **Bricklink API** - Returns array of unread notifications:
-  - `event_type`: "Order" | "Message" | "Feedback"
-  - `resource_id`: Order/Message/Feedback ID
-  - `timestamp`: ISO 8601 timestamp
+
+- `event_type`: "Order" | "Message" | "Feedback"
+- `resource_id`: Order/Message/Feedback ID
+- `timestamp`: ISO 8601 timestamp
 
 **Convex** - For each notification:
-  - Generates `dedupeKey`: `{businessAccountId}:{event_type}:{resource_id}:{timestamp}`
-  - Calls `api.bricklink.notifications.upsertNotification` (idempotent)
-  - Checks if notification already exists by `dedupeKey`
-    - If exists: Returns existing ID (prevents duplicate processing)
-    - If new: Creates notification with status "pending"
-  - Schedules `api.bricklink.notifications.processNotification` action
+
+- Generates `dedupeKey`: `{businessAccountId}:{event_type}:{resource_id}:{timestamp}`
+- Calls `api.marketplaces.bricklink.notifications.upsertNotification` (idempotent)
+- Checks if notification already exists by `dedupeKey`
+  - If exists: Returns existing ID (prevents duplicate processing)
+  - If new: Creates notification with status "pending"
+- Schedules `api.marketplaces.bricklink.notifications.processNotification` action
 
 **Convex** - Updates `marketplaceCredentials.lastCentralPolledAt` timestamp
 
@@ -37,10 +40,10 @@ Background cron job polls Bricklink API for new notifications as a safety net fo
 ## Related Files
 
 - `convex/crons.ts` - Cron job definitions
-- `convex/bricklink/notifications.ts::pollNotificationsForBusiness` - Polling action
-- `convex/bricklink/notifications.ts::pollNotificationsForAllBusinesses` - Multi-business poller
-- `convex/bricklink/notifications.ts::updateLastPolled` - Timestamp update
-- `convex/bricklink/storeClient.ts::getNotifications` - Bricklink API call
+- `convex/marketplaces/bricklink/notifications.ts::pollNotificationsForBusiness` - Polling action
+- `convex/marketplaces/bricklink/notifications.ts::pollNotificationsForAllBusinesses` - Multi-business poller
+- `convex/marketplaces/bricklink/notifications.ts::updateLastPolled` - Timestamp update
+- `convex/marketplaces/bricklink/storeClient.ts::getNotifications` - Bricklink API call
 
 ## Notes
 
@@ -50,4 +53,3 @@ Background cron job polls Bricklink API for new notifications as a safety net fo
 - `lastCentralPolledAt` tracks when polling last succeeded
 - Only polls businesses with active Bricklink credentials
 - Polling is less efficient than webhooks but provides reliability guarantee
-
