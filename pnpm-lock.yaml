@@ -220,8 +220,8 @@ importers:
         specifier: 3.2.5
         version: 3.2.5
       shadcn:
-        specifier: ^3.3.1
-        version: 3.3.1(@types/node@20.11.19)(typescript@5.3.3)
+        specifier: ^3.5.0
+        version: 3.5.0(@types/node@20.11.19)(typescript@5.3.3)
       simple-git-hooks:
         specifier: 2.9.0
         version: 2.9.0
@@ -8628,8 +8628,8 @@ packages:
     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
     dev: true
 
-  /shadcn@3.3.1(@types/node@20.11.19)(typescript@5.3.3):
-    resolution: {integrity: sha512-sgai5gahy/TiyTiqJEwIFpAuPhmkpt7sGVdRfcmNH53Yc3yI57+zFVmIaqbTST0jP/7tSqZuI0aSllXL2HIw5w==}
+  /shadcn@3.5.0(@types/node@20.11.19)(typescript@5.3.3):
+    resolution: {integrity: sha512-5f9tn7gHOiI8CqJ8LGrUEmX6dOivGgSbHkMCeOMCzxHZy9cPwyuRXt7ZyjwukO8QH9kGqi6oiKOpfvTXNGBP4g==}
     hasBin: true
     dependencies:
       '@antfu/ni': 25.0.0
