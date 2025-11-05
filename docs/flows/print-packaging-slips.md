@@ -14,14 +14,14 @@ User selects one or multiple orders and generates printable packaging slips for 
 
 **Frontend** - Parses order IDs from query parameter
 
-**Frontend** - Calls `api.marketplace.queries.getOrderItemsForOrders` with order IDs
+**Frontend** - Calls `api.marketplaces.shared.queries.getOrderItemsForOrders` with order IDs
 
 **Convex** - For each order ID:
 
 - Queries `bricklinkOrderItems` by `businessAccountId` and `orderId`
 - Returns items grouped by order ID
 
-**Frontend** - Calls `api.marketplace.queries.getOrdersByIds` with order IDs
+**Frontend** - Calls `api.marketplaces.shared.queries.getOrdersByIds` with order IDs
 
 **Convex** - Queries `bricklinkOrders` by order IDs
 
@@ -42,8 +42,8 @@ User selects one or multiple orders and generates printable packaging slips for 
 - `src/app/(authenticated)/print/packaging-slips/page.tsx` - Print page route
 - `src/components/orders/packaging-slip/packaging-slip.tsx` - Packaging slip component
 - `src/components/orders/orders-bulk-actions.tsx` - "Print Pick Slips" button
-- `convex/marketplace/queries.ts::getOrderItemsForOrders` - Order items query
-- `convex/marketplace/queries.ts::getOrdersByIds` - Orders query
+- `convex/marketplaces/shared/queries.ts::getOrderItemsForOrders` - Order items query
+- `convex/marketplaces/shared/queries.ts::getOrdersByIds` - Orders query
 
 ## Notes
 

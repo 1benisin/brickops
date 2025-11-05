@@ -83,10 +83,10 @@ When inventory items are created or updated, changes are queued for synchronizat
 - `convex/inventory/sync.ts::syncToMarketplace` - Provider-specific sync
 - `convex/inventory/sync.ts::updateSyncStatuses` - Status update mutation
 - `convex/inventory/helpers.ts::enqueueMarketplaceSync` - Outbox enqueue helper
-- `convex/bricklink/storeMappers.ts` - Bricklink data mapping
-- `convex/brickowl/storeMappers.ts` - Brickowl data mapping
-- `convex/bricklink/storeClient.ts` - Bricklink API client
-- `convex/brickowl/storeClient.ts` - Brickowl API client
+- `convex/marketplaces/bricklink/storeMappers.ts` - Bricklink data mapping
+- `convex/marketplaces/brickowl/storeMappers.ts` - Brickowl data mapping
+- `convex/marketplaces/bricklink/storeClient.ts` - Bricklink API client
+- `convex/marketplaces/brickowl/storeClient.ts` - Brickowl API client
 
 ## Notes
 

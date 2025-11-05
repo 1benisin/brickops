@@ -34,7 +34,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { FileSelector } from "../files/FileSelector";
 import { ColorSelect } from "@/components/catalog/ColorSelect";
 import { PartPriceGuide } from "@/components/catalog/PartPriceGuide";
 import { UnitPriceInputGroup } from "../shared/UnitPriceInputGroup";
@@ -57,7 +56,6 @@ const addInventorySchema = z.object({
     .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
       message: "Price must be a valid number",
     }),
-  fileId: z.union([z.string(), z.literal("none")]),
 
   // price helper controls (ui-only)
   priceHelperType: z.enum(["stock", "sold"]),
@@ -69,7 +67,6 @@ type LastUsedInventorySettings = {
   condition: ItemCondition;
   location: string;
   colorId: string;
-  fileId: Id<"inventoryFiles"> | "none";
   priceHelperType: "stock" | "sold";
   priceHelperStat: "min" | "max" | "avg" | "qty_avg";
 };
@@ -78,7 +75,6 @@ export type AddPartToInventoryDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   partNumber: string | null;
-  defaultFileId?: Id<"inventoryFiles"> | "none";
 };
 
 /** map guide -> value */
@@ -141,7 +137,6 @@ export function AddPartToInventoryDialog({
   open,
   onOpenChange,
   partNumber,
-  defaultFileId,
 }: AddPartToInventoryDialogProps) {
   const currentUser = useQuery(api.users.queries.getCurrentUser);
   const businessAccountId = currentUser?.businessAccount?._id;
@@ -161,7 +156,6 @@ export function AddPartToInventoryDialog({
       condition: "new",
       location: "",
       colorId: "",
-      fileId: "none",
       priceHelperType: "stock",
       priceHelperStat: "avg",
     },
@@ -174,7 +168,6 @@ export function AddPartToInventoryDialog({
       quantityAvailable: 1,
       condition: "new",
       colorId: "",
-      fileId: "none",
       price: "",
       priceHelperType: "stock",
       priceHelperStat: "avg",
@@ -267,7 +260,6 @@ export function AddPartToInventoryDialog({
         quantityAvailable: 1,
         condition,
         colorId: validColorId,
-        fileId: lastUsed.fileId || defaultFileId || "none",
         price: priceString,
         priceHelperType,
         priceHelperStat,
@@ -295,7 +287,6 @@ export function AddPartToInventoryDialog({
         condition: (vals.condition as "new" | "used") ?? "new",
         location: vals.location ?? "",
         colorId: vals.colorId ?? "",
-        fileId: (vals.fileId as Id<"inventoryFiles"> | "none") ?? "none",
         priceHelperType: (vals.priceHelperType as "stock" | "sold") ?? "stock",
         priceHelperStat: (vals.priceHelperStat as "min" | "max" | "avg" | "qty_avg") ?? "avg",
       });
@@ -315,8 +306,6 @@ export function AddPartToInventoryDialog({
         quantityAvailable: data.quantityAvailable,
         condition: data.condition,
         price: Number(data.price),
-        fileId:
-          data.fileId && data.fileId !== "none" ? (data.fileId as Id<"inventoryFiles">) : undefined,
       });
       onOpenChange(false);
     });
@@ -471,24 +460,6 @@ export function AddPartToInventoryDialog({
                     )}
                   />
                 </div>
-
-                {/* File selection */}
-                {businessAccountId && (
-                  <FormField<AddInventoryFormData, "fileId">
-                    control={form.control}
-                    name="fileId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <FileSelector
-                            value={field.value as Id<"inventoryFiles"> | "none" | undefined}
-                            onChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                )}
 
                 {/* Inline price guide to cross-check visually */}
                 <PartPriceGuide

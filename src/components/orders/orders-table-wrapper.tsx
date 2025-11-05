@@ -7,7 +7,7 @@ import { createOrdersColumns, type Order } from "./orders-columns";
 import { OrdersBulkActions } from "./orders-bulk-actions";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { OrdersQuerySpec } from "@/convex/marketplace/queries";
+import type { OrdersQuerySpec } from "@/convex/orders/queries";
 import { useServerTableState } from "@/components/ui/data-table/hooks/use-server-table-state";
 
 export function OrdersTableWrapper() {
@@ -162,7 +162,7 @@ export function OrdersTableWrapper() {
 
   // Fetch data using Convex query (server-side only)
   // Convex queries return undefined while fetching; keep server-sorted data stable during refetches
-  const result = useQuery(api.marketplace.queries.listOrdersFiltered, {
+  const result = useQuery(api.orders.queries.listOrdersFiltered, {
     querySpec: ordersQuerySpec,
   });
 

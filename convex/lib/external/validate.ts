@@ -1,4 +1,4 @@
-import { catalogClient } from "../../bricklink/catalogClient";
+import { catalogClient } from "../../marketplaces/bricklink/catalogClient";
 import { BrickognizeClient } from "./brickognize";
 import { BrickowlClient } from "./brickowl";
 import { HealthCheckResult } from "./types";

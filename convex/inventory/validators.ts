@@ -70,7 +70,6 @@ export const partialInventoryItemData = v.optional(
     updatedAt: v.optional(v.number()),
     isArchived: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
-    fileId: v.optional(v.id("inventoryFiles")),
     marketplaceSync: marketplaceSync,
   }),
 );
@@ -89,7 +88,6 @@ export const addInventoryItemArgs = v.object({
   condition: itemCondition,
   price: v.optional(v.number()),
   notes: v.optional(v.string()),
-  fileId: v.optional(v.id("inventoryFiles")), // AC: 3.5.3 - Associate items with files
   reason: v.optional(v.string()), // For history tracking
 });
 
@@ -114,25 +112,11 @@ export const deleteInventoryItemArgs = v.object({
   reason: v.optional(v.string()),
 });
 
-// AC: 3.5.5 - File association mutations
-export const addItemToFileArgs = v.object({
-  itemId: inventoryItemId,
-  fileId: v.id("inventoryFiles"),
-});
-
-export const removeItemFromFileArgs = v.object({
-  itemId: inventoryItemId,
-});
-
 // ============================================================================
 // QUERY ARGS
 // ============================================================================
 
 export const listInventoryItemsArgs = v.object({});
-
-export const listInventoryItemsByFileArgs = v.object({
-  fileId: v.id("inventoryFiles"),
-});
 
 export const getInventoryTotalsArgs = v.object({});
 
@@ -156,11 +140,6 @@ export const deleteInventoryItemReturns = v.object({
   archived: v.boolean(),
 });
 
-// AC: 3.5.5 - File association mutation returns
-export const addItemToFileReturns = v.null();
-
-export const removeItemFromFileReturns = v.null();
-
 // Queries
 export const listInventoryItemsReturns = v.array(
   v.object({
@@ -181,13 +160,9 @@ export const listInventoryItemsReturns = v.array(
     updatedAt: v.optional(v.number()),
     isArchived: v.optional(v.boolean()), // Matches schema - optional field
     deletedAt: v.optional(v.number()),
-    // Story 3.5 - Inventory Files fields
-    fileId: v.optional(v.id("inventoryFiles")),
     marketplaceSync: marketplaceSync,
   }),
 );
-
-export const listInventoryItemsByFileReturns = listInventoryItemsReturns;
 
 export const getInventoryTotalsReturns = v.object({
   counts: v.object({

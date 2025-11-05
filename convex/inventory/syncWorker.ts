@@ -3,9 +3,15 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import type { Id, Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import { createBricklinkStoreClient, createBrickOwlStoreClient } from "../marketplace/helpers";
-import { mapConvexToBricklinkCreate, mapConvexToBricklinkUpdate } from "../bricklink/storeMappers";
-import { mapConvexToBrickOwlCreate } from "../brickowl/storeMappers";
+import {
+  createBricklinkStoreClient,
+  createBrickOwlStoreClient,
+} from "../marketplaces/shared/helpers";
+import {
+  mapConvexToBricklinkCreate,
+  mapConvexToBricklinkUpdate,
+} from "../marketplaces/bricklink/storeMappers";
+import { mapConvexToBrickOwlCreate } from "../marketplaces/brickowl/storeMappers";
 
 /**
  * Phase 3: Worker that drains the marketplace outbox

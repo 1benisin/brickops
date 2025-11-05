@@ -24,7 +24,7 @@ crons.interval(
 crons.daily(
   "cleanup-catalog-refresh-outbox",
   { hourUTC: 2, minuteUTC: 0 },
-  internal.bricklink.dataRefresher.cleanupOutbox,
+  internal.marketplaces.bricklink.dataRefresher.cleanupOutbox,
 );
 
 // Phase 3: Drain marketplace outbox every 30 seconds
@@ -38,7 +38,7 @@ crons.interval(
 crons.interval(
   "poll-bricklink-notifications",
   { minutes: 10 },
-  internal.bricklink.notifications.pollAllNotifications,
+  internal.marketplaces.bricklink.notifications.pollAllNotifications,
 );
 
 export default crons;

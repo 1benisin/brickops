@@ -12,7 +12,7 @@ Bricklink sends a notification when a new order is created. The system receives 
 
 **Convex** - Extracts `webhookToken` from URL path or query parameter
 
-**Convex** - Validates token via `api.bricklink.notifications.getCredentialByToken`
+**Convex** - Validates token via `api.marketplaces.bricklink.notifications.getCredentialByToken`
 
 **Convex** - Validates request method (must be POST)
 
@@ -28,7 +28,7 @@ Bricklink sends a notification when a new order is created. The system receives 
 
 **Convex** - Generates `dedupeKey`: `{businessAccountId}:{event_type}:{resource_id}:{timestamp}`
 
-**Convex** - Calls `api.bricklink.notifications.upsertNotification` (idempotent)
+**Convex** - Calls `api.marketplaces.bricklink.notifications.upsertNotification` (idempotent)
 
 **Convex** - Checks if notification already exists by `dedupeKey`
 
@@ -76,7 +76,7 @@ Bricklink sends a notification when a new order is created. The system receives 
 
 **Convex** - Fetches order items: `client.getOrderItems(orderId)`
 
-**Convex** - Calls `api.bricklink.notifications.upsertOrder` mutation
+**Convex** - Calls `api.marketplaces.bricklink.notifications.upsertOrder` mutation
 
 **Convex** - Upserts `bricklinkOrders` document
 
@@ -107,14 +107,14 @@ Bricklink sends a notification when a new order is created. The system receives 
 
 ## Related Files
 
-- `convex/bricklink/webhook.ts::bricklinkWebhook` - Webhook HTTP handler
-- `convex/bricklink/notifications.ts::upsertNotification` - Idempotent notification creation
-- `convex/bricklink/notifications.ts::processNotification` - Notification processor
-- `convex/bricklink/notifications.ts::processOrderNotification` - Order-specific processing
-- `convex/bricklink/notifications.ts::upsertOrder` - Order upsert mutation
-- `convex/bricklink/notifications.ts::pollNotificationsForBusiness` - Polling action
-- `convex/bricklink/storeClient.ts::getOrder` - Order fetch method
-- `convex/bricklink/storeClient.ts::getOrderItems` - Order items fetch method
+- `convex/marketplaces/bricklink/webhook.ts::bricklinkWebhook` - Webhook HTTP handler
+- `convex/marketplaces/bricklink/notifications.ts::upsertNotification` - Idempotent notification creation
+- `convex/marketplaces/bricklink/notifications.ts::processNotification` - Notification processor
+- `convex/marketplaces/bricklink/notifications.ts::processOrderNotification` - Order-specific processing
+- `convex/marketplaces/bricklink/notifications.ts::upsertOrder` - Order upsert mutation
+- `convex/marketplaces/bricklink/notifications.ts::pollNotificationsForBusiness` - Polling action
+- `convex/marketplaces/bricklink/storeClient.ts::getOrder` - Order fetch method
+- `convex/marketplaces/bricklink/storeClient.ts::getOrderItems` - Order items fetch method
 
 ## Notes
 

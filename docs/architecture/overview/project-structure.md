@@ -3,19 +3,29 @@
 ```text
 brickops/
 ├── convex/                         # Convex backend functions and schema
-│   ├── bricklink/                  # BrickLink marketplace integration (Stories 2.3, 3.2)
-│   │   ├── catalogClient.ts        # Catalog queries (BrickOps credentials)
-│   │   ├── bricklinkMappers.ts     # Catalog data mappers
-│   │   ├── dataRefresher.ts        # Catalog refresh jobs
-│   │   ├── notifications.ts       # BrickLink notifications processing
-│   │   ├── oauth.ts                # OAuth 1.0a signing helpers
-│   │   ├── storeClient.ts          # Store client (inventory + orders, user credentials)
-│   │   ├── storeMappers.ts         # Store data mappers
-│   │   └── webhook.ts              # Webhook endpoint handlers
-│   ├── brickowl/                   # BrickOwl marketplace integration (Story 3.3)
-│   │   ├── auth.ts                 # API key authentication helpers
-│   │   ├── storeClient.ts          # Store client (inventory + orders, user credentials)
-│   │   └── storeMappers.ts         # Store data mappers
+│   ├── marketplaces/               # Marketplace integrations (Stories 2.3, 3.1-3.3)
+│   │   ├── bricklink/              # BrickLink marketplace integration
+│   │   │   ├── catalogClient.ts    # Catalog queries (BrickOps credentials)
+│   │   │   ├── bricklinkMappers.ts # Catalog data mappers
+│   │   │   ├── dataRefresher.ts    # Catalog refresh jobs
+│   │   │   ├── notifications.ts   # BrickLink notifications processing
+│   │   │   ├── oauth.ts            # OAuth 1.0a signing helpers
+│   │   │   ├── storeClient.ts      # Store client (inventory + orders, user credentials)
+│   │   │   ├── storeMappers.ts     # Store data mappers
+│   │   │   └── webhook.ts          # Webhook endpoint handlers
+│   │   ├── brickowl/               # BrickOwl marketplace integration
+│   │   │   ├── auth.ts             # API key authentication helpers
+│   │   │   ├── storeClient.ts      # Store client (inventory + orders, user credentials)
+│   │   │   └── storeMappers.ts     # Store data mappers
+│   │   └── shared/                 # Shared marketplace orchestration
+│   │       ├── actions.ts          # External marketplace API actions
+│   │       ├── helpers.ts          # Marketplace business logic and client factories
+│   │       ├── migrations.ts       # Marketplace migrations
+│   │       ├── mutations.ts        # Marketplace write operations
+│   │       ├── queries.ts          # Marketplace read operations
+│   │       ├── rateLimitConfig.ts  # Rate limit configurations per provider
+│   │       ├── schema.ts           # Marketplace table schemas
+│   │       └── types.ts            # Shared TypeScript interfaces
 │   ├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
 │   │   ├── actions.ts              # External API orchestration
 │   │   ├── helpers.ts              # Catalog business logic helpers
@@ -30,27 +40,21 @@ brickops/
 │   │   ├── mutations.ts            # Identification write operations
 │   │   └── schema.ts               # Identification table schemas
 │   ├── inventory/                  # Inventory domain functions (Story 3.4)
-│   │   ├── files/                  # Inventory file upload subdomain
-│   │   │   ├── actions.ts          # File processing actions
-│   │   │   ├── helpers.ts          # File parsing helpers
-│   │   │   ├── mutations.ts        # File mutations
-│   │   │   ├── queries.ts            # File queries
-│   │   │   └── validators.ts       # File validation
 │   │   ├── helpers.ts              # Inventory business logic helpers
 │   │   ├── mutations.ts            # Inventory write operations
 │   │   ├── queries.ts              # Inventory read operations
 │   │   ├── schema.ts               # Inventory table schemas
 │   │   ├── sync.ts                 # Marketplace sync orchestration
 │   │   ├── syncWorker.ts           # Background sync processing
+│   │   ├── types.ts                # Inventory types
+│   │   ├── testInventory.ts        # Inventory test utilities
 │   │   └── validators.ts           # Inventory input validation
-│   ├── marketplace/                # Marketplace domain functions (Stories 3.1-3.3)
-│   │   ├── actions.ts              # External marketplace API actions
-│   │   ├── helpers.ts              # Marketplace business logic
-│   │   ├── mutations.ts            # Marketplace write operations
-│   │   ├── queries.ts              # Marketplace read operations
-│   │   ├── rateLimitConfig.ts      # Rate limit configurations per provider
-│   │   ├── schema.ts               # Marketplace table schemas
-│   │   └── types.ts                # Shared TypeScript interfaces
+│   ├── orders/                     # Orders domain functions
+│   │   ├── ingestion.ts           # Order ingestion from marketplaces
+│   │   ├── mutations.ts            # Order write operations
+│   │   ├── queries.ts              # Order read operations
+│   │   ├── schema.ts               # Order table schemas
+│   │   └── mocks.ts                # Order test mocks
 │   ├── ratelimit/                  # Rate limiting domain
 │   │   ├── mutations.ts            # Rate limit write operations
 │   │   ├── rateLimitConfig.ts      # Rate limit configuration
@@ -141,8 +145,11 @@ BrickOps organizes backend code by business domain, with each domain following a
 - `catalog/` - Part catalog management (Story 2.2-2.3)
 - `identify/` - Part identification via Brickognize (Story 2.1)
 - `inventory/` - Inventory tracking and sync (Story 3.4)
-  - `inventory/files/` - Inventory file upload and processing subdomain
-- `marketplace/` - Marketplace integrations and orchestration (Stories 3.1-3.3)
+- `marketplaces/` - Marketplace integrations and orchestration (Stories 3.1-3.3)
+  - `marketplaces/bricklink/` - BrickLink marketplace integration
+  - `marketplaces/brickowl/` - BrickOwl marketplace integration
+  - `marketplaces/shared/` - Shared marketplace orchestration and types
+- `orders/` - Order management and processing
 - `ratelimit/` - Rate limiting infrastructure
 - `users/` - User management and RBAC (Story 1.3)
 
@@ -159,11 +166,11 @@ Each domain typically contains:
 
 **Marketplace Integration (Stories 3.1-3.3)**:
 
-- `bricklink/` - BrickLink marketplace integration with separate clients for catalog (BrickOps credentials) vs store (user credentials)
+- `marketplaces/bricklink/` - BrickLink marketplace integration with separate clients for catalog (BrickOps credentials) vs store (user credentials)
   - Includes `notifications.ts` for processing BrickLink push notifications
   - Includes `webhook.ts` for handling webhook events
-- `brickowl/` - BrickOwl marketplace integration following same pattern
-- `marketplace/` - Orchestration layer with shared types and configurations across all marketplace providers
+- `marketplaces/brickowl/` - BrickOwl marketplace integration following same pattern
+- `marketplaces/shared/` - Orchestration layer with shared types, configurations, and client factories across all marketplace providers
 
 **Shared Infrastructure**:
 
@@ -179,4 +186,3 @@ Each domain typically contains:
 - `__tests__/backend/` - Convex function tests
 - `__tests__/frontend/` - React component tests
 - `__tests__/e2e/` - Playwright end-to-end tests
-

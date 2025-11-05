@@ -9,11 +9,12 @@ User searches for parts in the catalog. System checks cache first, then fetches 
 **User** - Navigates to `/catalog` page
 
 **Frontend** - Initializes search state from URL params:
-  - `partId`: Part number filter
-  - `name`: Part name filter
-  - `location`: Location filter
-  - `sort`: Sort order
-  - `pageSize`: Results per page
+
+- `partId`: Part number filter
+- `name`: Part name filter
+- `location`: Location filter
+- `sort`: Sort order
+- `pageSize`: Results per page
 
 **User** - Enters search criteria in `CatalogSearchBar`
 
@@ -22,28 +23,32 @@ User searches for parts in the catalog. System checks cache first, then fetches 
 **Frontend** - Calls `api.catalog.queries.searchParts` with search args
 
 **Convex** - Queries cached catalog data from `catalogParts` table
-  - Filters by part number, name, or other criteria
-  - Applies sorting
-  - Paginates results
+
+- Filters by part number, name, or other criteria
+- Applies sorting
+- Paginates results
 
 **Convex** - If part not in cache:
-  - Calls Bricklink API `GET /items/{type}/{no}` to fetch part details
-  - Stores part data in `catalogParts` cache
-  - Returns cached part
+
+- Calls Bricklink API `GET /items/{type}/{no}` to fetch part details
+- Stores part data in `catalogParts` cache
+- Returns cached part
 
 **Convex** - Returns paginated results
 
 **Frontend** - Displays results in `CatalogResultCard` components
-  - Shows part image, name, part number, category
-  - Shows availability and price info if available
+
+- Shows part image, name, part number, category
+- Shows availability and price info if available
 
 **User** - Clicks on a part card
 
 **Frontend** - Opens `PartDetailDrawer` with part details
-  - Shows full part information
-  - Shows price guide data
-  - Shows inventory availability
-  - Provides "Add to Inventory" action
+
+- Shows full part information
+- Shows price guide data
+- Shows inventory availability
+- Provides "Add to Inventory" action
 
 **User** - Can add part to inventory from detail drawer
 
@@ -54,7 +59,7 @@ User searches for parts in the catalog. System checks cache first, then fetches 
 - `src/components/catalog/CatalogResultCard.tsx` - Part card display
 - `src/components/catalog/PartDetailDrawer.tsx` - Part detail drawer
 - `convex/catalog/queries.ts::searchParts` - Catalog search query
-- `convex/bricklink/catalogClient.ts` - Bricklink catalog API client
+- `convex/marketplaces/bricklink/catalogClient.ts` - Bricklink catalog API client
 
 ## Notes
 
@@ -64,4 +69,3 @@ User searches for parts in the catalog. System checks cache first, then fetches 
 - Results are paginated for large result sets
 - Part details include price guide and inventory availability
 - Catalog lookup is used in add inventory flow for part selection
-

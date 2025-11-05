@@ -5,8 +5,6 @@ import { requireUser, assertBusinessMembership } from "./helpers";
 import {
   listInventoryItemsArgs,
   listInventoryItemsReturns,
-  listInventoryItemsByFileArgs,
-  listInventoryItemsByFileReturns,
   getInventoryTotalsArgs,
   getInventoryTotalsReturns,
   getItemSyncStatusArgs,
@@ -33,31 +31,6 @@ export const listInventoryItems = query({
   },
 });
 
-export const listInventoryItemsByFile = query({
-  args: listInventoryItemsByFileArgs,
-  returns: listInventoryItemsByFileReturns,
-  handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-
-    // Verify the file belongs to the user's business account
-    const file = await ctx.db.get(args.fileId);
-    if (!file) {
-      throw new Error("File not found");
-    }
-    assertBusinessMembership(user, file.businessAccountId);
-
-    const items = await ctx.db
-      .query("inventoryItems")
-      .withIndex("by_fileId", (q) => q.eq("fileId", args.fileId))
-      .collect();
-
-    // Exclude archived items from file listings
-    const activeItems = items.filter((item) => !item.isArchived);
-
-    return activeItems.sort((a, b) => b.createdAt - a.createdAt); // Newest first
-  },
-});
-
 export const getInventoryTotals = query({
   args: getInventoryTotalsArgs,
   returns: getInventoryTotalsReturns,
@@ -69,24 +42,24 @@ export const getInventoryTotals = query({
       .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
+    // Exclude archived items
     const activeItems = items.filter((item) => !item.isArchived);
 
-    let available = 0;
-    let reserved = 0;
-
-    for (const it of activeItems) {
-      available += it.quantityAvailable ?? 0;
-      reserved += it.quantityReserved ?? 0;
-    }
+    // Calculate totals
+    const totals = activeItems.reduce(
+      (acc, item) => {
+        acc.available += item.quantityAvailable ?? 0;
+        acc.reserved += item.quantityReserved ?? 0;
+        return acc;
+      },
+      { available: 0, reserved: 0 },
+    );
 
     return {
       counts: {
         items: activeItems.length,
       },
-      totals: {
-        available,
-        reserved,
-      },
+      totals,
     };
   },
 });

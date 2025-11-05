@@ -14,13 +14,13 @@ export default function PrintPackagingSlipsPage() {
 
   // Fetch order items for all selected orders
   const orderItemsData = useQuery(
-    api.marketplace.queries.getOrderItemsForOrders,
+    api.orders.queries.getOrderItemsForOrders,
     orderIds.length > 0 ? { orderIds } : "skip",
   );
 
   // Fetch selected orders
   const selectedOrders = useQuery(
-    api.marketplace.queries.getOrdersByIds,
+    api.orders.queries.getOrdersByIds,
     orderIds.length > 0 ? { orderIds } : "skip",
   );
 

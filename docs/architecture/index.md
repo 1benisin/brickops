@@ -40,15 +40,14 @@ Convex serverless backend architecture and domains:
 
 - Catalog - Part catalog management
 - Identify - Part identification via Brickognize
-- Inventory - Inventory tracking and sync (includes file upload subdomain)
-- Marketplace - Marketplace integrations and orchestration
+- Inventory - Inventory tracking and sync
+- Marketplaces - Marketplace integrations and orchestration
+  - Bricklink - Marketplace integration with OAuth 1.0a
+  - BrickOwl - Marketplace integration with API keys
+  - Shared - Shared marketplace orchestration and types
+- Orders - Order management and processing
 - Users - User management and RBAC
 - Rate Limit - Global rate limiting infrastructure
-
-**Backend Integrations:**
-
-- BrickLink - Marketplace integration with OAuth 1.0a
-- BrickOwl - Marketplace integration with API keys
 
 ### Frontend
 
