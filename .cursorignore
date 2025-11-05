@@ -2,3 +2,6 @@
 
 # Allow .env files to be visible in Cursor
 !.env.local.example
+
+# dont' allow _archive folder
+_archive/
