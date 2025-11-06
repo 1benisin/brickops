@@ -24,7 +24,7 @@ export const testConnection = action({
     }
 
     // Get credentials via query (this will check owner permission)
-    const status = await ctx.runQuery(api.marketplace.queries.getCredentialStatus, {
+    const status = await ctx.runQuery(api.marketplaces.shared.queries.getCredentialStatus, {
       provider: args.provider,
     });
 

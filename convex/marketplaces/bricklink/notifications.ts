@@ -223,11 +223,11 @@ async function processOrderNotification(
 }
 
 /**
- * Process test order notification: use provided test data instead of API calls
+ * Process mock order notification: use provided mock data instead of API calls
  * Development only - bypasses BrickLink API calls
  * Internal mutation (not action) since it doesn't need to make external API calls
  */
-export const processTestOrderNotification = internalMutation({
+export const processMockOrderNotification = internalMutation({
   args: {
     businessAccountId: v.id("businessAccounts"),
     orderData: v.any(), // BricklinkOrderResponse
@@ -243,11 +243,11 @@ export const processTestOrderNotification = internalMutation({
 
     if (!isDevelopment) {
       throw new Error(
-        "Test webhook notifications can only be processed in development environments",
+        "Mock webhook notifications can only be processed in development environments",
       );
     }
 
-    // Type assertions for test data
+    // Type assertions for mock data
     const orderData = args.orderData as BricklinkOrderResponse;
     const orderItemsData = args.orderItemsData as BricklinkOrderItemResponse[][];
 
