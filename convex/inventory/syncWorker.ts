@@ -11,7 +11,10 @@ import {
   mapConvexToBricklinkCreate,
   mapConvexToBricklinkUpdate,
 } from "../marketplaces/bricklink/storeMappers";
-import { mapConvexToBrickOwlCreate } from "../marketplaces/brickowl/storeMappers";
+import {
+  mapConvexToBrickOwlCreate,
+  mapConvexToBrickOwlUpdate,
+} from "../marketplaces/brickowl/storeMappers";
 
 /**
  * Phase 3: Worker that drains the marketplace outbox
@@ -302,7 +305,7 @@ async function callMarketplaceAPI(
           });
         }
 
-        // For BrickLink, get the anchor from lastSyncedAvailable
+        // Get the anchor from lastSyncedAvailable for both marketplaces
         const anchorAvailable =
           args.message.provider === "bricklink"
             ? args.item.marketplaceSync?.bricklink?.lastSyncedAvailable ?? 0
@@ -326,9 +329,15 @@ async function callMarketplaceAPI(
             error: result.error ? String(result.error) : undefined,
           };
         } else {
-          // BrickOwl: Pass full item data (no delta-based update yet)
+          // BrickOwl update: Map with the anchor quantity (similar to Bricklink)
+          const payload = mapConvexToBrickOwlUpdate(
+            args.item,
+            anchorAvailable, // Previous quantity (anchor)
+            false, // Use relative_quantity mode (delta-based)
+          );
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (client as any).updateInventory(marketplaceId, args.item, {
+          const result = await (client as any).updateInventory(marketplaceId, payload, {
             idempotencyKey,
           });
 

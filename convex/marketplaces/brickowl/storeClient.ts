@@ -46,6 +46,7 @@ import { recordMetric } from "../../lib/external/metrics";
 import {
   generateRequestId,
   buildAuthHeaders,
+  getApiKey,
   validateApiKey,
   type BrickOwlCredentials,
 } from "./auth";
@@ -404,16 +405,66 @@ export class BrickOwlStoreClient {
       }
 
       // 3. Build URL and headers
-      const url = new URL(options.path, BASE_URL);
+      // Construct URL properly: BASE_URL is "https://api.brickowl.com/v1"
+      // Path is "/inventory/create" - need to remove leading slash to append correctly
+      const path = options.path.startsWith("/") ? options.path.slice(1) : options.path;
+      const url = new URL(`${BASE_URL}/${path}`);
+      const isPostRequest = options.method === "POST";
+      const apiKey = getApiKey(this.credentials.apiKey);
+
+      // For GET requests: Add API key as query parameter
+      if (!isPostRequest) {
+        url.searchParams.append("key", apiKey);
+      }
+
+      // Add other query parameters
       if (options.queryParams) {
         Object.entries(options.queryParams).forEach(([key, value]) => {
           url.searchParams.append(key, value);
         });
       }
 
-      const headers = buildAuthHeaders(this.credentials.apiKey);
+      const headers = buildAuthHeaders(this.credentials.apiKey, isPostRequest);
 
-      // 4. Make request
+      // 4. Prepare request body
+      // For POST: Convert JSON payload to form-encoded format and include API key
+      let requestBody: string | undefined;
+      if (isPostRequest && options.body) {
+        // Convert JSON object to form-encoded format
+        const formData = new URLSearchParams();
+        formData.append("key", apiKey);
+        
+        // Add all body parameters as form fields
+        Object.entries(options.body as Record<string, unknown>).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            // Convert values to strings (arrays/objects need special handling)
+            if (Array.isArray(value)) {
+              // For arrays, BrickOwl might expect JSON string or comma-separated
+              // Based on API docs, we'll stringify arrays
+              formData.append(key, JSON.stringify(value));
+            } else if (typeof value === "object") {
+              // For objects, stringify them
+              formData.append(key, JSON.stringify(value));
+            } else {
+              formData.append(key, String(value));
+            }
+          }
+        });
+        requestBody = formData.toString();
+      }
+
+      // 5. Log request for development/debugging
+      const logHeaders = { ...headers };
+      console.log("[BrickOwl API Request]", {
+        operation: options.path,
+        method: options.method,
+        url: url.toString(),
+        correlationId,
+        requestBody: requestBody ? requestBody.replace(/key=[^&]+/, "key=***") : undefined, // Mask API key in logs
+        headers: logHeaders,
+      });
+
+      // 6. Make request
       recordMetric("external.brickowl.store.request", {
         operation: options.path,
         method: options.method,
@@ -424,30 +475,96 @@ export class BrickOwlStoreClient {
       const response = await fetch(url.toString(), {
         method: options.method,
         headers,
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        body: requestBody,
       });
 
-      // 5. Record quota usage AFTER request
+      // 7. Record quota usage AFTER request
       await this.ctx.runMutation(internal.marketplaces.shared.mutations.incrementQuota, {
         businessAccountId: this.businessAccountId,
         provider: "brickowl",
       });
 
-      // 6. Handle response
+      // 8. Handle response
       const durationMs = Date.now() - startTime;
 
-      if (!response.ok) {
-        await this.handleErrorResponse(response, correlationId, durationMs);
+      // Read response body once (clone if needed for error handling)
+      let responseBody: unknown;
+      const contentType = response.headers.get("content-type") ?? "";
+      const contentLength = response.headers.get("content-length");
+      
+      try {
+        // Check if response has a body (content-length > 0 or no content-length header)
+        if (contentLength === "0") {
+          responseBody = null;
+        } else if (contentType.includes("application/json")) {
+          // Parse as JSON directly
+          responseBody = await response.json();
+        } else {
+          // Parse as text (or empty string if no body)
+          const text = await response.text();
+          responseBody = text || null;
+        }
+      } catch (parseError) {
+        // If we can't parse the body, log it and throw
+        console.error("[BrickOwl API] Failed to parse response body", {
+          status: response.status,
+          statusText: response.statusText,
+          contentType,
+          contentLength,
+          correlationId,
+          parseError: parseError instanceof Error ? parseError.message : String(parseError),
+        });
+        throw new ConvexError(
+          `BrickOwl API response parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+        );
       }
 
-      const data = (await response.json()) as T;
+      // Log full response for development/debugging
+      // Safely extract headers for logging (Headers.entries() may not be available in all runtimes)
+      const responseHeaders: Record<string, string> = {};
+      const headerKeys = [
+        "content-type",
+        "content-length",
+        "x-ratelimit-limit",
+        "x-ratelimit-remaining",
+        "x-ratelimit-reset",
+        "retry-after",
+      ];
+      for (const key of headerKeys) {
+        const value = response.headers.get(key);
+        if (value) {
+          responseHeaders[key] = value;
+        }
+      }
 
-      // 7. Cache result if idempotent
+      console.log("[BrickOwl API Response]", {
+        operation: options.path,
+        method: options.method,
+        status: response.status,
+        statusText: response.statusText,
+        correlationId,
+        requestBody: options.body,
+        responseBody: JSON.stringify(responseBody),
+        headers: responseHeaders,
+      });
+
+      if (!response.ok) {
+        await this.handleErrorResponse(
+          response.status,
+          responseBody,
+          correlationId,
+          durationMs,
+        );
+      }
+
+      const data = responseBody as T;
+
+      // 8. Cache result if idempotent
       if (options.idempotencyKey) {
         this.requestCache.set(options.idempotencyKey, data);
       }
 
-      // 8. Record success metrics
+      // 9. Record success metrics
       recordMetric("external.brickowl.store.success", {
         operation: options.path,
         businessAccountId: this.businessAccountId,
@@ -485,60 +602,98 @@ export class BrickOwlStoreClient {
 
   /**
    * Handle error responses from BrickOwl API
+   * @param status - HTTP status code
+   * @param errorBody - Already parsed response body
+   * @param correlationId - Request correlation ID
+   * @param _durationMs - Request duration
    */
   private async handleErrorResponse(
-    response: Response,
+    status: number,
+    errorBody: unknown,
     correlationId: string,
     _durationMs: number,
   ): Promise<never> {
-    let errorBody: unknown;
-    try {
-      errorBody = await response.json();
-    } catch {
-      errorBody = await response.text();
-    }
+    // Log error response for development/debugging
+    console.error("[BrickOwl API Error]", {
+      status,
+      correlationId,
+      errorBody: JSON.stringify(errorBody),
+    });
 
     const apiError = normalizeApiError("brickowl", errorBody, { correlationId });
 
     // Handle specific HTTP status codes
-    if (response.status === 429) {
-      const retryAfter = response.headers.get("Retry-After");
-      const retryAfterMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
-
+    if (status === 429) {
       recordMetric("external.brickowl.store.throttle", {
         correlationId,
-        retryAfterMs,
+        retryAfterMs: 60000, // Default 60s if not specified
       });
 
-      const err = new ConvexError(
-        `BrickOwl rate limit: retry after ${Math.ceil(retryAfterMs / 1000)}s`,
-      );
-      (err.data as { httpStatus?: number }).httpStatus = response.status;
+      const err = new ConvexError(`BrickOwl rate limit: retry after 60s`);
+      // Initialize data as object if it doesn't exist or is not an object
+      if (!err.data || typeof err.data !== "object") {
+        err.data = {};
+      }
+      (err.data as { httpStatus?: number }).httpStatus = status;
       throw err;
     }
 
-    if (response.status === 401) {
+    if (status === 401) {
       const err = new ConvexError(
         "BrickOwl API key is invalid or expired. Please update your credentials.",
       );
-      (err.data as { httpStatus?: number }).httpStatus = response.status;
+      if (!err.data || typeof err.data !== "object") {
+        err.data = {};
+      }
+      (err.data as { httpStatus?: number }).httpStatus = status;
       throw err;
     }
 
-    if (response.status === 404) {
-      const err = new ConvexError("Inventory lot not found on BrickOwl");
-      (err.data as { httpStatus?: number }).httpStatus = response.status;
+    if (status === 404) {
+      // 404 on create might mean endpoint not found, authentication issue, or invalid BOID
+      // Check if error body is HTML (indicates wrong endpoint/auth issue)
+      const isHtmlError =
+        typeof errorBody === "string" && errorBody.trim().startsWith("<!DOCTYPE");
+      
+      // Check if it's an invalid BOID error
+      let message: string;
+      if (isHtmlError) {
+        message = "BrickOwl API endpoint not found or authentication failed. Please check your API key and endpoint URL.";
+      } else if (
+        typeof errorBody === "object" &&
+        errorBody !== null &&
+        "error" in errorBody &&
+        typeof (errorBody as { error?: { status?: string } }).error?.status === "string" &&
+        (errorBody as { error: { status: string } }).error.status.includes("Invalid BOID")
+      ) {
+        message =
+          "Invalid BOID: The part number provided is not a valid BrickOwl BOID. " +
+          "BrickOwl uses different part identifiers (BOIDs) than Bricklink. " +
+          "You need to look up the correct BOID for this part in BrickOwl's catalog before creating inventory.";
+      } else {
+        message = "Inventory lot not found on BrickOwl";
+      }
+      
+      const err = new ConvexError(message);
+      if (!err.data || typeof err.data !== "object") {
+        err.data = {};
+      }
+      (err.data as { httpStatus?: number; errorBody?: unknown }).httpStatus = status;
+      (err.data as { httpStatus?: number; errorBody?: unknown }).errorBody = errorBody;
       throw err;
     }
 
-    if (response.status === 400) {
+    if (status === 400) {
       const err = new ConvexError(apiError.error.message || "Invalid request data");
-      (err.data as { httpStatus?: number }).httpStatus = response.status;
+      if (!err.data || typeof err.data !== "object") {
+        err.data = {};
+      }
+      (err.data as { httpStatus?: number }).httpStatus = status;
       throw err;
     }
 
     // Record failure for circuit breaker (5xx errors and network failures)
-    if (response.status >= 500) {
+    if (status >= 500) {
       await this.ctx.runMutation(internal.marketplaces.shared.mutations.recordFailure, {
         businessAccountId: this.businessAccountId,
         provider: "brickowl",
@@ -546,9 +701,12 @@ export class BrickOwlStoreClient {
     }
 
     const finalError = new ConvexError(
-      apiError.error.message || `BrickOwl API error: ${response.status}`,
+      apiError.error.message || `BrickOwl API error: ${status}`,
     );
-    (finalError.data as { httpStatus?: number }).httpStatus = response.status;
+    if (!finalError.data || typeof finalError.data !== "object") {
+      finalError.data = {};
+    }
+    (finalError.data as { httpStatus?: number }).httpStatus = status;
     throw finalError;
   }
 

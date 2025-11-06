@@ -532,28 +532,6 @@ export class BricklinkStoreClient {
       tokenSecret: this.credentials.tokenSecret,
     };
 
-    // DEBUG: Log credential info (not the actual secrets)
-    console.log("[OAuth Debug] Credential check", {
-      hasConsumerKey: !!this.credentials.consumerKey,
-      consumerKeyLength: this.credentials.consumerKey?.length,
-      consumerKeyPrefix: this.credentials.consumerKey?.substring(0, 4),
-      consumerKeySuffix: this.credentials.consumerKey?.substring(
-        this.credentials.consumerKey.length - 4,
-      ),
-      hasConsumerSecret: !!this.credentials.consumerSecret,
-      consumerSecretLength: this.credentials.consumerSecret?.length,
-      hasTokenValue: !!this.credentials.tokenValue,
-      tokenValueLength: this.credentials.tokenValue?.length,
-      tokenValuePrefix: this.credentials.tokenValue?.substring(0, 4),
-      tokenValueSuffix: this.credentials.tokenValue?.substring(
-        this.credentials.tokenValue.length - 4,
-      ),
-      hasTokenSecret: !!this.credentials.tokenSecret,
-      tokenSecretLength: this.credentials.tokenSecret?.length,
-      url: url.href,
-      method,
-    });
-
     // Generate OAuth parameters
     const oauthParams = generateOAuthParams();
 
@@ -574,15 +552,6 @@ export class BricklinkStoreClient {
 
     // Generate OAuth signature
     const baseUrl = url.href.split("?")[0];
-
-    // DEBUG: Log signature generation details
-    console.log("[OAuth Debug] Signature generation", {
-      method,
-      baseUrl,
-      paramCount: allParams.length,
-      hasBody: !!options.body,
-      bodyPreview: options.body ? JSON.stringify(options.body).substring(0, 100) : null,
-    });
 
     const signature = await generateOAuthSignature(oauthCredentials, method, baseUrl, allParams);
 
