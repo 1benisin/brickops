@@ -7,7 +7,7 @@ const requiredPaths = [
   "convex/inventory",
   "convex/catalog",
   "convex/identify",
-  "convex/marketplace",
+  "convex/marketplaces",
   "convex/schema.ts",
   "src/app",
   "src/components",

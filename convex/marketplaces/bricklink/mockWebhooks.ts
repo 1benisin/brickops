@@ -1,5 +1,5 @@
 /**
- * Development-only webhook notification testing
+ * Development-only webhook notification mocking
  * Simulates BrickLink webhook notifications and processes them through the full pipeline
  *
  * IMPORTANT: Only available in development/staging environments
@@ -24,9 +24,9 @@ function isDevelopmentMode(): boolean {
 }
 
 /**
- * Get random inventory items from database for test order generation
- * If no inventory items exist, creates default test inventory items
- * Imported from testOrders.ts pattern
+ * Get random inventory items from database for mock order generation
+ * If no inventory items exist, creates default mock inventory items
+ * Imported from mocks.ts pattern
  */
 async function getRandomInventoryItems(
   ctx: MutationCtx,
@@ -51,11 +51,11 @@ async function getRandomInventoryItems(
     .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
     .collect();
 
-  // If no items exist, we'll need to create default test inventory items
+  // If no items exist, we'll need to create default mock inventory items
   // For now, throw an error to guide the user
   if (allItems.length === 0) {
     throw new Error(
-      "No inventory items found. Please create test orders first, which will create default inventory items.",
+      "No inventory items found. Please create mock orders first, which will create default inventory items.",
     );
   }
 
@@ -73,20 +73,24 @@ async function getRandomInventoryItems(
 }
 
 /**
- * Create test order data with random parts from database
- * Similar to testOrders.ts but uses sensible defaults
+ * Create mock order data with random parts from database
+ * Similar to mocks.ts but uses sensible defaults
  */
-async function createTestOrderDataWithParts(
+async function createMockOrderDataWithParts(
   ctx: MutationCtx,
   businessAccountId: Id<"businessAccounts">,
   userId: Id<"users">,
+  orderIndex?: number,
 ): Promise<{
   orderData: any; // BricklinkOrderResponse
   orderItemsData: any[][]; // BricklinkOrderItemResponse[][]
 }> {
-  const orderId = `TEST-WEBHOOK-${Date.now()}`;
+  const timestamp = Date.now();
+  const orderId = orderIndex !== undefined 
+    ? `MOCK-WEBHOOK-${timestamp}-${orderIndex}`
+    : `MOCK-WEBHOOK-${timestamp}`;
   const now = new Date().toISOString();
-  const buyerName = "Test Webhook Buyer";
+  const buyerName = "Mock Webhook Buyer";
   const status = "PENDING";
   const itemCount = 3;
 
@@ -100,17 +104,17 @@ async function createTestOrderDataWithParts(
 
   if (inventoryItems.length === 0) {
     throw new Error(
-      "Failed to find inventory items. Please ensure you have inventory items or create test orders first.",
+      "Failed to find inventory items. Please ensure you have inventory items or create mock orders first.",
     );
   }
 
-  // Create realistic test order
+  // Create realistic mock order
   const orderData = {
     order_id: orderId,
     date_ordered: now,
     date_status_changed: now,
-    seller_name: "Test Store",
-    store_name: "Test Store",
+    seller_name: "Mock Store",
+    store_name: "Mock Store",
     buyer_name: buyerName,
     buyer_email: `${buyerName.toLowerCase().replace(" ", ".")}@example.com`,
     buyer_order_count: 5,
@@ -120,7 +124,7 @@ async function createTestOrderDataWithParts(
     is_filed: false,
     drive_thru_sent: false,
     salesTax_collected_by_bl: false,
-    remarks: "Test order created via webhook notification simulation",
+    remarks: "Mock order created via webhook notification simulation",
     total_count: itemCount,
     unique_count: itemCount,
     total_weight: "0.5",
@@ -135,11 +139,11 @@ async function createTestOrderDataWithParts(
       address: {
         name: {
           full: buyerName,
-          first: buyerName.split(" ")[0] || "Test",
+          first: buyerName.split(" ")[0] || "Mock",
           last: buyerName.split(" ")[1] || "Buyer",
         },
-        full: `${buyerName}\n123 Test St\nAnytown, ST 12345`,
-        address1: "123 Test St",
+        full: `${buyerName}\n123 Mock St\nAnytown, ST 12345`,
+        address1: "123 Mock St",
         city: "Anytown",
         state: "ST",
         postal_code: "12345",
@@ -155,7 +159,7 @@ async function createTestOrderDataWithParts(
     },
   };
 
-  // Create test order items from existing inventory items
+  // Create mock order items from existing inventory items
   const items: any[] = [];
 
   for (let i = 0; i < itemCount && i < inventoryItems.length; i++) {
@@ -222,72 +226,90 @@ async function createTestOrderDataWithParts(
 }
 
 /**
- * Trigger a test webhook notification
+ * Trigger a mock webhook notification
  * Simulates the full webhook flow: notification creation → processing → order creation
  * Development only
  */
-export const triggerTestWebhookNotification = mutation({
-  args: {},
-  handler: async (ctx) => {
+export const triggerMockWebhookNotification = mutation({
+  args: {
+    quantity: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     // Safety check: only allow in development
     if (!isDevelopmentMode()) {
       throw new Error(
-        "Test webhook notifications can only be triggered in development environments",
+        "Mock webhook notifications can only be triggered in development environments",
       );
     }
 
     // Get businessAccountId and userId from auth context
     const { businessAccountId, userId } = await requireActiveUser(ctx);
 
-    // Generate test order data using existing inventory items
-    const { orderData, orderItemsData } = await createTestOrderDataWithParts(
-      ctx,
-      businessAccountId,
-      userId,
-    );
+    // Default to 1 if quantity not provided
+    const quantity = args.quantity ?? 1;
+    const ordersCreated = [];
 
-    // Create notification record (simulating webhook receipt)
-    // Use the order_id as resource_id (convert to number for consistency)
-    // Extract timestamp from order_id (TEST-WEBHOOK-{timestamp}) or use current time
-    const orderIdMatch = orderData.order_id.match(/TEST-WEBHOOK-(\d+)/);
-    const orderIdNumber = orderIdMatch ? parseInt(orderIdMatch[1]) : Date.now();
-    const timestamp = new Date().toISOString();
-    const dedupeKey = `${businessAccountId}:Order:${orderIdNumber}:${timestamp}`;
-
-    const notificationId = await ctx.runMutation(
-      internal.marketplaces.bricklink.notifications.upsertNotification,
-      {
+    // Generate and process multiple mock orders
+    for (let i = 0; i < quantity; i++) {
+      // Generate mock order data using existing inventory items
+      const { orderData, orderItemsData } = await createMockOrderDataWithParts(
+        ctx,
         businessAccountId,
-        eventType: "Order",
-        resourceId: orderIdNumber,
-        timestamp,
-        dedupeKey,
-      },
-    );
+        userId,
+        i,
+      );
 
-    // Process the notification with test data (bypasses API calls)
-    await ctx.runMutation(
-      internal.marketplaces.bricklink.notifications.processTestOrderNotification,
-      {
-        businessAccountId,
-        orderData,
-        orderItemsData,
-      },
-    );
+      // Create notification record (simulating webhook receipt)
+      // Use the order_id as resource_id (convert to number for consistency)
+      // Extract timestamp from order_id (MOCK-WEBHOOK-{timestamp}-{index}) or use current time
+      const orderIdMatch = orderData.order_id.match(/MOCK-WEBHOOK-(\d+)(?:-(\d+))?/);
+      const orderIdNumber = orderIdMatch ? parseInt(orderIdMatch[1]) : Date.now();
+      const timestamp = new Date().toISOString();
+      const dedupeKey = `${businessAccountId}:Order:${orderIdNumber}:${timestamp}:${i}`;
 
-    // Update notification status to completed
-    await ctx.runMutation(internal.marketplaces.bricklink.notifications.updateNotificationStatus, {
-      notificationId,
-      status: "completed",
-      processedAt: Date.now(),
-    });
+      const notificationId = await ctx.runMutation(
+        internal.marketplaces.bricklink.notifications.upsertNotification,
+        {
+          businessAccountId,
+          eventType: "Order",
+          resourceId: orderIdNumber,
+          timestamp,
+          dedupeKey,
+        },
+      );
+
+      // Process the notification with mock data (bypasses API calls)
+      await ctx.runMutation(
+        internal.marketplaces.bricklink.notifications.processMockOrderNotification,
+        {
+          businessAccountId,
+          orderData,
+          orderItemsData,
+        },
+      );
+
+      // Update notification status to completed
+      await ctx.runMutation(internal.marketplaces.bricklink.notifications.updateNotificationStatus, {
+        notificationId,
+        status: "completed",
+        processedAt: Date.now(),
+      });
+
+      ordersCreated.push({
+        orderId: orderData.order_id,
+        itemCount: orderItemsData.flat().length,
+      });
+    }
+
+    const totalItems = ordersCreated.reduce((sum, order) => sum + order.itemCount, 0);
 
     return {
       success: true,
-      orderId: orderData.order_id,
-      notificationId,
-      itemCount: orderItemsData.flat().length,
-      message: `Test webhook notification processed successfully. Order ${orderData.order_id} created with ${orderItemsData.flat().length} items`,
+      ordersCreated: ordersCreated.length,
+      totalItems,
+      orders: ordersCreated,
+      message: `Mock webhook notification processed successfully. ${ordersCreated.length} order${ordersCreated.length === 1 ? '' : 's'} created with ${totalItems} total item${totalItems === 1 ? '' : 's'}`,
     };
   },
 });
+

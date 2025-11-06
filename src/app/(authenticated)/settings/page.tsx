@@ -58,12 +58,11 @@ export default function SettingsPage() {
   const removeUser = useMutation(api.users.mutations.removeUser);
   const createUserInvite = useMutation(api.users.mutations.createUserInvite);
   const updatePreferences = useMutation(api.users.mutations.updatePreferences);
-  const updateSyncSettings = useMutation(api.marketplace.mutations.updateSyncSettings);
-  const syncSettings = useQuery(api.marketplace.queries.getSyncSettings);
+  const updateSyncSettings = useMutation(api.marketplaces.shared.mutations.updateSyncSettings);
+  const syncSettings = useQuery(api.marketplaces.shared.queries.getSyncSettings);
   const isDevEnvironment = useQuery(api.orders.mocks.isDevelopmentEnvironment);
-  const createBulkTestOrders = useMutation(api.orders.mocks.createBulkTestOrders);
   const deleteAllOrders = useMutation(api.orders.mocks.deleteAllOrders);
-  const triggerTestWebhook = useMutation(api.marketplaces.bricklink.testWebhooks.triggerTestWebhookNotification);
+  const triggerMockWebhook = useMutation(api.marketplaces.bricklink.mockWebhooks.triggerMockWebhookNotification);
   const generateMockInventory = useMutation(api.inventory.testInventory.generateMockInventoryItems);
   const deleteAllInventory = useMutation(api.inventory.testInventory.deleteAllInventoryItems);
 
@@ -88,14 +87,14 @@ export default function SettingsPage() {
   const [userError, setUserError] = useState<string | null>(null);
 
   // Development tools state
-  const [isCreatingOrders, setIsCreatingOrders] = useState(false);
   const [isDeletingOrders, setIsDeletingOrders] = useState(false);
-  const [isTriggeringWebhook, setIsTriggeringWebhook] = useState(false);
+  const [isTriggeringMockWebhook, setIsTriggeringMockWebhook] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [devMessage, setDevMessage] = useState<{ type: "success" | "error"; text: string } | null>(
     null,
   );
   const [mockInventoryCount, setMockInventoryCount] = useState(30);
+  const [mockWebhookQuantity, setMockWebhookQuantity] = useState(1);
   const [isGeneratingInventory, setIsGeneratingInventory] = useState(false);
   const [isDeletingInventory, setIsDeletingInventory] = useState(false);
   const [inventoryDeleteDialogOpen, setInventoryDeleteDialogOpen] = useState(false);
@@ -111,39 +110,21 @@ export default function SettingsPage() {
   };
 
   // Development tools handlers
-  const handleTriggerTestWebhook = async () => {
-    setIsTriggeringWebhook(true);
+  const handleTriggerMockWebhook = async () => {
+    setIsTriggeringMockWebhook(true);
     setDevMessage(null);
     try {
-      const result = await triggerTestWebhook();
+      const result = await triggerMockWebhook({ quantity: mockWebhookQuantity });
       setDevMessage({
         type: "success",
-        text: result.message || "Test webhook notification processed successfully",
+        text: result.message || "Mock webhook notification processed successfully",
       });
       setTimeout(() => setDevMessage(null), 5000);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to trigger test webhook";
+      const message = error instanceof Error ? error.message : "Failed to trigger mock webhook";
       setDevMessage({ type: "error", text: message });
     } finally {
-      setIsTriggeringWebhook(false);
-    }
-  };
-
-  const handleCreateTestOrders = async () => {
-    setIsCreatingOrders(true);
-    setDevMessage(null);
-    try {
-      const result = await createBulkTestOrders();
-      setDevMessage({
-        type: "success",
-        text: result.message || `Created ${result.ordersCreated} test orders successfully`,
-      });
-      setTimeout(() => setDevMessage(null), 5000);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create test orders";
-      setDevMessage({ type: "error", text: message });
-    } finally {
-      setIsCreatingOrders(false);
+      setIsTriggeringMockWebhook(false);
     }
   };
 
@@ -780,37 +761,32 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-6 space-y-4">
-                {/* Create Test Orders */}
+                {/* Trigger Mock Webhook Notification */}
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-foreground">Test Orders</h3>
+                  <h3 className="text-sm font-medium text-foreground">Mock Webhook Notification</h3>
                   <p className="text-xs text-muted-foreground">
-                    Create 3 test Bricklink orders with random parts from your catalog.
-                  </p>
-                  <Button
-                    type="button"
-                    onClick={handleCreateTestOrders}
-                    disabled={isCreatingOrders}
-                    data-testid="create-test-orders-button"
-                  >
-                    {isCreatingOrders ? "Creating..." : "Create Test Orders"}
-                  </Button>
-                </div>
-
-                {/* Trigger Test Webhook Notification */}
-                <div className="space-y-2 border-t pt-4">
-                  <h3 className="text-sm font-medium text-foreground">Test Webhook Notification</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Simulate a BrickLink webhook notification. Creates a test order through the full
+                    Simulate a BrickLink webhook notification. Creates mock orders through the full
                     webhook processing flow using items from your inventory.
                   </p>
-                  <Button
-                    type="button"
-                    onClick={handleTriggerTestWebhook}
-                    disabled={isTriggeringWebhook}
-                    data-testid="trigger-test-webhook-button"
-                  >
-                    {isTriggeringWebhook ? "Processing..." : "Trigger Test BrickLink Order"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={mockWebhookQuantity}
+                      onChange={(e) => setMockWebhookQuantity(parseInt(e.target.value) || 1)}
+                      className="w-24"
+                      data-testid="mock-webhook-quantity-input"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleTriggerMockWebhook}
+                      disabled={isTriggeringMockWebhook}
+                      data-testid="trigger-mock-webhook-button"
+                    >
+                      {isTriggeringMockWebhook ? "Processing..." : "Trigger Mock BrickLink Order"}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Delete All Orders */}

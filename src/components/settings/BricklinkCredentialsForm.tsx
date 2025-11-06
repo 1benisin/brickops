@@ -9,13 +9,13 @@ import { Check, X, Loader2, AlertCircle, Copy, ExternalLink } from "lucide-react
 import { getEnv } from "@/lib/env";
 
 export function BrickLinkCredentialsForm() {
-  const status = useQuery(api.marketplace.queries.getCredentialStatus, {
+  const status = useQuery(api.marketplaces.shared.queries.getCredentialStatus, {
     provider: "bricklink",
   });
 
-  const saveCredentials = useMutation(api.marketplace.mutations.saveCredentials);
-  const revokeCredentials = useMutation(api.marketplace.mutations.revokeCredentials);
-  const testConnection = useAction(api.marketplace.actions.testConnection);
+  const saveCredentials = useMutation(api.marketplaces.shared.mutations.saveCredentials);
+  const revokeCredentials = useMutation(api.marketplaces.shared.mutations.revokeCredentials);
+  const testConnection = useAction(api.marketplaces.shared.actions.testConnection);
 
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
