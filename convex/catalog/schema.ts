@@ -110,12 +110,26 @@ export const catalogTables = {
     .index("by_partNo_colorId_newOrUsed", ["partNo", "colorId", "newOrUsed"])
     .index("by_lastFetched", ["lastFetched"]),
 
-  // Bricklink-aligned color reference table
+  // Multi-source color reference table (Bricklink-aligned with BrickOwl support)
   colors: defineTable({
-    colorId: v.number(), // Bricklink's color_id
+    colorId: v.number(), // Bricklink's color_id (primary)
     colorName: v.string(), // Bricklink's color_name
     colorCode: v.optional(v.string()), // Bricklink's color_code (hex)
-    colorType: v.optional(v.string()), // Bricklink's color_type
+    colorType: v.optional(
+      v.union(
+        v.literal("Modulex"),
+        v.literal("Speckle"),
+        v.literal("Glitter"),
+        v.literal("Milky"),
+        v.literal("Metallic"),
+        v.literal("Satin"),
+        v.literal("Pearl"),
+        v.literal("Chrome"),
+        v.literal("Transparent"),
+        v.literal("Solid"),
+      ),
+    ), // Bricklink's color_type
+    brickowlColorId: v.optional(v.number()), // BrickOwl's color_id (from Rebrickable mapping)
     lastFetched: v.number(), // Universal freshness timestamp
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),

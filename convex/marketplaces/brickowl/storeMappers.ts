@@ -57,8 +57,8 @@ export function mapBrickOwlToConvexInventory(
 export function mapConvexToBrickOwlCreate(
   convexInventory: Doc<"inventoryItems">,
 ): CreateInventoryPayload {
-  // Map condition: "new" -> "new", "used" -> "usedc" (most common used condition)
-  const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedc" as const);
+  // Map condition: "new" -> "new", "used" -> "usedn" (Used Like New - matches our inventory model)
+  const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedn" as const);
 
   // Price is already a number (BrickOwl expects number, not string like BrickLink)
   const price = convexInventory.price ?? 0;
@@ -131,7 +131,7 @@ export function mapConvexToBrickOwlUpdate(
   const for_sale = 1 as const;
 
   // Map condition back to BrickOwl format
-  const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedc" as const);
+  const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedn" as const);
 
   return {
     absolute_quantity,
@@ -167,10 +167,10 @@ export function mapBrickOwlConditionToConvex(brickowlCondition: string): "new" |
 
 /**
  * Map Convex condition to BrickOwl condition code
- * Uses most common codes: "new" for new, "usedc" (complete) for used
+ * Uses: "new" for new, "usedn" (Used Like New) for used - matches our inventory model
  */
-export function mapConvexConditionToBrickOwl(convexCondition: "new" | "used"): "new" | "usedc" {
-  return convexCondition === "new" ? "new" : "usedc";
+export function mapConvexConditionToBrickOwl(convexCondition: "new" | "used"): "new" | "usedn" {
+  return convexCondition === "new" ? "new" : "usedn";
 }
 
 /**

@@ -11,10 +11,10 @@
  *
  * Schema Alignment:
  * - parts: no, name, type (PART/MINIFIG/SET), categoryId, alternateNo, imageUrl, etc.
- * - colors: colorId, colorName, colorCode, colorType
  * - categories: categoryId, categoryName, parentId
- * - partColors: partNo, colorId, quantity
  * - bricklinkElementReference: elementId, partNumber, colorId, bricklinkPartId
+ *
+ * Note: Colors are now handled by scripts/seed/build-colors.ts
  *
  * Safety & Performance:
  * - Streaming SAX parser (low memory)
@@ -139,7 +139,7 @@ export const main = async () => {
     .option("parts-only", {
       type: "boolean",
       default: false,
-      describe: "Only build parts JSONL files (skip colors, categories, elements)",
+      describe: "Only build parts JSONL files (skip categories, elements)",
     })
     .help()
     .parse();
@@ -151,52 +151,7 @@ export const main = async () => {
   // Ensure output directory exists
   await mkdir(DATA_DIR, { recursive: true });
 
-  // 1) Colors → colors.jsonl (schema: colorId, colorName, colorCode, colorType)
-  if (!argv["parts-only"]) {
-    const colorPath = join(DATA_DIR, "colors.xml");
-    const outPath = join(DATA_DIR, "colors.jsonl");
-
-    try {
-      await access(colorPath, constants.F_OK);
-      log(
-        `${colors.blue}→${colors.reset} Writing colors JSONL ${colors.dim}→${colors.reset} ${colors.dim}${outPath}${colors.reset}`,
-      );
-      const out = createWriteStream(outPath, { encoding: "utf8" });
-
-      let colorCount = 0;
-
-      await parseXmlStream(colorPath, async (item) => {
-        const colorId = Number(item.COLOR);
-        const colorName = item.COLORNAME?.trim();
-        if (!colorId || !colorName) return;
-
-        const colorType = item.COLORTYPE?.trim();
-        const colorCode = item.COLORRGB?.trim() || undefined;
-
-        const doc: Record<string, unknown> = {
-          colorId,
-          colorName: decodeHtmlEntities(String(colorName)),
-          lastFetched: oneYearAgo,
-          createdAt: oneYearAgo,
-        };
-        if (colorCode) doc.colorCode = String(colorCode);
-        if (colorType) doc.colorType = String(colorType);
-
-        const line = `${JSON.stringify(doc)}\n`;
-        if (!out.write(line)) await new Promise((r) => out.once("drain", r));
-        colorCount++;
-        if (limit && colorCount >= limit) return;
-      });
-      await new Promise<void>((resolve) => out.end(resolve));
-      logProgress("Colors JSONL", colorCount, "complete");
-    } catch {
-      log(
-        `${colors.yellow}⚠${colors.reset} Skipping colors - ${colors.dim}colors.xml not found${colors.reset}`,
-      );
-    }
-  }
-
-  // 2) Categories → categories.jsonl (schema: categoryId, categoryName, parentId)
+  // 1) Categories → categories.jsonl (schema: categoryId, categoryName, parentId)
   if (!argv["parts-only"]) {
     const categoryXmlPath = join(DATA_DIR, "categories.xml");
     const categoryJsonlPath = join(DATA_DIR, "categories.jsonl");
@@ -238,7 +193,7 @@ export const main = async () => {
     }
   }
 
-  // 3) Codes → bricklinkElementReference.jsonl (schema: elementId, partNumber, colorId, bricklinkPartId, designId, syncedAt)
+  // 2) Codes → bricklinkElementReference.jsonl (schema: elementId, partNumber, colorId, bricklinkPartId, designId, syncedAt)
   if (!argv["parts-only"]) {
     const codesPath = join(DATA_DIR, "codes.xml");
     const elementJsonl = join(DATA_DIR, "bricklinkElementReference.jsonl");
@@ -288,7 +243,7 @@ export const main = async () => {
     }
   }
 
-  // 4) Parts → parts.jsonl (schema: no, name, type, categoryId, alternateNo, imageUrl, etc.)
+  // 3) Parts → parts.jsonl (schema: no, name, type, categoryId, alternateNo, imageUrl, etc.)
   {
     const partsPath = join(DATA_DIR, "Parts.xml");
     const partsJsonl = join(DATA_DIR, "parts.jsonl");
@@ -354,7 +309,7 @@ export const main = async () => {
     }
   }
 
-  // 5) Parts Sample → parts-sample.jsonl (250 records for quick testing)
+  // 4) Parts Sample → parts-sample.jsonl (250 records for quick testing)
   {
     const partsPath = join(DATA_DIR, "Parts.xml");
     const partsSampleJsonl = join(DATA_DIR, "parts-sample.jsonl");

@@ -12,7 +12,10 @@ import {
   mapConvexToBricklinkCreate,
   mapConvexToBricklinkUpdate,
 } from "../marketplaces/bricklink/storeMappers";
-import { mapConvexToBrickOwlCreate } from "../marketplaces/brickowl/storeMappers";
+import {
+  mapConvexToBrickOwlCreate,
+  mapConvexToBrickOwlUpdate,
+} from "../marketplaces/brickowl/storeMappers";
 import { partialInventoryItemData } from "./validators";
 
 /**
@@ -261,7 +264,7 @@ async function syncUpdate(
     return await syncCreate(ctx, client, marketplace, args, idempotencyKey);
   }
 
-  // CRITICAL: Use the mapper to generate proper delta for BrickLink
+  // CRITICAL: Use the mapper to generate proper delta for both marketplaces
   // The mapper expects previousQuantity to calculate the +/- delta correctly
   const argsWithPreviousData = args as { previousData?: Partial<Doc<"inventoryItems">> };
   const previousQuantity =
@@ -269,7 +272,7 @@ async function syncUpdate(
   const payload =
     marketplace === "bricklink"
       ? mapConvexToBricklinkUpdate(args.newData as Doc<"inventoryItems">, previousQuantity)
-      : (args.newData as Record<string, unknown>);
+      : mapConvexToBrickOwlUpdate(args.newData as Doc<"inventoryItems">, previousQuantity);
 
   const result = await (client as any).updateInventory(marketplaceId, payload, { idempotencyKey }); // eslint-disable-line @typescript-eslint/no-explicit-any
 

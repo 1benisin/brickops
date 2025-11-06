@@ -26,6 +26,7 @@
     "prepare": "simple-git-hooks",
     "build:imports": "npx tsx scripts/catalog/build-catalog.ts --limit 0",
     "build:sample": "npx tsx scripts/catalog/build-catalog.ts --limit 100",
+    "seed:catalog:colors": "npx tsx scripts/seed/build-colors.ts && npx convex import --table colors --replace data/seed/colors.jsonl",
     "import:colors": "npx convex import --table colors --replace docs/external-documentation/api-bricklink/seed-data/colors.jsonl",
     "import:categories": "npx convex import --table categories --replace docs/external-documentation/api-bricklink/seed-data/categories.jsonl",
     "import:elements": "npx convex import --table bricklinkElementReference --replace docs/external-documentation/api-bricklink/seed-data/bricklinkElementReference.jsonl",
