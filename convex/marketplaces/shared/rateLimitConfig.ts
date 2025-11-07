@@ -3,7 +3,7 @@
  * Single source of truth for API rate limit values
  */
 
-export type MarketplaceProvider = "bricklink" | "brickowl";
+export type MarketplaceProvider = "bricklink" | "brickowl" | "rebrickable";
 
 export interface RateLimitConfig {
   capacity: number;
@@ -20,6 +20,9 @@ export interface RateLimitConfig {
  * BrickOwl: No published global limit, using conservative estimate
  *   - Bulk endpoint limit: 200 requests/minute (strictest documented)
  *   - Applied to all endpoints for safety
+ *
+ * Rebrickable: Normal user accounts allowed 1 request/sec average
+ *   - Conservative: 60 requests/minute (1 req/sec with burst allowance)
  */
 export const RATE_LIMIT_CONFIGS: Record<MarketplaceProvider, RateLimitConfig> = {
   bricklink: {
@@ -31,6 +34,11 @@ export const RATE_LIMIT_CONFIGS: Record<MarketplaceProvider, RateLimitConfig> = 
     capacity: 200, // requests per minute
     windowDurationMs: 60 * 1000, // 1 minute
     alertThreshold: 0.8, // Alert at 80% (160 requests)
+  },
+  rebrickable: {
+    capacity: 60, // requests per minute (1 req/sec average)
+    windowDurationMs: 60 * 1000, // 1 minute
+    alertThreshold: 0.8, // Alert at 80% (48 requests)
   },
 };
 

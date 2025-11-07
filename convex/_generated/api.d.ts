@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as api_rebrickable from "../api/rebrickable.js";
 import type * as auth from "../auth.js";
 import type * as catalog_actions from "../catalog/actions.js";
 import type * as catalog_helpers from "../catalog/helpers.js";
@@ -90,6 +91,7 @@ import type * as users_queries from "../users/queries.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "api/rebrickable": typeof api_rebrickable;
   auth: typeof auth;
   "catalog/actions": typeof catalog_actions;
   "catalog/helpers": typeof catalog_helpers;

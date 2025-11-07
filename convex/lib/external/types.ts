@@ -36,7 +36,7 @@ function generateRequestId(): string {
   );
 }
 
-export type ExternalProvider = "brickognize" | "bricklink" | "brickowl";
+export type ExternalProvider = "brickognize" | "bricklink" | "brickowl" | "rebrickable";
 
 export interface ApiError {
   error: {
