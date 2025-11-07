@@ -1,5 +1,6 @@
 type EnvKey =
   | "BRICKOWL_API_KEY"
+  | "REBRICKABLE_API_KEY"
   | "BRICKLINK_CONSUMER_KEY"
   | "BRICKLINK_CONSUMER_SECRET"
   | "BRICKLINK_ACCESS_TOKEN"
@@ -46,6 +47,8 @@ export type BricklinkCredentials = {
 };
 
 export const getBrickowlApiKey = () => getSecret("BRICKOWL_API_KEY");
+
+export const getRebrickableApiKey = () => getSecret("REBRICKABLE_API_KEY");
 
 export const getBricklinkCredentials = (): BricklinkCredentials => ({
   consumerKey: getSecret("BRICKLINK_CONSUMER_KEY"),

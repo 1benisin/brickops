@@ -1,6 +1,7 @@
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
+import { recordMetric } from "../lib/external/metrics";
 // (catalogClient not needed for direct image URLs)
 
 // ============================================================================
@@ -155,3 +156,118 @@ export const enqueueRefreshPriceGuide = action({
  * Uses rate limiting to respect Bricklink API limits
  */
 // (fetchPartColorImage removed - client uses BrickLink CDN directly)
+
+// ============================================================================
+// REBRICKABLE ID MAPPING ACTIONS
+// ============================================================================
+
+/**
+ * Get BrickOwl part ID from BrickLink part ID using Rebrickable API
+ * Returns the first BrickOwl ID found, or null if not found
+ */
+export const getBrickowlPartId = action({
+  args: {
+    bricklinkPartId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Check feature flag to disable external calls in dev/test
+    if (process.env.DISABLE_EXTERNAL_CALLS === "true") {
+      return null;
+    }
+
+    // Verify user is authenticated
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+
+    const { RebrickableClient } = await import("../api/rebrickable");
+    const client = new RebrickableClient();
+
+    try {
+      const partsMap = await client.getPartsByBricklinkIds([args.bricklinkPartId]);
+      const parts = partsMap.get(args.bricklinkPartId) ?? [];
+
+      if (parts.length === 0) {
+        return null;
+      }
+
+      // Return first BrickOwl ID found
+      const brickowlIds = parts[0]?.external_ids.BrickOwl;
+      if (!brickowlIds || brickowlIds.length === 0) {
+        return null;
+      }
+
+      return brickowlIds[0];
+    } catch (error) {
+      // Log error but return null instead of throwing
+      // This allows the calling code to handle missing mappings gracefully
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      recordMetric("external.rebrickable.getBrickowlPartId.error", {
+        bricklinkPartId: args.bricklinkPartId,
+        error: errorMessage,
+      });
+      return null;
+    }
+  },
+});
+
+/**
+ * Get BrickOwl part IDs from multiple BrickLink part IDs using Rebrickable API
+ * Returns a map of BrickLink ID -> BrickOwl ID(s)
+ * Uses bulk API calls when possible to minimize requests
+ */
+export const getBrickowlPartIds = action({
+  args: {
+    bricklinkPartIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Check feature flag to disable external calls in dev/test
+    if (process.env.DISABLE_EXTERNAL_CALLS === "true") {
+      return {};
+    }
+
+    // Verify user is authenticated
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+
+    if (args.bricklinkPartIds.length === 0) {
+      return {};
+    }
+
+    const { RebrickableClient } = await import("../api/rebrickable");
+    const client = new RebrickableClient();
+
+    try {
+      const partsMap = await client.getPartsByBricklinkIds(args.bricklinkPartIds);
+
+      // Build map of BrickLink ID -> BrickOwl ID(s)
+      const mapping: Record<string, string> = {};
+
+      for (const bricklinkId of args.bricklinkPartIds) {
+        const parts = partsMap.get(bricklinkId) ?? [];
+        if (parts.length === 0) {
+          continue;
+        }
+
+        // Get first BrickOwl ID from first part found
+        const brickowlIds = parts[0]?.external_ids.BrickOwl;
+        if (brickowlIds && brickowlIds.length > 0) {
+          mapping[bricklinkId] = brickowlIds[0];
+        }
+      }
+
+      return mapping;
+    } catch (error) {
+      // Log error but return empty map instead of throwing
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      recordMetric("external.rebrickable.getBrickowlPartIds.error", {
+        bricklinkPartIdCount: args.bricklinkPartIds.length,
+        error: errorMessage,
+      });
+      return {};
+    }
+  },
+});
