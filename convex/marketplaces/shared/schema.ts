@@ -16,6 +16,8 @@ export const marketplaceTables = {
     // Metadata
     isActive: v.boolean(),
     syncEnabled: v.optional(v.boolean()), // Default: true for backward compatibility
+    ordersSyncEnabled: v.optional(v.boolean()), // Per-provider order ingestion toggle
+    inventorySyncEnabled: v.optional(v.boolean()), // Per-provider inventory sync toggle
     lastValidatedAt: v.optional(v.number()),
     validationStatus: v.optional(
       v.union(v.literal("success"), v.literal("pending"), v.literal("failed")),
@@ -27,6 +29,20 @@ export const marketplaceTables = {
     // Webhook configuration for BrickLink push notifications
     webhookToken: v.optional(v.string()), // Unique token for webhook URL routing
     lastCentralPolledAt: v.optional(v.number()), // Last time GET /notifications was called
+    webhookStatus: v.optional(
+      v.union(
+        v.literal("unconfigured"),
+        v.literal("registering"),
+        v.literal("registered"),
+        v.literal("disabled"),
+        v.literal("error"),
+      ),
+    ),
+    webhookEndpoint: v.optional(v.string()),
+    webhookRegisteredAt: v.optional(v.number()),
+    webhookLastCheckedAt: v.optional(v.number()),
+    webhookLastError: v.optional(v.string()),
+    webhookMetadata: v.optional(v.any()),
   })
     .index("by_business_provider", ["businessAccountId", "provider"])
     .index("by_businessAccount", ["businessAccountId"])

@@ -5,8 +5,8 @@ import { PackagingSlipMessages } from "./packaging-slip-messages";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 interface PackagingSlipProps {
-  order: Doc<"bricklinkOrders">;
-  items: Doc<"bricklinkOrderItems">[];
+  order: Doc<"orders">;
+  items: Doc<"orderItems">[];
 }
 
 export function PackagingSlip({ order, items }: PackagingSlipProps) {

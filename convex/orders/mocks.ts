@@ -633,7 +633,7 @@ export const getOrderItems = query({
 
     // Query items from database
     const items = await ctx.db
-      .query("bricklinkOrderItems")
+      .query("orderItems")
       .withIndex("by_order", (q) =>
         q.eq("businessAccountId", args.businessAccountId).eq("orderId", args.orderId),
       )
@@ -680,7 +680,7 @@ export const listTestOrders = query({
     }
 
     const orders = await ctx.db
-      .query("bricklinkOrders")
+      .query("orders")
       .withIndex("by_business_order", (q) => q.eq("businessAccountId", args.businessAccountId))
       .collect();
 
@@ -752,6 +752,7 @@ export const createBulkTestOrders = mutation({
 
       await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
         businessAccountId,
+        provider: "bricklink",
         orderData,
         orderItemsData,
       });
@@ -788,7 +789,7 @@ export const deleteAllOrders = mutation({
 
     // Find all orders for this business account
     const orders = await ctx.db
-      .query("bricklinkOrders")
+      .query("orders")
       .withIndex("by_business_order", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
@@ -797,7 +798,7 @@ export const deleteAllOrders = mutation({
     // Delete all items for each order
     for (const order of orders) {
       const items = await ctx.db
-        .query("bricklinkOrderItems")
+        .query("orderItems")
         .withIndex("by_order", (q) =>
           q.eq("businessAccountId", businessAccountId).eq("orderId", order.orderId),
         )
@@ -839,7 +840,7 @@ export const deleteTestOrders = mutation({
 
     // Find all test orders
     const orders = await ctx.db
-      .query("bricklinkOrders")
+      .query("orders")
       .withIndex("by_business_order", (q) => q.eq("businessAccountId", args.businessAccountId))
       .collect();
 
@@ -850,7 +851,7 @@ export const deleteTestOrders = mutation({
     for (const order of testOrders) {
       // Delete order items first
       const items = await ctx.db
-        .query("bricklinkOrderItems")
+        .query("orderItems")
         .withIndex("by_order", (q) =>
           q.eq("businessAccountId", args.businessAccountId).eq("orderId", order.orderId),
         )

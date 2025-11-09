@@ -191,6 +191,83 @@ export interface BulkOperationResult {
   results: StoreOperationResult[];
 }
 
+export interface BrickOwlOrderResponse {
+  order_id?: string;
+  id?: string;
+  orderId?: string;
+  order_number?: string | number;
+  store_id?: string | number;
+  status?: string | number;
+  status_id?: string | number;
+  status_text?: string;
+  created?: string | number;
+  created_at?: string | number;
+  order_time?: string | number;
+  updated?: string | number;
+  updated_at?: string | number;
+  buyer?: Record<string, unknown>;
+  customer?: Record<string, unknown>;
+  buyer_name?: string;
+  buyer_email?: string;
+  buyer_order_count?: number | string;
+  seller_name?: string;
+  store_name?: string;
+  store?: Record<string, unknown>;
+  payment?: Record<string, unknown>;
+  shipping?: Record<string, unknown>;
+  note?: string;
+  notes?: string;
+  remark?: string;
+  subtotal?: number | string;
+  items_total?: number | string;
+  total?: number | string;
+  grand_total?: number | string;
+  final_total?: number | string;
+  tax_total?: number | string;
+  shipping_total?: number | string;
+  insurance_total?: number | string;
+  discount_total?: number | string;
+  credit_total?: number | string;
+  coupon_total?: number | string;
+  total_items?: number | string;
+  total_quantity?: number | string;
+  item_count?: number | string;
+  unique_items?: number | string;
+  unique_count?: number | string;
+  total_weight?: number | string;
+  [key: string]: unknown;
+}
+
+export interface BrickOwlOrderItemResponse {
+  order_item_id?: string;
+  lot_id?: string;
+  order_id?: string;
+  boid?: string;
+  item_no?: string;
+  external_id?: string;
+  name?: string;
+  type?: string;
+  category_id?: number | string;
+  color_id?: number | string;
+  color_name?: string;
+  quantity?: number | string;
+  qty?: number | string;
+  total_quantity?: number | string;
+  price?: number | string;
+  unit_price?: number | string;
+  final_price?: number | string;
+  currency?: string;
+  condition?: string;
+  completeness?: string;
+  note?: string;
+  remarks?: string;
+  description?: string;
+  weight?: number | string;
+  location?: string;
+  bin?: string;
+  [key: string]: unknown;
+}
+
 /**
  * Batch Request Item
  */
@@ -1072,6 +1149,73 @@ export class BrickOwlStoreClient {
     }));
 
     return await this.bulkBatchOperations(requests, options);
+  }
+
+  /**
+   * Retrieve order details
+   */
+  async getOrder(orderId: string): Promise<BrickOwlOrderResponse> {
+    const correlationId = generateRequestId();
+    const response = await this.requestWithRetry<
+      BrickOwlOrderResponse | { order: BrickOwlOrderResponse }
+    >({
+      method: "GET",
+      path: "/order/view",
+      queryParams: { order_id: orderId },
+      correlationId,
+      isIdempotent: true,
+    });
+
+    if (response && typeof response === "object" && "order" in response) {
+      return (response as { order: BrickOwlOrderResponse }).order ?? {};
+    }
+
+    return (response as BrickOwlOrderResponse) ?? {};
+  }
+
+  /**
+   * Retrieve order items
+   */
+  async getOrderItems(orderId: string): Promise<BrickOwlOrderItemResponse[]> {
+    const correlationId = generateRequestId();
+    const response = await this.requestWithRetry<
+      BrickOwlOrderItemResponse[] | { items: BrickOwlOrderItemResponse[] }
+    >({
+      method: "GET",
+      path: "/order/items",
+      queryParams: { order_id: orderId },
+      correlationId,
+      isIdempotent: true,
+    });
+
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    if (response && typeof response === "object" && Array.isArray(response.items)) {
+      return response.items;
+    }
+
+    return [];
+  }
+
+  /**
+   * Register or clear BrickOwl order notification target
+   */
+  async setOrderNotifyTarget(target: string | null): Promise<void> {
+    const correlationId = generateRequestId();
+    const body = {
+      ip: target ?? "",
+    };
+
+    await this.requestWithRetry({
+      method: "POST",
+      path: "/order/notify",
+      body,
+      correlationId,
+      idempotencyKey: target ? `notify-${target}` : "notify-clear",
+      isIdempotent: true,
+    });
   }
 
   /**

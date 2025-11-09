@@ -17,6 +17,7 @@ import {
   mapConvexToBrickOwlUpdate,
 } from "../marketplaces/brickowl/storeMappers";
 import { partialInventoryItemData } from "./validators";
+import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
 
 /**
  * Update sync status after immediate sync attempt
@@ -223,19 +224,85 @@ async function syncCreate(
   args: { newData?: Partial<Doc<"inventoryItems">> },
   idempotencyKey: string,
 ) {
-  const payload =
-    marketplace === "bricklink"
-      ? mapConvexToBricklinkCreate(args.newData as any) // eslint-disable-line @typescript-eslint/no-explicit-any
-      : mapConvexToBrickOwlCreate(args.newData as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (marketplace === "bricklink") {
+    const payload = mapConvexToBricklinkCreate(args.newData as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const result = await (client as any).createInventory(payload, { idempotencyKey }); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const marketplaceId = result.marketplaceId;
 
-  const result = await (client as any).createInventory(payload, { idempotencyKey }); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const marketplaceId = result.marketplaceId;
+    return {
+      success: result.success,
+      marketplaceId,
+      error: result.error ? formatApiError(result.error) : undefined,
+    };
+  } else {
+    // BrickOwl: Need to fetch brickowlId from parts table
+    const inventoryData = args.newData as Partial<Doc<"inventoryItems">>;
+    if (!inventoryData?.partNumber) {
+      return {
+        success: false,
+        marketplaceId: undefined,
+        error: "partNumber is required for BrickOwl inventory creation",
+      };
+    }
 
-  return {
-    success: result.success,
-    marketplaceId,
-    error: result.error ? String(result.error) : undefined,
-  };
+    const brickowlId = await ensureBrickowlIdForPartAction(ctx, inventoryData.partNumber);
+
+    if (brickowlId === null) {
+      return {
+        success: false,
+        marketplaceId: undefined,
+        error: `Part ${inventoryData.partNumber} not found in catalog`,
+      };
+    }
+
+    if (brickowlId === "") {
+      return {
+        success: false,
+        marketplaceId: undefined,
+        error: `BrickOwl ID not available for part ${inventoryData.partNumber}.`,
+      };
+    }
+
+    let brickowlColorId: number | undefined;
+    if (inventoryData?.colorId) {
+      const bricklinkColorId = Number.parseInt(inventoryData.colorId, 10);
+      if (Number.isNaN(bricklinkColorId)) {
+        return {
+          success: false,
+          marketplaceId: undefined,
+          error: `Invalid BrickLink color ID "${inventoryData.colorId}" for part ${inventoryData.partNumber}.`,
+        };
+      }
+
+      const color = await ctx.runQuery(internal.catalog.queries.getColorInternal, {
+        colorId: bricklinkColorId,
+      });
+
+      if (!color || color.brickowlColorId === undefined) {
+        return {
+          success: false,
+          marketplaceId: undefined,
+          error: `BrickOwl color ID not available for BrickLink color ${inventoryData.colorId} on part ${inventoryData.partNumber}.`,
+        };
+      }
+
+      brickowlColorId = color.brickowlColorId;
+    }
+
+    const payload = mapConvexToBrickOwlCreate(
+      inventoryData as Doc<"inventoryItems">,
+      brickowlId,
+      brickowlColorId,
+    );
+    const result = await (client as any).createInventory(payload, { idempotencyKey }); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const marketplaceId = result.marketplaceId;
+
+    return {
+      success: result.success,
+      marketplaceId,
+      error: result.error ? formatApiError(result.error) : undefined,
+    };
+  }
 }
 
 async function syncUpdate(
@@ -279,7 +346,7 @@ async function syncUpdate(
   return {
     success: result.success,
     marketplaceId: marketplaceId,
-    error: result.error ? String(result.error) : undefined,
+    error: result.error ? formatApiError(result.error) : undefined,
   };
 }
 
@@ -304,7 +371,7 @@ async function syncDelete(
   return {
     success: result.success,
     marketplaceId: undefined,
-    error: result.error ? String(result.error) : undefined,
+    error: result.error ? formatApiError(result.error) : undefined,
   };
 }
 
@@ -329,6 +396,7 @@ export const retryFailedSync = internalAction({
     // Implement retry logic with exponential backoff
     const maxRetries = args.maxRetries ?? 3;
     let attempt = 0;
+    let lastErrorMessage: string | undefined;
 
     while (attempt < maxRetries) {
       try {
@@ -350,6 +418,7 @@ export const retryFailedSync = internalAction({
           return { success: true };
         }
 
+        lastErrorMessage = result.error ? formatApiError(result.error) : undefined;
         attempt++;
         if (attempt < maxRetries) {
           // Exponential backoff: 1s, 2s, 4s
@@ -358,6 +427,7 @@ export const retryFailedSync = internalAction({
         }
       } catch (error) {
         attempt++;
+        lastErrorMessage = error instanceof Error ? error.message : String(error);
         if (attempt >= maxRetries) {
           throw error;
         }
@@ -367,6 +437,6 @@ export const retryFailedSync = internalAction({
       }
     }
 
-    return { success: false, reason: "Max retries exceeded" };
+    return { success: false, reason: "Max retries exceeded", error: lastErrorMessage };
   },
 });

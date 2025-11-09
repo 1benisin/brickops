@@ -19,8 +19,8 @@ Background cron job periodically syncs orders from Bricklink and Brickowl market
 
 **Convex** - For each returned order:
 
-- Checks if order already exists in `bricklinkOrders` or `brickowlOrders` table
-- If new: Creates order document
+- Checks if order already exists in the unified `orders` table (filtered by `businessAccountId`, `provider`, and `orderId`)
+- If new: Creates order document with `provider` field
 - If existing: Updates order document with latest data
 
 **Convex** - For each order, fetches order items:
@@ -32,7 +32,7 @@ Background cron job periodically syncs orders from Bricklink and Brickowl market
 
 - Matches items to inventory by `partNumber` + `colorId` + `condition` + `location`
 - Retrieves location from matched inventory item
-- Creates or updates `bricklinkOrderItems` or `brickowlOrderItems` documents
+- Creates or updates entries in the unified `orderItems` table (tagged with `provider`)
 
 **Convex** - Reserves inventory for order items:
 

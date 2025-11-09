@@ -78,12 +78,12 @@ Bricklink sends a notification when a new order is created. The system receives 
 
 **Convex** - Calls `api.marketplaces.bricklink.notifications.upsertOrder` mutation
 
-**Convex** - Upserts `bricklinkOrders` document
+**Convex** - Upserts unified `orders` document (with `provider: "bricklink"`)
 
 - Parses timestamps (date_ordered, date_status_changed)
 - Stores order metadata (buyer info, shipping, payment, etc.)
 
-**Convex** - Upserts `bricklinkOrderItems` documents
+**Convex** - Upserts unified `orderItems` documents (each tagged with `provider: "bricklink"`)
 
 - For each item: Matches to inventory by `itemNo` + `colorId` + `condition` + `location`
 - Retrieves location from matched inventory item (if exists)

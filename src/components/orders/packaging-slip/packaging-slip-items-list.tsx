@@ -5,12 +5,12 @@ import { decodeHTML } from "@/lib/utils";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 interface PackagingSlipItemsListProps {
-  items: Doc<"bricklinkOrderItems">[];
+  items: Doc<"orderItems">[];
 }
 
-const PartImage = ({ itemNo, colorId }: { itemNo: string; colorId: number }) => {
+const PartImage = ({ itemNo, colorId }: { itemNo: string; colorId?: number }) => {
   const [currentImageUrl, setCurrentImageUrl] = useState<string>(
-    `https://img.bricklink.com/ItemImage/PN/${colorId}/${itemNo}.png`,
+    `https://img.bricklink.com/ItemImage/PN/${colorId ?? 0}/${itemNo}.png`,
   );
   const [hasError, setHasError] = useState(false);
 
@@ -40,7 +40,7 @@ export function PackagingSlipItemsList({ items }: PackagingSlipItemsListProps) {
   if (!items || items.length === 0) return <div>No Order Items</div>;
 
   // Group items into rows of 3
-  const itemRows: Doc<"bricklinkOrderItems">[][] = [];
+  const itemRows: Doc<"orderItems">[][] = [];
   for (let i = 0; i < items.length; i += 3) {
     itemRows.push(items.slice(i, i + 3));
   }
@@ -57,7 +57,7 @@ export function PackagingSlipItemsList({ items }: PackagingSlipItemsListProps) {
                 style={{ width: "calc(33.333% - 0.2em)" }}
               >
                 <div style={{ display: "flex" }}>
-                  <PartImage itemNo={item.itemNo} colorId={item.colorId} />
+                  <PartImage itemNo={item.itemNo} colorId={item.colorId ?? undefined} />
                   <div className="mx-2 w-3/4 flex-none text-sm">
                     <div className="flex justify-between">
                       <span>

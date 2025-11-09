@@ -18,12 +18,12 @@ User selects one or multiple orders and generates printable packaging slips for 
 
 **Convex** - For each order ID:
 
-- Queries `bricklinkOrderItems` by `businessAccountId` and `orderId`
+- Queries unified `orderItems` by `businessAccountId` and `orderId`
 - Returns items grouped by order ID
 
 **Frontend** - Calls `api.marketplaces.shared.queries.getOrdersByIds` with order IDs
 
-**Convex** - Queries `bricklinkOrders` by order IDs
+**Convex** - Queries unified `orders` by order IDs
 
 - Returns order metadata (buyer info, shipping address, payment info, etc.)
 

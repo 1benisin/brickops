@@ -2,7 +2,7 @@ import React from "react";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 interface PackagingSlipMessagesProps {
-  order: Doc<"bricklinkOrders">;
+  order: Doc<"orders">;
 }
 
 export function PackagingSlipMessages({ order }: PackagingSlipMessagesProps) {

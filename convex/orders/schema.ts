@@ -2,18 +2,13 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export const ordersTables = {
-  // BrickLink orders (full order data fetched from API)
-  bricklinkOrders: defineTable({
+  orders: defineTable({
     businessAccountId: v.id("businessAccounts"),
-    orderId: v.string(), // BrickLink order_id
-    dateOrdered: v.number(), // Parsed timestamp
-    dateStatusChanged: v.number(), // Parsed timestamp
-    sellerName: v.string(),
-    storeName: v.string(),
-    buyerName: v.string(),
-    buyerEmail: v.string(),
-    buyerOrderCount: v.number(),
-    requireInsurance: v.boolean(),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    orderId: v.string(),
+    externalOrderKey: v.optional(v.string()), // Provider-specific identifier when different from orderId
+    dateOrdered: v.number(),
+    dateStatusChanged: v.optional(v.number()),
     status: v.union(
       v.literal("PENDING"),
       v.literal("UPDATED"),
@@ -26,103 +21,130 @@ export const ordersTables = {
       v.literal("COMPLETED"),
       v.literal("CANCELLED"),
       v.literal("HOLD"),
-    ), // BrickLink order status values. Alert statuses (OCR, NPB, NPX, NRS, NSS) are mapped to HOLD during ingestion.
-    isInvoiced: v.boolean(),
-    isFiled: v.boolean(),
-    driveThruSent: v.boolean(),
-    salesTaxCollectedByBl: v.boolean(),
+      v.literal("ARCHIVED"),
+    ),
+    providerStatus: v.optional(v.string()),
+    buyerName: v.optional(v.string()),
+    buyerEmail: v.optional(v.string()),
+    buyerOrderCount: v.optional(v.number()),
+    storeName: v.optional(v.string()),
+    sellerName: v.optional(v.string()),
     remarks: v.optional(v.string()),
-    totalCount: v.number(),
-    lotCount: v.number(),
+    totalCount: v.optional(v.number()),
+    lotCount: v.optional(v.number()),
     totalWeight: v.optional(v.number()),
-    // Payment info
     paymentMethod: v.optional(v.string()),
     paymentCurrencyCode: v.optional(v.string()),
     paymentDatePaid: v.optional(v.number()),
     paymentStatus: v.optional(v.string()),
-    // Shipping info
     shippingMethod: v.optional(v.string()),
     shippingMethodId: v.optional(v.string()),
     shippingTrackingNo: v.optional(v.string()),
     shippingTrackingLink: v.optional(v.string()),
     shippingDateShipped: v.optional(v.number()),
-    // Address (stored as JSON string for simplicity)
-    shippingAddress: v.optional(v.string()), // JSON string
-    // Cost info
-    costCurrencyCode: v.string(),
-    costSubtotal: v.number(),
-    costGrandTotal: v.number(),
-    costSalesTaxCollectedByBL: v.optional(v.number()),
+    shippingAddress: v.optional(v.string()),
+    costCurrencyCode: v.optional(v.string()),
+    costSubtotal: v.optional(v.number()),
+    costGrandTotal: v.optional(v.number()),
+    costSalesTax: v.optional(v.number()),
     costFinalTotal: v.optional(v.number()),
-    costEtc1: v.optional(v.number()),
-    costEtc2: v.optional(v.number()),
     costInsurance: v.optional(v.number()),
     costShipping: v.optional(v.number()),
     costCredit: v.optional(v.number()),
     costCoupon: v.optional(v.number()),
-    // Metadata
-    lastSyncedAt: v.number(), // Last time order data was fetched from BrickLink
+    providerData: v.optional(v.any()),
+    lastSyncedAt: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    // Existing indexes
-    .index("by_business_order", ["businessAccountId", "orderId"]) // Also used for orderId sorting
+    .index("by_business_order", ["businessAccountId", "orderId"])
+    .index("by_business_provider_order", ["businessAccountId", "provider", "orderId"])
     .index("by_business_status", ["businessAccountId", "status"])
     .index("by_business_date", ["businessAccountId", "dateOrdered"])
-    // Indexes for sorting and filtering
-    .index("by_business_buyerName", ["businessAccountId", "buyerName"])
+    .index("by_business_paymentStatus", ["businessAccountId", "paymentStatus"])
+    .index("by_business_provider_date", ["businessAccountId", "provider", "dateOrdered"])
     .index("by_business_status_dateOrdered", ["businessAccountId", "status", "dateOrdered"])
+    .index("by_business_provider_status", ["businessAccountId", "provider", "status"])
     .index("by_business_costGrandTotal", ["businessAccountId", "costGrandTotal"])
     .index("by_business_totalCount", ["businessAccountId", "totalCount"])
     .index("by_business_dateStatusChanged", ["businessAccountId", "dateStatusChanged"])
-    .index("by_business_paymentStatus", ["businessAccountId", "paymentStatus"])
+    .index("by_business_buyerName", ["businessAccountId", "buyerName"])
     .searchIndex("search_orders_orderId", {
       searchField: "orderId",
-      filterFields: ["businessAccountId"],
+      filterFields: ["businessAccountId", "provider"],
     })
     .searchIndex("search_orders_buyerName", {
       searchField: "buyerName",
-      filterFields: ["businessAccountId"],
+      filterFields: ["businessAccountId", "provider"],
     })
     .searchIndex("search_orders_paymentMethod", {
       searchField: "paymentMethod",
-      filterFields: ["businessAccountId"],
+      filterFields: ["businessAccountId", "provider"],
     })
     .searchIndex("search_orders_shippingMethod", {
       searchField: "shippingMethod",
-      filterFields: ["businessAccountId"],
+      filterFields: ["businessAccountId", "provider"],
     }),
 
-  // BrickLink order items (line items for orders)
-  bricklinkOrderItems: defineTable({
+  orderItems: defineTable({
     businessAccountId: v.id("businessAccounts"),
-    orderId: v.string(), // BrickLink order_id (references bricklinkOrders)
-    inventoryId: v.optional(v.number()), // BrickLink inventory_id if applicable
-    itemNo: v.string(), // Part/set/minifig number
-    itemName: v.string(),
-    itemType: v.string(), // PART, SET, MINIFIG, etc.
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    orderId: v.string(),
+    providerOrderKey: v.optional(v.string()),
+    providerItemId: v.optional(v.string()),
+    itemNo: v.string(),
+    itemName: v.optional(v.string()),
+    itemType: v.optional(v.string()),
     itemCategoryId: v.optional(v.number()),
-    colorId: v.number(),
+    colorId: v.optional(v.number()),
     colorName: v.optional(v.string()),
     quantity: v.number(),
-    newOrUsed: v.string(), // N or U
-    completeness: v.optional(v.string()), // C, B, S (for SETs)
-    unitPrice: v.number(), // Original unit price
-    unitPriceFinal: v.number(), // Final unit price after tiered pricing
-    currencyCode: v.string(),
+    condition: v.optional(v.string()),
+    completeness: v.optional(v.string()),
+    unitPrice: v.optional(v.number()),
+    unitPriceFinal: v.optional(v.number()),
+    currencyCode: v.optional(v.string()),
     remarks: v.optional(v.string()),
     description: v.optional(v.string()),
     weight: v.optional(v.number()),
-    location: v.string(), // Location from inventory item or BrickLink API
+    location: v.optional(v.string()),
     status: v.union(
       v.literal("picked"),
       v.literal("unpicked"),
       v.literal("skipped"),
       v.literal("issue"),
-    ), // Picking status (default: "unpicked")
+    ),
+    providerData: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_order", ["businessAccountId", "orderId"])
-    .index("by_business_item", ["businessAccountId", "itemNo", "colorId"]),
+    .index("by_business_item", ["businessAccountId", "itemNo", "colorId"])
+    .index("by_business_provider_order", ["businessAccountId", "provider", "orderId"]),
+
+  orderNotifications: defineTable({
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    eventType: v.string(),
+    resourceId: v.string(),
+    timestamp: v.number(),
+    occurredAt: v.number(),
+    dedupeKey: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("dead_letter"),
+    ),
+    attempts: v.number(),
+    lastError: v.optional(v.string()),
+    processedAt: v.optional(v.number()),
+    payloadSnapshot: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_business_provider_status", ["businessAccountId", "provider", "status"])
+    .index("by_dedupe", ["dedupeKey"])
+    .index("by_business_created", ["businessAccountId", "createdAt"]),
 };

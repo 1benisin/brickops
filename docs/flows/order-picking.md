@@ -19,7 +19,7 @@ User selects one or multiple orders from the orders page, navigates to the picki
 **Convex** - For each order item:
 
 - Matches to inventory items by `partNumber` + `colorId` + `condition` + `location`
-- Uses location from order item (already in `bricklinkOrderItems.location`)
+- Uses location from order item (stored on unified `orderItems.location`)
 - Calculates `remainingAfterPick = (quantityAvailable + quantityReserved) - quantity`
 
 **Convex** - Returns order items sorted by location
@@ -43,7 +43,7 @@ User selects one or multiple orders from the orders page, navigates to the picki
 
 **Convex** - Updates order item:
 
-- Sets `status: "picked"` on `bricklinkOrderItems` document
+- Sets `status: "picked"` on unified `orderItems` document
 - Sets `updatedAt` timestamp
 
 **Convex** - Updates inventory item:

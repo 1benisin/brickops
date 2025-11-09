@@ -56,6 +56,8 @@ export function mapBrickOwlToConvexInventory(
  */
 export function mapConvexToBrickOwlCreate(
   convexInventory: Doc<"inventoryItems">,
+  brickowlId: string,
+  brickowlColorId?: number,
 ): CreateInventoryPayload {
   // Map condition: "new" -> "new", "used" -> "usedn" (Used Like New - matches our inventory model)
   const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedn" as const);
@@ -69,14 +71,9 @@ export function mapConvexToBrickOwlCreate(
   // Map notes to public_note (public-facing description visible to customers)
   const public_note = convexInventory.notes || undefined;
 
-  // Validate required fields
-  if (!convexInventory.partNumber) {
-    throw new Error("partNumber is required for BrickOwl inventory creation");
-  }
-
   return {
-    boid: convexInventory.partNumber,
-    color_id: convexInventory.colorId ? parseInt(convexInventory.colorId, 10) : undefined,
+    boid: brickowlId,
+    ...(brickowlColorId !== undefined ? { color_id: brickowlColorId } : {}),
     quantity: convexInventory.quantityAvailable,
     price,
     condition,

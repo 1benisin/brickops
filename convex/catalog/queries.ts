@@ -263,6 +263,9 @@ export const getPart = query({
         yearReleased: part.yearReleased,
         description: part.description,
         isObsolete: part.isObsolete,
+        brickowlId: part.brickowlId,
+        ldrawId: part.ldrawId,
+        legoId: part.legoId,
         lastFetched: part.lastFetched,
       },
       status,
@@ -455,6 +458,21 @@ export const getOutboxMessageById = internalQuery({
   },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.messageId);
+  },
+});
+
+/**
+ * Get color data for internal use (returns raw schema)
+ */
+export const getColorInternal = internalQuery({
+  args: {
+    colorId: v.number(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("colors")
+      .withIndex("by_colorId", (q) => q.eq("colorId", args.colorId))
+      .first();
   },
 });
 

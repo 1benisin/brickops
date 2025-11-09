@@ -103,6 +103,12 @@ export const ordersQuerySpecValidator = v.object({
           value: v.string(),
         }),
       ),
+      provider: v.optional(
+        v.object({
+          kind: v.literal("enum"),
+          value: v.string(),
+        }),
+      ),
     }),
   ),
 
@@ -142,8 +148,8 @@ export const listOrders = query({
     const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
 
     const orders = await ctx.db
-      .query("bricklinkOrders")
-      .withIndex("by_business_order", (q) => q.eq("businessAccountId", businessAccountId))
+      .query("orders")
+      .withIndex("by_business_date", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
     // Sort by dateOrdered descending (newest first)
@@ -211,6 +217,12 @@ export const listOrdersFiltered = query({
       }
     }
 
+    let providerFilter: "bricklink" | "brickowl" | undefined;
+    if (remainingFilters?.provider && remainingFilters.provider.kind === "enum") {
+      providerFilter = remainingFilters.provider.value as "bricklink" | "brickowl";
+      delete remainingFilters.provider;
+    }
+
     const usingSearchIndex = Boolean(textFilterField && textFilterValue);
 
     // Choose best index based on filters and sort
@@ -233,72 +245,90 @@ export const listOrdersFiltered = query({
       } as const;
 
       queryBuilder = ctx.db
-        .query("bricklinkOrders")
-        .withSearchIndex(searchIndexMap[textFilterField], (q) =>
-          q
+        .query("orders")
+        .withSearchIndex(searchIndexMap[textFilterField], (q) => {
+          let searchBuilder = q
             .search(searchFieldMap[textFilterField], textFilterValue)
-            .eq("businessAccountId", businessAccountId),
-        );
+            .eq("businessAccountId", businessAccountId);
+          if (providerFilter) {
+            searchBuilder = searchBuilder.eq("provider", providerFilter);
+          }
+          return searchBuilder;
+        });
     } else {
-      // Index selection logic
-      type IndexName =
-        | "by_business_date"
-        | "by_business_status"
-        | "by_business_status_dateOrdered"
-        | "by_business_buyerName"
-        | "by_business_costGrandTotal"
-        | "by_business_order"
-        | "by_business_totalCount"
-        | "by_business_dateStatusChanged"
-        | "by_business_paymentStatus";
-
-      let indexName: IndexName;
-
       if (remainingFilters?.status && primarySort === "dateOrdered") {
-        // Use composite index: by_business_status_dateOrdered
-        indexName = "by_business_status_dateOrdered";
         const statusValue = remainingFilters.status.value;
         queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) =>
+          .query("orders")
+          .withIndex("by_business_status_dateOrdered", (q) =>
             q.eq("businessAccountId", businessAccountId).eq("status", statusValue),
           );
+        if (providerFilter) {
+          queryBuilder = queryBuilder.filter((q) => q.eq(q.field("provider"), providerFilter));
+        }
       } else if (primarySort === "costGrandTotal") {
-        indexName = "by_business_costGrandTotal";
         queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+          .query("orders")
+          .withIndex("by_business_costGrandTotal", (q) =>
+            q.eq("businessAccountId", businessAccountId),
+          );
+        if (providerFilter) {
+          queryBuilder = queryBuilder.filter((q) => q.eq(q.field("provider"), providerFilter));
+        }
       } else if (primarySort === "orderId") {
-        indexName = "by_business_order";
-        queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+        if (providerFilter) {
+          queryBuilder = ctx.db
+            .query("orders")
+            .withIndex("by_business_provider_order", (q) =>
+              q.eq("businessAccountId", businessAccountId).eq("provider", providerFilter),
+            );
+        } else {
+          queryBuilder = ctx.db
+            .query("orders")
+            .withIndex("by_business_order", (q) => q.eq("businessAccountId", businessAccountId));
+        }
       } else if (primarySort === "buyerName") {
-        indexName = "by_business_buyerName";
         queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+          .query("orders")
+          .withIndex("by_business_buyerName", (q) => q.eq("businessAccountId", businessAccountId));
+        if (providerFilter) {
+          queryBuilder = queryBuilder.filter((q) => q.eq(q.field("provider"), providerFilter));
+        }
       } else if (primarySort === "totalCount") {
-        indexName = "by_business_totalCount";
         queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+          .query("orders")
+          .withIndex("by_business_totalCount", (q) => q.eq("businessAccountId", businessAccountId));
+        if (providerFilter) {
+          queryBuilder = queryBuilder.filter((q) => q.eq(q.field("provider"), providerFilter));
+        }
       } else if (primarySort === "dateStatusChanged") {
-        indexName = "by_business_dateStatusChanged";
         queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+          .query("orders")
+          .withIndex("by_business_dateStatusChanged", (q) =>
+            q.eq("businessAccountId", businessAccountId),
+          );
+        if (providerFilter) {
+          queryBuilder = queryBuilder.filter((q) => q.eq(q.field("provider"), providerFilter));
+        }
       } else if (primarySort === "status") {
-        indexName = "by_business_status";
         queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+          .query("orders")
+          .withIndex("by_business_status", (q) => q.eq("businessAccountId", businessAccountId));
+        if (providerFilter) {
+          queryBuilder = queryBuilder.filter((q) => q.eq(q.field("provider"), providerFilter));
+        }
       } else {
-        // Default: sort by dateOrdered
-        indexName = "by_business_date";
-        queryBuilder = ctx.db
-          .query("bricklinkOrders")
-          .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
+        if (providerFilter) {
+          queryBuilder = ctx.db
+            .query("orders")
+            .withIndex("by_business_provider_date", (q) =>
+              q.eq("businessAccountId", businessAccountId).eq("provider", providerFilter),
+            );
+        } else {
+          queryBuilder = ctx.db
+            .query("orders")
+            .withIndex("by_business_date", (q) => q.eq("businessAccountId", businessAccountId));
+        }
       }
     }
 
@@ -306,6 +336,10 @@ export const listOrdersFiltered = query({
     // Note: businessAccountId is already filtered by the index predicate above
     queryBuilder = queryBuilder.filter((q) => {
       let filter = q.eq(q.field("businessAccountId"), businessAccountId); // Keep for safety but index already filters
+
+      if (providerFilter) {
+        filter = q.and(filter, q.eq(q.field("provider"), providerFilter));
+      }
 
       // Text prefix searches
       if (remainingFilters?.orderId?.kind === "prefix") {
@@ -425,7 +459,7 @@ export const listOrdersFiltered = query({
 
       // Apply cursor if provided (for pagination)
       if (pagination.cursor) {
-        const cursorDoc = await ctx.db.get(pagination.cursor as Id<"bricklinkOrders">);
+        const cursorDoc = await ctx.db.get(pagination.cursor as Id<"orders">);
         if (cursorDoc) {
           // Filter items after cursor based on sort field
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -619,11 +653,11 @@ export const getOrdersByIds = query({
     }
 
     // Fetch all matching orders
-    const orders: Doc<"bricklinkOrders">[] = [];
+    const orders: Doc<"orders">[] = [];
 
     for (const orderId of args.orderIds) {
       const order = await ctx.db
-        .query("bricklinkOrders")
+        .query("orders")
         .withIndex("by_business_order", (q) =>
           q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
         )
@@ -666,11 +700,11 @@ export const getOrderItemsForOrders = query({
 
     // Fetch all order items for the given order IDs
     // Group by orderId for efficient access
-    const itemsByOrderId: Record<string, Doc<"bricklinkOrderItems">[]> = {};
+    const itemsByOrderId: Record<string, Doc<"orderItems">[]> = {};
 
     for (const orderId of args.orderIds) {
       const items = await ctx.db
-        .query("bricklinkOrderItems")
+        .query("orderItems")
         .withIndex("by_order", (q) =>
           q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
         )
@@ -711,11 +745,11 @@ export const getPickableItemsForOrders = query({
     }
 
     // Get all order items for the given orderIds
-    const allOrderItems: Doc<"bricklinkOrderItems">[] = [];
+    const allOrderItems: Doc<"orderItems">[] = [];
 
     for (const orderId of args.orderIds) {
       const items = await ctx.db
-        .query("bricklinkOrderItems")
+        .query("orderItems")
         .withIndex("by_order", (q) =>
           q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
         )
@@ -728,61 +762,35 @@ export const getPickableItemsForOrders = query({
     // Return ALL items (including picked ones) - frontend will handle display based on status
     const items = await Promise.all(
       allOrderItems.map(async (orderItem) => {
-        // Match inventory item using partNumber, colorId, condition, AND location
-        const inventoryItem = await ctx.db
+        const location = orderItem.location ?? "UNKNOWN";
+        const condition = orderItem.condition ?? undefined;
+        const colorIdFilter =
+          orderItem.colorId !== undefined ? String(orderItem.colorId) : undefined;
+
+        let inventoryQuery = ctx.db
           .query("inventoryItems")
           .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
-          .filter((q) =>
-            q.and(
-              q.eq(q.field("partNumber"), orderItem.itemNo),
-              q.eq(q.field("colorId"), orderItem.colorId.toString()),
-              q.eq(q.field("condition"), orderItem.newOrUsed === "N" ? "new" : "used"),
-              q.eq(q.field("location"), orderItem.location || "UNKNOWN"),
-            ),
-          )
-          .first();
+          .filter((q) => {
+            let predicate = q.eq(q.field("partNumber"), orderItem.itemNo);
+            if (colorIdFilter) {
+              predicate = q.and(predicate, q.eq(q.field("colorId"), colorIdFilter));
+            }
+            if (condition) {
+              predicate = q.and(predicate, q.eq(q.field("condition"), condition));
+            }
+            predicate = q.and(predicate, q.eq(q.field("location"), location));
+            return predicate;
+          });
 
-        // Handle migration: if document has isPicked instead of status, convert it
-        const itemDoc = orderItem as Record<string, unknown>;
-        let status: "picked" | "unpicked" | "skipped" | "issue";
+        const inventoryItem = await inventoryQuery.first();
+        const status = orderItem.status;
 
-        if ("status" in itemDoc) {
-          status = orderItem.status;
-        } else if ("isPicked" in itemDoc) {
-          // Old schema - convert isPicked to status
-          const isPicked = itemDoc.isPicked as boolean;
-          status = isPicked ? "picked" : "unpicked";
-          // Migrate the document on-the-fly
-          try {
-            await ctx.db.patch(orderItem._id, {
-              status: status,
-            });
-          } catch (error) {
-            console.error(`Failed to migrate order item ${orderItem._id}:`, error);
-          }
-        } else {
-          // Missing both - default to unpicked
-          status = "unpicked";
-          try {
-            await ctx.db.patch(orderItem._id, {
-              status: "unpicked",
-            });
-          } catch (error) {
-            console.error(`Failed to set status on order item ${orderItem._id}:`, error);
-          }
-        }
-
-        // Calculate remaining after pick based on status
-        // For unpicked/skipped: what will remain after picking (quantityAvailable + quantityReserved - orderItem.quantity)
-        // For picked/issue: current remaining (quantityAvailable + quantityReserved, already adjusted)
         let remainingAfterPick = 0;
         if (inventoryItem) {
           if (status === "unpicked" || status === "skipped") {
-            // Item not yet picked - show what will remain after picking
             remainingAfterPick =
               inventoryItem.quantityAvailable + inventoryItem.quantityReserved - orderItem.quantity;
           } else {
-            // Item already picked/issue - reserved quantity already decreased, show current remaining
             remainingAfterPick = inventoryItem.quantityAvailable + inventoryItem.quantityReserved;
           }
         }
@@ -795,11 +803,11 @@ export const getPickableItemsForOrders = query({
           colorId: orderItem.colorId,
           colorName: orderItem.colorName,
           quantity: orderItem.quantity,
-          location: orderItem.location || "UNKNOWN",
-          status: status,
+          location,
+          status,
           inventoryItemId: inventoryItem?._id,
           remainingAfterPick,
-          imageUrl: undefined, // TODO: Add image URL if available
+          imageUrl: undefined,
         };
       }),
     );

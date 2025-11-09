@@ -11,6 +11,7 @@ import {
   getCurrentAvailableFromLedger,
   getLastSyncedSeq,
   enqueueMarketplaceSync,
+  ensureBrickowlIdForPart,
 } from "./helpers";
 import {
   addInventoryItemArgs,
@@ -79,6 +80,9 @@ export const addInventoryItem = mutation({
     if (args.quantityAvailable < 0) {
       throw new ConvexError("Quantity available cannot be negative");
     }
+
+    // Ensure the catalog entry for this part has a BrickOwl identifier (or an explicit placeholder).
+    await ensureBrickowlIdForPart(ctx, args.partNumber);
 
     // TOTO - check for duplicate item going into same drawer
     // TODO - Similarity check: verify that other parts in the same location

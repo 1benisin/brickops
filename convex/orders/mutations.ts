@@ -9,7 +9,7 @@ import { requireUser, assertBusinessMembership } from "../inventory/helpers";
  */
 export const markOrderItemAsPicked = mutation({
   args: {
-    orderItemId: v.id("bricklinkOrderItems"),
+    orderItemId: v.id("orderItems"),
     inventoryItemId: v.id("inventoryItems"),
   },
   handler: async (ctx, args) => {
@@ -36,11 +36,18 @@ export const markOrderItemAsPicked = mutation({
     }
 
     // Verify inventory item matches order item
+    if (inventoryItem.partNumber !== orderItem.itemNo) {
+      throw new ConvexError("Inventory item does not match order item");
+    }
+
     if (
-      inventoryItem.partNumber !== orderItem.itemNo ||
-      inventoryItem.colorId !== orderItem.colorId.toString() ||
-      inventoryItem.condition !== (orderItem.newOrUsed === "N" ? "new" : "used")
+      orderItem.colorId !== undefined &&
+      inventoryItem.colorId !== orderItem.colorId.toString()
     ) {
+      throw new ConvexError("Inventory item does not match order item");
+    }
+
+    if (orderItem.condition !== undefined && inventoryItem.condition !== orderItem.condition) {
       throw new ConvexError("Inventory item does not match order item");
     }
 
@@ -88,7 +95,7 @@ export const updateOrderStatusIfFullyPicked = mutation({
 
     // Get order
     const order = await ctx.db
-      .query("bricklinkOrders")
+      .query("orders")
       .withIndex("by_business_order", (q) =>
         q.eq("businessAccountId", businessAccountId).eq("orderId", args.orderId),
       )
@@ -100,7 +107,7 @@ export const updateOrderStatusIfFullyPicked = mutation({
 
     // Get all order items
     const orderItems = await ctx.db
-      .query("bricklinkOrderItems")
+      .query("orderItems")
       .withIndex("by_order", (q) =>
         q.eq("businessAccountId", businessAccountId).eq("orderId", args.orderId),
       )
@@ -144,7 +151,7 @@ export const markOrdersAsPicked = mutation({
     for (const orderId of args.orderIds) {
       // Get order
       const order = await ctx.db
-        .query("bricklinkOrders")
+        .query("orders")
         .withIndex("by_business_order", (q) =>
           q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
         )
@@ -166,7 +173,7 @@ export const markOrdersAsPicked = mutation({
 
       // Get all order items for this order
       const orderItems = await ctx.db
-        .query("bricklinkOrderItems")
+        .query("orderItems")
         .withIndex("by_order", (q) =>
           q.eq("businessAccountId", businessAccountId).eq("orderId", orderId),
         )
@@ -208,7 +215,7 @@ export const markOrdersAsPicked = mutation({
  */
 export const markOrderItemAsIssue = mutation({
   args: {
-    orderItemId: v.id("bricklinkOrderItems"),
+    orderItemId: v.id("orderItems"),
     inventoryItemId: v.id("inventoryItems"),
   },
   handler: async (ctx, args) => {
@@ -235,11 +242,18 @@ export const markOrderItemAsIssue = mutation({
     }
 
     // Verify inventory item matches order item
+    if (inventoryItem.partNumber !== orderItem.itemNo) {
+      throw new ConvexError("Inventory item does not match order item");
+    }
+
     if (
-      inventoryItem.partNumber !== orderItem.itemNo ||
-      inventoryItem.colorId !== orderItem.colorId.toString() ||
-      inventoryItem.condition !== (orderItem.newOrUsed === "N" ? "new" : "used")
+      orderItem.colorId !== undefined &&
+      inventoryItem.colorId !== orderItem.colorId.toString()
     ) {
+      throw new ConvexError("Inventory item does not match order item");
+    }
+
+    if (orderItem.condition !== undefined && inventoryItem.condition !== orderItem.condition) {
       throw new ConvexError("Inventory item does not match order item");
     }
 
@@ -278,7 +292,7 @@ export const markOrderItemAsIssue = mutation({
  */
 export const markOrderItemAsSkipped = mutation({
   args: {
-    orderItemId: v.id("bricklinkOrderItems"),
+    orderItemId: v.id("orderItems"),
   },
   handler: async (ctx, args) => {
     const { user } = await requireUser(ctx);
@@ -314,7 +328,7 @@ export const markOrderItemAsSkipped = mutation({
  */
 export const markOrderItemAsUnpicked = mutation({
   args: {
-    orderItemId: v.id("bricklinkOrderItems"),
+    orderItemId: v.id("orderItems"),
     inventoryItemId: v.optional(v.id("inventoryItems")),
   },
   handler: async (ctx, args) => {
@@ -351,11 +365,18 @@ export const markOrderItemAsUnpicked = mutation({
       }
 
       // Verify inventory item matches order item
+      if (inventoryItem.partNumber !== orderItem.itemNo) {
+        throw new ConvexError("Inventory item does not match order item");
+      }
+
       if (
-        inventoryItem.partNumber !== orderItem.itemNo ||
-        inventoryItem.colorId !== orderItem.colorId.toString() ||
-        inventoryItem.condition !== (orderItem.newOrUsed === "N" ? "new" : "used")
+        orderItem.colorId !== undefined &&
+        inventoryItem.colorId !== orderItem.colorId.toString()
       ) {
+        throw new ConvexError("Inventory item does not match order item");
+      }
+
+      if (orderItem.condition !== undefined && inventoryItem.condition !== orderItem.condition) {
         throw new ConvexError("Inventory item does not match order item");
       }
 
@@ -372,7 +393,7 @@ export const markOrderItemAsUnpicked = mutation({
     // if we unpicked an item from a fully picked order
     const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
     const order = await ctx.db
-      .query("bricklinkOrders")
+      .query("orders")
       .withIndex("by_business_order", (q) =>
         q.eq("businessAccountId", businessAccountId).eq("orderId", orderItem.orderId),
       )
@@ -381,7 +402,7 @@ export const markOrderItemAsUnpicked = mutation({
     if (order && order.status === "PACKED") {
       // Check if all items are still picked or issue (no skipped or unpicked)
       const orderItems = await ctx.db
-        .query("bricklinkOrderItems")
+        .query("orderItems")
         .withIndex("by_order", (q) =>
           q.eq("businessAccountId", businessAccountId).eq("orderId", orderItem.orderId),
         )

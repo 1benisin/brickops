@@ -52,6 +52,7 @@ import type * as lib_external_types from "../lib/external/types.js";
 import type * as lib_external_validate from "../lib/external/validate.js";
 import type * as lib_rateLimiterAdapter from "../lib/rateLimiterAdapter.js";
 import type * as lib_webcrypto from "../lib/webcrypto.js";
+import type * as marketplaces_bricklink_actions from "../marketplaces/bricklink/actions.js";
 import type * as marketplaces_bricklink_bricklinkMappers from "../marketplaces/bricklink/bricklinkMappers.js";
 import type * as marketplaces_bricklink_catalogClient from "../marketplaces/bricklink/catalogClient.js";
 import type * as marketplaces_bricklink_dataRefresher from "../marketplaces/bricklink/dataRefresher.js";
@@ -61,7 +62,9 @@ import type * as marketplaces_bricklink_oauth from "../marketplaces/bricklink/oa
 import type * as marketplaces_bricklink_storeClient from "../marketplaces/bricklink/storeClient.js";
 import type * as marketplaces_bricklink_storeMappers from "../marketplaces/bricklink/storeMappers.js";
 import type * as marketplaces_bricklink_webhook from "../marketplaces/bricklink/webhook.js";
+import type * as marketplaces_brickowl_actions from "../marketplaces/brickowl/actions.js";
 import type * as marketplaces_brickowl_auth from "../marketplaces/brickowl/auth.js";
+import type * as marketplaces_brickowl_queries from "../marketplaces/brickowl/queries.js";
 import type * as marketplaces_brickowl_storeClient from "../marketplaces/brickowl/storeClient.js";
 import type * as marketplaces_brickowl_storeMappers from "../marketplaces/brickowl/storeMappers.js";
 import type * as marketplaces_shared_actions from "../marketplaces/shared/actions.js";
@@ -130,6 +133,7 @@ declare const fullApi: ApiFromModules<{
   "lib/external/validate": typeof lib_external_validate;
   "lib/rateLimiterAdapter": typeof lib_rateLimiterAdapter;
   "lib/webcrypto": typeof lib_webcrypto;
+  "marketplaces/bricklink/actions": typeof marketplaces_bricklink_actions;
   "marketplaces/bricklink/bricklinkMappers": typeof marketplaces_bricklink_bricklinkMappers;
   "marketplaces/bricklink/catalogClient": typeof marketplaces_bricklink_catalogClient;
   "marketplaces/bricklink/dataRefresher": typeof marketplaces_bricklink_dataRefresher;
@@ -139,7 +143,9 @@ declare const fullApi: ApiFromModules<{
   "marketplaces/bricklink/storeClient": typeof marketplaces_bricklink_storeClient;
   "marketplaces/bricklink/storeMappers": typeof marketplaces_bricklink_storeMappers;
   "marketplaces/bricklink/webhook": typeof marketplaces_bricklink_webhook;
+  "marketplaces/brickowl/actions": typeof marketplaces_brickowl_actions;
   "marketplaces/brickowl/auth": typeof marketplaces_brickowl_auth;
+  "marketplaces/brickowl/queries": typeof marketplaces_brickowl_queries;
   "marketplaces/brickowl/storeClient": typeof marketplaces_brickowl_storeClient;
   "marketplaces/brickowl/storeMappers": typeof marketplaces_brickowl_storeMappers;
   "marketplaces/shared/actions": typeof marketplaces_shared_actions;

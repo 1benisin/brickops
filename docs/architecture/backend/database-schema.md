@@ -273,6 +273,160 @@ marketplaceRateLimits: defineTable({
 .index("by_business_provider", ["businessAccountId", "provider"]),  // Primary lookup
 ```
 
+### orders / orderItems / orderNotifications (Unified Marketplace Orders)
+
+**Purpose**: Normalized order storage that supports multiple marketplaces (BrickLink, BrickOwl) with shared picking workflows and ingestion telemetry.
+
+```typescript
+orders: defineTable({
+  businessAccountId: v.id("businessAccounts"),
+  provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  orderId: v.string(), // Canonical cross-provider identifier
+  externalOrderKey: v.optional(v.string()), // Provider-specific key when different
+  dateOrdered: v.number(),
+  dateStatusChanged: v.optional(v.number()),
+  status: v.union(
+    v.literal("PENDING"),
+    v.literal("UPDATED"),
+    v.literal("PROCESSING"),
+    v.literal("READY"),
+    v.literal("PAID"),
+    v.literal("PACKED"),
+    v.literal("SHIPPED"),
+    v.literal("RECEIVED"),
+    v.literal("COMPLETED"),
+    v.literal("CANCELLED"),
+    v.literal("HOLD"),
+    v.literal("ARCHIVED"),
+  ),
+  providerStatus: v.optional(v.string()), // Raw status for auditing/debugging
+  buyerName: v.optional(v.string()),
+  buyerEmail: v.optional(v.string()),
+  buyerOrderCount: v.optional(v.number()),
+  storeName: v.optional(v.string()),
+  sellerName: v.optional(v.string()),
+  remarks: v.optional(v.string()),
+  totalCount: v.optional(v.number()),
+  lotCount: v.optional(v.number()),
+  totalWeight: v.optional(v.number()),
+  paymentMethod: v.optional(v.string()),
+  paymentCurrencyCode: v.optional(v.string()),
+  paymentDatePaid: v.optional(v.number()),
+  paymentStatus: v.optional(v.string()),
+  shippingMethod: v.optional(v.string()),
+  shippingMethodId: v.optional(v.string()),
+  shippingTrackingNo: v.optional(v.string()),
+  shippingTrackingLink: v.optional(v.string()),
+  shippingDateShipped: v.optional(v.number()),
+  shippingAddress: v.optional(v.string()), // Stored as JSON string
+  costCurrencyCode: v.optional(v.string()),
+  costSubtotal: v.optional(v.number()),
+  costGrandTotal: v.optional(v.number()),
+  costSalesTax: v.optional(v.number()),
+  costFinalTotal: v.optional(v.number()),
+  costInsurance: v.optional(v.number()),
+  costShipping: v.optional(v.number()),
+  costCredit: v.optional(v.number()),
+  costCoupon: v.optional(v.number()),
+  providerData: v.optional(v.any()), // Raw snapshot for reconciliation
+  lastSyncedAt: v.number(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+  .index("by_business_order", ["businessAccountId", "orderId"])
+  .index("by_business_provider_order", ["businessAccountId", "provider", "orderId"])
+  .index("by_business_status", ["businessAccountId", "status"])
+  .index("by_business_date", ["businessAccountId", "dateOrdered"])
+  .index("by_business_paymentStatus", ["businessAccountId", "paymentStatus"])
+  .index("by_business_provider_date", ["businessAccountId", "provider", "dateOrdered"])
+  .searchIndex("search_orders_orderId", {
+    searchField: "orderId",
+    filterFields: ["businessAccountId", "provider"],
+  })
+  .searchIndex("search_orders_buyerName", {
+    searchField: "buyerName",
+    filterFields: ["businessAccountId", "provider"],
+  })
+  .searchIndex("search_orders_paymentMethod", {
+    searchField: "paymentMethod",
+    filterFields: ["businessAccountId", "provider"],
+  })
+  .searchIndex("search_orders_shippingMethod", {
+    searchField: "shippingMethod",
+    filterFields: ["businessAccountId", "provider"],
+  });
+
+orderItems: defineTable({
+  businessAccountId: v.id("businessAccounts"),
+  provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  orderId: v.string(),
+  providerOrderKey: v.optional(v.string()), // Useful for BrickOwl composite keys
+  providerItemId: v.optional(v.string()),
+  itemNo: v.string(),
+  itemName: v.optional(v.string()),
+  itemType: v.optional(v.string()),
+  itemCategoryId: v.optional(v.number()),
+  colorId: v.optional(v.number()),
+  colorName: v.optional(v.string()),
+  quantity: v.number(),
+  condition: v.optional(v.string()),
+  completeness: v.optional(v.string()),
+  unitPrice: v.optional(v.number()),
+  unitPriceFinal: v.optional(v.number()),
+  currencyCode: v.optional(v.string()),
+  remarks: v.optional(v.string()),
+  description: v.optional(v.string()),
+  weight: v.optional(v.number()),
+  location: v.optional(v.string()),
+  status: v.union(
+    v.literal("picked"),
+    v.literal("unpicked"),
+    v.literal("skipped"),
+    v.literal("issue"),
+  ),
+  providerData: v.optional(v.any()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+  .index("by_order", ["businessAccountId", "orderId"])
+  .index("by_business_item", ["businessAccountId", "itemNo", "colorId"])
+  .index("by_business_provider_order", ["businessAccountId", "provider", "orderId"]);
+
+orderNotifications: defineTable({
+  businessAccountId: v.id("businessAccounts"),
+  provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  eventType: v.string(),
+  resourceId: v.string(),
+  timestamp: v.number(),
+  occurredAt: v.number(),
+  dedupeKey: v.string(),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("processing"),
+    v.literal("completed"),
+    v.literal("failed"),
+    v.literal("dead_letter"),
+  ),
+  attempts: v.number(),
+  lastError: v.optional(v.string()),
+  processedAt: v.optional(v.number()),
+  payloadSnapshot: v.optional(v.any()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+  .index("by_business_provider_status", ["businessAccountId", "provider", "status"])
+  .index("by_dedupe", ["dedupeKey"])
+  .index("by_business_created", ["businessAccountId", "createdAt"]);
+```
+
+### Migration Notes (BrickLink → Unified Orders)
+
+- `bricklinkOrders`, `bricklinkOrderItems`, and `bricklinkNotifications` remain in the schema temporarily while backfill jobs migrate historical data into the new normalized tables.
+- Backfill strategy:
+  1. For each business account, iterate `bricklinkOrders` sorted by `dateOrdered`, transform to the normalized shape, and insert into `orders`/`orderItems` using idempotent upsert mutations.
+  2. Once all records are migrated, freeze writes to legacy tables, verify downstream queries have switched to the new tables, and drop legacy definitions in a subsequent release.
+- During the transition, ingestion and UI code operate on the new tables; backfill jobs are safe to run multiple times thanks to `orders` `by_business_provider_order` index coupled with deterministic upsert keys.
+
 ## Index Usage Patterns
 
 ### Inventory Queries

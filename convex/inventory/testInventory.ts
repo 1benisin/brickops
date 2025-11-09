@@ -10,7 +10,7 @@ import { mutation, query } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import type { Id, Doc } from "../_generated/dataModel";
 import { requireUser } from "./helpers";
-import { now, getNextSeqForItem, enqueueMarketplaceSync } from "./helpers";
+import { now, getNextSeqForItem, enqueueMarketplaceSync, ensureBrickowlIdForPart } from "./helpers";
 
 /**
  * Check if we're in development mode
@@ -60,6 +60,8 @@ async function createInventoryItemWithLedger(
   if (itemData.quantityAvailable < 0) {
     throw new ConvexError("Quantity available cannot be negative");
   }
+
+  await ensureBrickowlIdForPart(ctx, itemData.partNumber);
 
   const timestamp = now();
   const document: Omit<Doc<"inventoryItems">, "_id" | "_creationTime"> = {
@@ -194,11 +196,24 @@ export const generateMockInventoryItems = mutation({
       throw new ConvexError("No parts found in catalog. Please sync catalog data first.");
     }
 
+    const eligibleParts = allParts.filter((part) => Boolean(part.brickowlId));
+
+    if (eligibleParts.length === 0) {
+      throw new ConvexError(
+        "No parts with BrickOwl mappings found in catalog. Please sync catalog data with BrickOwl IDs.",
+      );
+    }
+
     const locations = generateLocations();
     const created: string[] = [];
     const errors: string[] = [];
+    const partColorCache = new Map<string, Array<Doc<"partColors">>>();
 
-    for (let i = 0; i < args.count; i++) {
+    let attempts = 0;
+    const maxAttempts = args.count * 5;
+
+    while (created.length < args.count && eligibleParts.length > 0 && attempts < maxAttempts) {
+      attempts += 1;
       let itemData: {
         name: string;
         partNumber: string;
@@ -212,16 +227,23 @@ export const generateMockInventoryItems = mutation({
       } | null = null;
       try {
         // Pick random part
-        const part = allParts[Math.floor(Math.random() * allParts.length)];
+        const partIndex = Math.floor(Math.random() * eligibleParts.length);
+        const part = eligibleParts[partIndex];
 
         // Get available colors for this part
-        const partColors = await ctx.db
-          .query("partColors")
-          .withIndex("by_partNo", (q) => q.eq("partNo", part.no))
-          .collect();
+        let partColors = partColorCache.get(part.no);
+        if (!partColors) {
+          partColors = await ctx.db
+            .query("partColors")
+            .withIndex("by_partNo", (q) => q.eq("partNo", part.no))
+            .collect();
+          partColorCache.set(part.no, partColors);
+        }
 
         if (partColors.length === 0) {
-          errors.push(`Item ${i + 1}: No colors available for part ${part.no}`);
+          errors.push(`Attempt ${attempts}: No colors available for part ${part.no}`);
+          // Remove this part from eligibility to avoid repeated failures
+          eligibleParts.splice(partIndex, 1);
           continue;
         }
 
@@ -233,7 +255,7 @@ export const generateMockInventoryItems = mutation({
           name: part.name,
           partNumber: part.no,
           colorId: String(randomColor.colorId),
-          location: locations[i % locations.length],
+          location: locations[created.length % locations.length],
           quantityAvailable: Math.floor(Math.random() * 100) + 1, // 1-100
           quantityReserved: 0,
           condition: (Math.random() > 0.5 ? "new" : "used") as "new" | "used",
@@ -261,11 +283,22 @@ export const generateMockInventoryItems = mutation({
           ? `${itemData.partNumber}/${itemData.colorId}`
           : "unknown/unknown";
         console.error(
-          `Failed to create mock inventory item ${i + 1} (${partInfo}):`,
+          `Failed to create mock inventory item attempt ${attempts} (${partInfo}):`,
           errorMessage,
           errorDetails,
         );
-        errors.push(`Item ${i + 1} (${partInfo}): ${errorMessage}`);
+        errors.push(`Attempt ${attempts} (${partInfo}): ${errorMessage}`);
+      }
+    }
+
+    if (created.length < args.count) {
+      errors.push(
+        `Only ${created.length} of ${args.count} mock items were created. Not enough catalog parts with BrickOwl IDs and available colors.`,
+      );
+      if (eligibleParts.length === 0) {
+        errors.push(
+          "All remaining catalog parts are missing BrickOwl mappings. Please refresh catalog data with BrickOwl IDs.",
+        );
       }
     }
 

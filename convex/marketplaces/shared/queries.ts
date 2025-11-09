@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, MutationCtx, QueryCtx } from "../../_generated/server";
+import { query, internalQuery, MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 
@@ -74,6 +74,14 @@ export const getCredentialStatus = query({
       lastValidatedAt: credential.lastValidatedAt,
       validationStatus: credential.validationStatus,
       validationMessage: credential.validationMessage,
+      syncEnabled: credential.syncEnabled ?? true,
+      ordersSyncEnabled: credential.ordersSyncEnabled ?? credential.syncEnabled ?? true,
+      inventorySyncEnabled: credential.inventorySyncEnabled ?? credential.syncEnabled ?? true,
+      webhookStatus: credential.webhookStatus,
+      webhookEndpoint: credential.webhookEndpoint,
+      webhookRegisteredAt: credential.webhookRegisteredAt,
+      webhookLastCheckedAt: credential.webhookLastCheckedAt,
+      webhookLastError: credential.webhookLastError,
       createdAt: credential.createdAt,
       updatedAt: credential.updatedAt,
       webhookToken: credential.webhookToken, // Include webhook token for BrickLink
@@ -117,7 +125,7 @@ export const getMarketplaceSyncConfig = query({
       .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
-    // Determine if each marketplace should show sync column
+    // Determine if each marketplace should show sync column (inventory sync)
     const bricklinkCred = credentials.find((c) => c.provider === "bricklink");
     const brickowlCred = credentials.find((c) => c.provider === "brickowl");
 
@@ -125,9 +133,13 @@ export const getMarketplaceSyncConfig = query({
       showBricklinkSync:
         bricklinkCred !== undefined &&
         bricklinkCred.isActive &&
-        (bricklinkCred.syncEnabled ?? true), // Default to true for backward compatibility
+        (bricklinkCred.inventorySyncEnabled ??
+          bricklinkCred.syncEnabled ??
+          true), // Default to true for backward compatibility
       showBrickowlSync:
-        brickowlCred !== undefined && brickowlCred.isActive && (brickowlCred.syncEnabled ?? true), // Default to true for backward compatibility
+        brickowlCred !== undefined &&
+        brickowlCred.isActive &&
+        (brickowlCred.inventorySyncEnabled ?? brickowlCred.syncEnabled ?? true), // Default to true
     };
   },
 });
@@ -150,5 +162,38 @@ export const getSyncSettings = query({
       syncEnabled: cred.syncEnabled ?? true, // Default to true
       isActive: cred.isActive,
     }));
+  },
+});
+
+/**
+ * Internal: Get marketplace credential metadata (sans encrypted fields)
+ */
+export const getCredentialMetadata = internalQuery({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  },
+  handler: async (ctx, args) => {
+    const credential = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", args.businessAccountId).eq("provider", args.provider),
+      )
+      .first();
+
+    if (!credential) {
+      return null;
+    }
+
+    const {
+      bricklinkConsumerKey,
+      bricklinkConsumerSecret,
+      bricklinkTokenValue,
+      bricklinkTokenSecret,
+      brickowlApiKey,
+      ...metadata
+    } = credential;
+
+    return metadata;
   },
 });

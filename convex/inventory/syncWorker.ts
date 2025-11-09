@@ -15,6 +15,7 @@ import {
   mapConvexToBrickOwlCreate,
   mapConvexToBrickOwlUpdate,
 } from "../marketplaces/brickowl/storeMappers";
+import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
 
 /**
  * Phase 3: Worker that drains the marketplace outbox
@@ -99,6 +100,22 @@ export const markOutboxFailed = internalMutation({
 });
 
 /**
+ * Mark outbox message as failed permanently (no more retries)
+ */
+export const markOutboxFailedPermanently = internalMutation({
+  args: {
+    messageId: v.id("marketplaceOutbox"),
+    error: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.messageId, {
+      status: "failed",
+      lastError: args.error,
+    });
+  },
+});
+
+/**
  * Compute exponential backoff with jitter for retry attempts
  * Returns the next attempt timestamp
  */
@@ -154,8 +171,32 @@ async function processOutboxMessage(
     fromSeqExclusive: number;
     toSeqInclusive: number;
     attempt: number;
+    lastError?: string;
   },
 ) {
+  // Early check: if already exceeded max retries, mark as failed immediately
+  if (message.attempt >= 5) {
+    const errorMessage = message.lastError || "Max retries exceeded";
+
+    await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailedPermanently, {
+      messageId: message._id,
+      error: errorMessage,
+    });
+
+    await ctx.runMutation(internal.inventory.sync.updateSyncStatuses, {
+      inventoryItemId: message.itemId,
+      results: [
+        {
+          provider: message.provider,
+          success: false,
+          error: errorMessage,
+        },
+      ],
+    });
+
+    return; // Don't process further
+  }
+
   try {
     // Mark as inflight (CAS to avoid double processing)
     const marked = await ctx.runMutation(internal.inventory.syncWorker.markOutboxInflight, {
@@ -217,34 +258,80 @@ async function processOutboxMessage(
         messageId: message._id,
       });
     } else {
-      // Schedule retry with backoff
-      const nextAttempt = computeNextAttempt(message.attempt);
+      if (
+        message.provider === "brickowl" &&
+        (result.errorCode === "missing_brickowl_id" ||
+          result.errorCode === "missing_brickowl_color" ||
+          result.errorCode === "part_missing")
+      ) {
+        const errorMessage =
+          result.error ??
+          (result.errorCode === "missing_brickowl_id"
+            ? `BrickOwl ID not available for part ${item.partNumber}`
+            : result.errorCode === "part_missing"
+              ? `Part ${item.partNumber} not found in catalog`
+              : `BrickOwl color ID not available for BrickLink color ${item.colorId} on part ${item.partNumber}`);
 
-      await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailed, {
-        messageId: message._id,
-        attempt: message.attempt + 1,
-        nextAttemptAt: nextAttempt,
-        error: String(result.error),
-      });
+        await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailedPermanently, {
+          messageId: message._id,
+          error: errorMessage,
+        });
 
-      // If too many attempts, alert
+        await ctx.runMutation(internal.inventory.sync.updateSyncStatuses, {
+          inventoryItemId: message.itemId,
+          results: [
+            {
+              provider: "brickowl",
+              success: false,
+              error: errorMessage,
+            },
+          ],
+        });
+        return;
+      }
+
       if (message.attempt >= 5) {
+        const errorMessage = formatApiError(result.error) || "Unknown marketplace sync error";
         console.error(
           `Max retries exceeded for message ${message._id}, item ${message.itemId}, provider ${message.provider}`,
         );
+        await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailedPermanently, {
+          messageId: message._id,
+          error: errorMessage,
+        });
+      } else {
+        // Schedule retry with backoff
+        const nextAttempt = computeNextAttempt(message.attempt);
+
+        await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailed, {
+          messageId: message._id,
+          attempt: message.attempt + 1,
+          nextAttemptAt: nextAttempt,
+          error: formatApiError(result.error),
+        });
       }
     }
   } catch (error) {
     console.error(`Error processing message ${message._id}:`, error);
 
-    // Schedule retry
-    const nextAttempt = computeNextAttempt(message.attempt);
-    await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailed, {
-      messageId: message._id,
-      attempt: message.attempt + 1,
-      nextAttemptAt: nextAttempt,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    // Check if we've exceeded max retries
+    if (message.attempt >= 5) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // Mark as failed permanently
+      await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailedPermanently, {
+        messageId: message._id,
+        error: errorMessage,
+      });
+    } else {
+      // Schedule retry
+      const nextAttempt = computeNextAttempt(message.attempt);
+      await ctx.runMutation(internal.inventory.syncWorker.markOutboxFailed, {
+        messageId: message._id,
+        attempt: message.attempt + 1,
+        nextAttemptAt: nextAttempt,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
@@ -263,7 +350,16 @@ async function callMarketplaceAPI(
     item: Doc<"inventoryItems">;
     delta: number;
   },
-): Promise<{ success: boolean; error?: string; marketplaceId?: number | string }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  marketplaceId?: number | string;
+  errorCode?:
+    | "missing_brickowl_id"
+    | "missing_brickowl_color"
+    | "part_missing"
+    | "validation_error";
+}> {
   try {
     // Create provider-specific client
     const client =
@@ -276,18 +372,78 @@ async function callMarketplaceAPI(
     // Handle different operation kinds
     switch (args.message.kind) {
       case "create": {
-        const payload =
-          args.message.provider === "bricklink"
-            ? mapConvexToBricklinkCreate(args.item)
-            : mapConvexToBrickOwlCreate(args.item);
+        if (args.message.provider === "bricklink") {
+          const payload = mapConvexToBricklinkCreate(args.item);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await (client as any).createInventory(payload, { idempotencyKey });
+          return {
+            success: result.success,
+            marketplaceId: result.marketplaceId,
+            error: result.error ? formatApiError(result.error) : undefined,
+          };
+        } else {
+          // BrickOwl: Need to fetch brickowlId from parts table
+          if (!args.item.partNumber) {
+            return {
+              success: false,
+              error: "partNumber is required for BrickOwl inventory creation",
+              errorCode: "validation_error",
+            };
+          }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (client as any).createInventory(payload, { idempotencyKey });
-        return {
-          success: result.success,
-          marketplaceId: result.marketplaceId,
-          error: result.error ? String(result.error) : undefined,
-        };
+          const brickowlId = await ensureBrickowlIdForPartAction(ctx, args.item.partNumber);
+
+          if (brickowlId === null) {
+            return {
+              success: false,
+              error: `Part ${args.item.partNumber} not found in catalog`,
+              errorCode: "part_missing",
+            };
+          }
+
+          if (brickowlId === "") {
+            return {
+              success: false,
+              error: `BrickOwl ID not available for part ${args.item.partNumber}.`,
+              errorCode: "missing_brickowl_id",
+            };
+          }
+
+          let brickowlColorId: number | undefined;
+          if (args.item.colorId) {
+            const bricklinkColorId = Number.parseInt(args.item.colorId, 10);
+            if (Number.isNaN(bricklinkColorId)) {
+              return {
+                success: false,
+                error: `Invalid BrickLink color ID "${args.item.colorId}" for part ${args.item.partNumber}.`,
+                errorCode: "validation_error",
+              };
+            }
+
+            const color = await ctx.runQuery(internal.catalog.queries.getColorInternal, {
+              colorId: bricklinkColorId,
+            });
+
+            if (!color || color.brickowlColorId === undefined) {
+              return {
+                success: false,
+                error: `BrickOwl color ID not available for BrickLink color ${args.item.colorId} on part ${args.item.partNumber}.`,
+                errorCode: "missing_brickowl_color",
+              };
+            }
+
+            brickowlColorId = color.brickowlColorId;
+          }
+
+          const payload = mapConvexToBrickOwlCreate(args.item, brickowlId, brickowlColorId);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await (client as any).createInventory(payload, { idempotencyKey });
+          return {
+            success: result.success,
+            marketplaceId: result.marketplaceId,
+            error: result.error ? formatApiError(result.error) : undefined,
+          };
+        }
       }
 
       case "update": {
@@ -326,7 +482,7 @@ async function callMarketplaceAPI(
           return {
             success: result.success,
             marketplaceId: marketplaceId,
-            error: result.error ? String(result.error) : undefined,
+            error: result.error ? formatApiError(result.error) : undefined,
           };
         } else {
           // BrickOwl update: Map with the anchor quantity (similar to Bricklink)
@@ -344,7 +500,7 @@ async function callMarketplaceAPI(
           return {
             success: result.success,
             marketplaceId: marketplaceId,
-            error: result.error ? String(result.error) : undefined,
+            error: result.error ? formatApiError(result.error) : undefined,
           };
         }
       }
@@ -365,7 +521,7 @@ async function callMarketplaceAPI(
         return {
           success: result.success,
           marketplaceId: undefined,
-          error: result.error ? String(result.error) : undefined,
+          error: result.error ? formatApiError(result.error) : undefined,
         };
       }
 
@@ -377,7 +533,7 @@ async function callMarketplaceAPI(
     console.error(`Error calling ${args.message.provider} API:`, errorMessage);
     return {
       success: false,
-      error: errorMessage,
+      error: formatApiError(errorMessage),
     };
   }
 }
