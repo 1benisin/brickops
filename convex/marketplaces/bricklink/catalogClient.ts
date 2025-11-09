@@ -210,13 +210,16 @@ export class BricklinkClient {
   /**
    * Refresh part data from Bricklink API
    */
-  async getRefreshedPart(partNo: string): Promise<ReturnType<typeof mapPart>> {
+  async getRefreshedPart(
+    partNo: string,
+    externalIds?: { brickowlId?: string; ldrawId?: string; legoId?: string },
+  ): Promise<ReturnType<typeof mapPart>> {
     try {
       const result = await this.request<{ meta: unknown; data: BricklinkItemResponse }>({
         path: `/items/part/${partNo}`,
       });
 
-      return mapPart(result.data.data);
+      return mapPart(result.data.data, externalIds);
     } catch (error) {
       throw new Error(
         `Failed to fetch part ${partNo}: ${error instanceof Error ? error.message : String(error)}`,

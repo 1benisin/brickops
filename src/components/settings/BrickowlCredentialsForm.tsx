@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Check, X, Loader2, AlertCircle } from "lucide-react";
 
 export function BrickOwlCredentialsForm() {
@@ -14,7 +16,10 @@ export function BrickOwlCredentialsForm() {
 
   const saveCredentials = useMutation(api.marketplaces.shared.mutations.saveCredentials);
   const revokeCredentials = useMutation(api.marketplaces.shared.mutations.revokeCredentials);
+  const updateSyncSettings = useMutation(api.marketplaces.shared.mutations.updateSyncSettings);
   const testConnection = useAction(api.marketplaces.shared.actions.testConnection);
+  const registerWebhookAction = useAction(api.marketplaces.brickowl.actions.registerWebhook);
+  const unregisterWebhookAction = useAction(api.marketplaces.brickowl.actions.unregisterWebhook);
 
   const [apiKey, setApiKey] = useState("");
 
@@ -28,9 +33,27 @@ export function BrickOwlCredentialsForm() {
   const [isSaving, startSaveTransition] = useTransition();
   const [isTesting, startTestTransition] = useTransition();
   const [isRevoking, startRevokeTransition] = useTransition();
+  const [isUpdatingOrders, startUpdateOrdersTransition] = useTransition();
+  const [isUpdatingInventory, startUpdateInventoryTransition] = useTransition();
+  const [isRegisteringWebhook, startRegisterWebhookTransition] = useTransition();
+  const [isUnregisteringWebhook, startUnregisterWebhookTransition] = useTransition();
 
   const configured = status?.configured ?? false;
   const isActive = status?.isActive ?? false;
+  const ordersSyncEnabled = status?.ordersSyncEnabled ?? status?.syncEnabled ?? true;
+  const inventorySyncEnabled = status?.inventorySyncEnabled ?? status?.syncEnabled ?? true;
+  const webhookStatus = status?.webhookStatus ?? "unconfigured";
+  const webhookEndpoint = status?.webhookEndpoint;
+  const webhookLastCheckedAt = status?.webhookLastCheckedAt;
+  const webhookLastError = status?.webhookLastError;
+  const isBusy = isSaving || isTesting || isRevoking;
+  const webhookBusy = isRegisteringWebhook || isUnregisteringWebhook;
+
+  const [webhookTarget, setWebhookTarget] = useState(webhookEndpoint ?? "");
+
+  useEffect(() => {
+    setWebhookTarget(webhookEndpoint ?? "");
+  }, [webhookEndpoint]);
 
   const handleSave = () => {
     setError(null);
@@ -109,6 +132,122 @@ export function BrickOwlCredentialsForm() {
     });
   };
 
+  const handleToggleOrdersSync = (next: boolean) => {
+    if (!configured) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    startUpdateOrdersTransition(async () => {
+      try {
+        await updateSyncSettings({ provider: "brickowl", ordersSyncEnabled: next });
+        setSuccess(`BrickOwl order sync ${next ? "enabled" : "paused"}.`);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to update order sync setting";
+        setError(message);
+      }
+    });
+  };
+
+  const handleToggleInventorySync = (next: boolean) => {
+    if (!configured) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    startUpdateInventoryTransition(async () => {
+      try {
+        await updateSyncSettings({ provider: "brickowl", inventorySyncEnabled: next });
+        setSuccess(`BrickOwl inventory sync ${next ? "enabled" : "paused"}.`);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to update inventory sync setting";
+        setError(message);
+      }
+    });
+  };
+
+  const handleRegisterWebhook = () => {
+    if (!configured) {
+      setError("Save credentials before registering BrickOwl notifications.");
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    const target = webhookTarget.trim();
+    startRegisterWebhookTransition(async () => {
+      try {
+        await registerWebhookAction({ target: target.length > 0 ? target : undefined });
+        setSuccess(
+          target.length > 0
+            ? `BrickOwl will send order notifications to ${target}.`
+            : "Webhook registration requested using the default BrickOwl target.",
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to register BrickOwl notifications";
+        setError(message);
+      }
+    });
+  };
+
+  const handleUnregisterWebhook = () => {
+    if (!configured) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    startUnregisterWebhookTransition(async () => {
+      try {
+        await unregisterWebhookAction({});
+        setSuccess("BrickOwl notifications disabled. Manual polling remains active.");
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to disable BrickOwl notifications";
+        setError(message);
+      }
+    });
+  };
+
+  const renderWebhookStatusBadge = () => {
+    switch (webhookStatus) {
+      case "registered":
+        return (
+          <Badge className="gap-1.5 border-0 bg-green-100 text-green-700">
+            <Check className="size-3.5" />
+            Registered
+          </Badge>
+        );
+      case "registering":
+        return (
+          <Badge className="gap-1.5 border-0 bg-yellow-100 text-yellow-700">
+            <Loader2 className="size-3.5 animate-spin" />
+            Registering
+          </Badge>
+        );
+      case "error":
+        return (
+          <Badge className="gap-1.5 border-0 bg-red-100 text-red-700">
+            <X className="size-3.5" />
+            Error
+          </Badge>
+        );
+      case "disabled":
+        return (
+          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
+            Disabled
+          </Badge>
+        );
+      default:
+        return (
+          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
+            Not Configured
+          </Badge>
+        );
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Status Badge */}
@@ -133,6 +272,131 @@ export function BrickOwlCredentialsForm() {
               Last validated: {new Date(status.lastValidatedAt).toLocaleString()}
             </div>
           )}
+        </div>
+      )}
+
+      {configured && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-4 rounded-md border bg-muted/50 p-4">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Sync Controls</h4>
+              <p className="text-xs text-muted-foreground">
+                Choose how BrickOps imports orders and syncs inventory with BrickOwl.
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Order Sync</p>
+                <p className="text-xs text-muted-foreground">
+                  Automatically ingest BrickOwl orders. Disabled orders will still be available via
+                  manual sync.
+                </p>
+              </div>
+              <Switch
+                id="brickowl-orders-sync"
+                checked={ordersSyncEnabled}
+                onCheckedChange={(value) => handleToggleOrdersSync(value === true)}
+                disabled={isBusy || isUpdatingOrders}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Inventory Sync</p>
+                <p className="text-xs text-muted-foreground">
+                  Reserve BrickOwl inventory quantities when orders are received.
+                </p>
+              </div>
+              <Switch
+                id="brickowl-inventory-sync"
+                checked={inventorySyncEnabled}
+                onCheckedChange={(value) => handleToggleInventorySync(value === true)}
+                disabled={isBusy || isUpdatingInventory}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-md border bg-muted/50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">Order Notifications</h4>
+                <p className="text-xs text-muted-foreground">
+                  BrickOwl notifies a static IP address when orders arrive. Configure a relay and we
+                  will keep it in sync.
+                </p>
+              </div>
+              {renderWebhookStatusBadge()}
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="brickowl-webhook-target" className="text-xs font-medium text-foreground">
+                Notification Target (public IP or relay URL)
+              </label>
+              <Input
+                id="brickowl-webhook-target"
+                value={webhookTarget}
+                onChange={(e) => setWebhookTarget(e.target.value)}
+                placeholder="e.g. 203.0.113.12 or https://relay.example.com"
+                disabled={isBusy || webhookBusy}
+              />
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Leave blank to use the default <code>BRICKOWL_WEBHOOK_TARGET</code> environment
+                variable. BrickOwl sends GET requests to <code>http://IP:42500/brick_owl_order_notify</code>.
+              </p>
+            </div>
+            {webhookEndpoint && (
+              <div className="text-xs text-muted-foreground">
+                Current target:{" "}
+                <span className="break-all font-medium text-foreground">{webhookEndpoint}</span>
+              </div>
+            )}
+            {webhookLastCheckedAt && (
+              <div className="text-xs text-muted-foreground">
+                Last updated: {new Date(webhookLastCheckedAt).toLocaleString()}
+              </div>
+            )}
+            {webhookLastError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive">
+                {webhookLastError}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleRegisterWebhook}
+                disabled={isBusy || webhookBusy}
+              >
+                {isRegisteringWebhook ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Registering...
+                  </>
+                ) : (
+                  "Register Notifications"
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={handleUnregisterWebhook}
+                disabled={isBusy || webhookBusy}
+              >
+                {isUnregisteringWebhook ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Disabling...
+                  </>
+                ) : (
+                  "Disable Notifications"
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              We continue polling BrickOwl every few minutes even when notifications are disabled,
+              but push notifications deliver orders faster.
+            </p>
+          </div>
         </div>
       )}
 

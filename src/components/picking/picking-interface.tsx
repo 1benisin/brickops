@@ -17,11 +17,11 @@ import {
 } from "@/components/ui/AlertDialog";
 
 export type PickableItem = {
-  orderItemId: Id<"bricklinkOrderItems">;
+  orderItemId: Id<"orderItems">;
   orderId: string;
   itemNo: string;
   itemName: string;
-  colorId: number;
+  colorId?: number;
   colorName?: string;
   quantity: number;
   location: string;

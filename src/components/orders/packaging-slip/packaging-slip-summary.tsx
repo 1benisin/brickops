@@ -3,7 +3,7 @@ import { formatDate, formatPhoneNumber } from "@/lib/utils";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 interface PackagingSlipSummaryProps {
-  order: Doc<"bricklinkOrders">;
+  order: Doc<"orders">;
 }
 
 export function PackagingSlipSummary({ order }: PackagingSlipSummaryProps) {
@@ -13,6 +13,9 @@ export function PackagingSlipSummary({ order }: PackagingSlipSummaryProps) {
       currency: currencyCode,
     }).format(amount);
   };
+
+  const formatCurrencyValue = (amount?: number, currencyCode?: string) =>
+    amount !== undefined ? formatCurrency(amount, currencyCode ?? "USD") : "-";
 
   // Parse shipping address JSON
   let shippingAddress: {
@@ -83,7 +86,7 @@ export function PackagingSlipSummary({ order }: PackagingSlipSummaryProps) {
                 </tr>
                 <tr>
                   <td className="whitespace-nowrap align-top font-bold">Marketplace:</td>
-                  <td>BrickLink</td>
+                  <td>{order.provider === "brickowl" ? "BrickOwl" : "BrickLink"}</td>
                 </tr>
                 <tr>
                   <td className="whitespace-nowrap align-top font-bold">Order Status:</td>
@@ -91,19 +94,15 @@ export function PackagingSlipSummary({ order }: PackagingSlipSummaryProps) {
                 </tr>
                 <tr>
                   <td className="whitespace-nowrap align-top font-bold">Order Subtotal:</td>
-                  <td>{formatCurrency(order.costSubtotal, order.costCurrencyCode)}</td>
+                  <td>{formatCurrencyValue(order.costSubtotal, order.costCurrencyCode)}</td>
                 </tr>
                 <tr>
                   <td className="whitespace-nowrap align-top font-bold">Shipping:</td>
-                  <td>
-                    {order.costShipping
-                      ? formatCurrency(order.costShipping, order.costCurrencyCode)
-                      : "-"}
-                  </td>
+                  <td>{formatCurrencyValue(order.costShipping, order.costCurrencyCode)}</td>
                 </tr>
                 <tr>
                   <td className="whitespace-nowrap align-top font-bold">Total:</td>
-                  <td>{formatCurrency(order.costGrandTotal, order.costCurrencyCode)}</td>
+                  <td>{formatCurrencyValue(order.costGrandTotal, order.costCurrencyCode)}</td>
                 </tr>
               </tbody>
             </table>

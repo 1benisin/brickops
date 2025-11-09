@@ -615,6 +615,13 @@ export class BricklinkStoreClient {
         body = { parseError: (error as Error).message };
       }
 
+      console.error("[BrickLink API Error]", {
+        endpoint: options.path,
+        status: response.status,
+        body,
+        correlationId,
+      });
+
       // Record failure for circuit breaker
       await this.ctx.runMutation(internal.marketplaces.shared.mutations.recordFailure, {
         businessAccountId: this.businessAccountId,
@@ -776,6 +783,8 @@ export class BricklinkStoreClient {
     options?: OperationOptions,
   ): Promise<StoreOperationResult> {
     const correlationId = generateRequestId();
+
+    console.debug("[BrickLink createInventory] payload", payload);
 
     // Dry-run mode: validate without executing
     if (options?.dryRun) {
@@ -1397,6 +1406,24 @@ export class BricklinkStoreClient {
   }
 
   /**
+   * Register or clear webhook notification callback URL
+   */
+  async setNotificationCallback(callbackUrl: string | null): Promise<void> {
+    if (callbackUrl) {
+      await this.request<BricklinkApiResponse<unknown>>({
+        path: "/notifications/register",
+        method: "POST",
+        body: { url: callbackUrl },
+      });
+    } else {
+      await this.request<BricklinkApiResponse<unknown>>({
+        path: "/notifications/register",
+        method: "DELETE",
+      });
+    }
+  }
+
+  /**
    * Get order details
    * GET /orders/{order_id}
    */
@@ -1469,6 +1496,7 @@ export class BricklinkStoreClient {
  */
 export interface BricklinkOrderResponse {
   order_id: string;
+  resource_id?: string | number;
   date_ordered: string;
   date_status_changed: string;
   seller_name: string;

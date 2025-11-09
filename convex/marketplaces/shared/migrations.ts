@@ -22,7 +22,7 @@ export const migrateIsPickedToStatus = mutation({
     await requireUser(ctx);
 
     // Get all order items
-    const orderItems = await ctx.db.query("bricklinkOrderItems").collect();
+    const orderItems = await ctx.db.query("orderItems").collect();
 
     let migrated = 0;
     let skipped = 0;

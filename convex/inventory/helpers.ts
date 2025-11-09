@@ -1,6 +1,13 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
-import type { QueryCtx, MutationCtx, DatabaseReader, DatabaseWriter } from "../_generated/server";
+import { internal } from "../_generated/api";
+import type {
+  QueryCtx,
+  MutationCtx,
+  ActionCtx,
+  DatabaseReader,
+  DatabaseWriter,
+} from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -57,6 +64,123 @@ export function requireOwnerRole(user: Doc<"users">) {
   if (user.role !== "owner") {
     throw new ConvexError("Only business account owners can manage inventory");
   }
+}
+
+/**
+ * Ensure a part has a BrickOwl ID by enqueueing a catalog refresh when missing.
+ * If the part cannot be found in the catalog we throw immediately.
+ */
+export async function ensureBrickowlIdForPart(ctx: MutationCtx, partNumber: string): Promise<void> {
+  const part = await ctx.db
+    .query("parts")
+    .withIndex("by_no", (q) => q.eq("no", partNumber))
+    .first();
+
+  if (!part) {
+    throw new ConvexError(
+      `Part ${partNumber} not found in catalog. Please refresh the catalog before adding inventory.`,
+    );
+  }
+
+  // If we already have a BrickOwl ID (including explicit blanks), no further work is required.
+  if (part.brickowlId !== undefined) {
+    return;
+  }
+
+  // Check whether there's already an outstanding refresh request for this part.
+  const existingMessage = await ctx.db
+    .query("catalogRefreshOutbox")
+    .withIndex("by_table_primary_secondary", (q) =>
+      q.eq("tableName", "parts").eq("primaryKey", partNumber).eq("secondaryKey", undefined),
+    )
+    .filter((q) =>
+      q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")),
+    )
+    .first();
+
+  let messageId = existingMessage?._id;
+
+  if (!existingMessage) {
+    messageId = await ctx.db.insert("catalogRefreshOutbox", {
+      tableName: "parts",
+      primaryKey: partNumber,
+      secondaryKey: undefined,
+      recordId: partNumber,
+      priority: 1,
+      lastFetched: part.lastFetched,
+      status: "pending",
+      attempt: 0,
+      nextAttemptAt: Date.now(),
+      createdAt: Date.now(),
+    });
+  }
+
+  if (messageId) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.catalog.refreshWorker.processSingleOutboxMessage,
+      { messageId },
+    );
+  }
+}
+
+/**
+ * Ensure a part has a BrickOwl ID when running inside an action.
+ * Returns:
+ *  - the BrickOwl ID string if found,
+ *  - an empty string if no mapping exists (and the catalog has been marked accordingly),
+ *  - null if the part does not exist in the catalog.
+ */
+export async function ensureBrickowlIdForPartAction(
+  ctx: ActionCtx,
+  partNumber: string,
+): Promise<string | null> {
+  const part = await ctx.runQuery(internal.catalog.queries.getPartInternal, { partNumber });
+
+  if (!part) {
+    return null;
+  }
+
+  if (part.brickowlId !== undefined) {
+    return part.brickowlId ?? "";
+  }
+
+  let messageId = await ctx.runMutation(internal.catalog.mutations.enqueueCatalogRefresh, {
+    tableName: "parts",
+    primaryKey: partNumber,
+    secondaryKey: undefined,
+    lastFetched: part.lastFetched,
+    priority: 1,
+  });
+
+  if (!messageId) {
+    const existing = await ctx.runQuery(internal.catalog.queries.getOutboxMessage, {
+      tableName: "parts",
+      primaryKey: partNumber,
+    });
+
+    if (existing && (existing.status === "pending" || existing.status === "inflight")) {
+      messageId = existing._id;
+    }
+  }
+
+  if (messageId) {
+    await ctx.runAction(internal.catalog.refreshWorker.processSingleOutboxMessage, {
+      messageId,
+    });
+  }
+
+  const refreshed = await ctx.runQuery(internal.catalog.queries.getPartInternal, { partNumber });
+  if (refreshed?.brickowlId !== undefined) {
+    return refreshed.brickowlId ?? "";
+  }
+
+  await ctx.runMutation(internal.catalog.mutations.updatePartBrickowlId, {
+    partNumber,
+    brickowlId: "",
+  });
+
+  return "";
 }
 
 /**
@@ -192,4 +316,61 @@ export async function enqueueMarketplaceSync(
   });
 
   return true; // Outbox message created successfully
+}
+
+/**
+ * Format errors from external API calls (ApiError or generic error) into readable strings.
+ */
+export function formatApiError(error: unknown): string {
+  if (!error) {
+    return "";
+  }
+
+  const safeStringify = (value: unknown): string | undefined => {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return undefined;
+    }
+  };
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (typeof error === "object") {
+    const maybeApiError = error as {
+      error?: { message?: unknown; code?: unknown; details?: unknown };
+      message?: unknown;
+      code?: unknown;
+    };
+    const message = maybeApiError.error?.message;
+    const code = maybeApiError.error?.code;
+
+    if (typeof message === "string") {
+      return typeof code === "string" && code.length > 0 ? `${message} (${code})` : message;
+    }
+
+    if (typeof maybeApiError.message === "string") {
+      const topLevelCode =
+        typeof maybeApiError.code === "string" && maybeApiError.code.length > 0
+          ? ` (${maybeApiError.code})`
+          : "";
+      const detailsSummary =
+        "details" in maybeApiError && maybeApiError.details !== undefined
+          ? safeStringify(maybeApiError.details)
+          : undefined;
+      return detailsSummary
+        ? `${maybeApiError.message}${topLevelCode} | details: ${detailsSummary}`
+        : `${maybeApiError.message}${topLevelCode}`;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "[object]";
+    }
+  }
+
+  return String(error);
 }

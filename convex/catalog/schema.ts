@@ -18,6 +18,9 @@ export const catalogTables = {
     yearReleased: v.optional(v.number()), // Bricklink's year_released
     description: v.optional(v.string()), // Bricklink's description
     isObsolete: v.optional(v.boolean()), // Bricklink's is_obsolete
+    brickowlId: v.optional(v.string()), // BrickOwl part ID from Rebrickable
+    ldrawId: v.optional(v.string()), // LDraw part ID from Rebrickable
+    legoId: v.optional(v.string()), // LEGO part ID from Rebrickable
     lastFetched: v.number(), // Universal freshness timestamp
     // system fields
     createdAt: v.number(),

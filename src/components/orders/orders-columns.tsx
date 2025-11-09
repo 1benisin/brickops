@@ -19,7 +19,20 @@ const createOrderColumn = <TValue = unknown,>(
 ) => createColumn<Order, TValue>(config);
 
 // Type definition for Order from Convex schema
-export type Order = Doc<"bricklinkOrders">;
+export type Order = Doc<"orders">;
+const ProviderBadge = ({ provider }: { provider: Order["provider"] }) => {
+  const label = provider === "brickowl" ? "BrickOwl" : "BrickLink";
+  const className =
+    provider === "brickowl"
+      ? "bg-purple-500/10 text-purple-700 border-purple-200"
+      : "bg-blue-500/10 text-blue-700 border-blue-200";
+
+  return (
+    <Badge variant="outline" className={className}>
+      {label}
+    </Badge>
+  );
+};
 
 // Helper function to format currency
 const formatCurrency = (amount: number, currencyCode: string = "USD") => {
@@ -113,6 +126,25 @@ export const createOrdersColumns = (): ColumnDef<Order>[] => {
           aria-label="Select row"
         />
       ),
+    }),
+    createOrderColumn({
+      id: "provider",
+      accessorKey: "provider",
+      meta: {
+        label: "Source",
+        filterType: "select",
+        filterOptions: [
+          { label: "BrickLink", value: "bricklink" },
+          { label: "BrickOwl", value: "brickowl" },
+        ],
+      },
+      header: "Source",
+      size: 110,
+      minSize: 100,
+      maxSize: 140,
+      enableSorting: true,
+      enableColumnFilter: true,
+      cell: ({ row }) => <ProviderBadge provider={row.original.provider} />,
     }),
     // Order ID column
     createOrderColumn({

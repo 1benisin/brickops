@@ -41,6 +41,7 @@ Next Action - Description
 ### Catalog
 
 - [Part Catalog Lookup](./part-catalog-lookup.md) - Searching and viewing part catalog
+- [Catalog Stale/Missing Data Refresh](./catalog-stale-data-refresh.md) - Automatic refresh of stale or missing part data
 
 ### Background Processes
 

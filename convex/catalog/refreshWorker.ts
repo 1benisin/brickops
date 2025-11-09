@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import { catalogClient } from "../marketplaces/bricklink/catalogClient";
+import { RebrickableClient, type RebrickablePart } from "../api/rebrickable";
 
 /**
  * Query to get pending outbox messages ready for processing
@@ -97,6 +98,31 @@ function computeNextAttempt(attempt: number): number {
 }
 
 /**
+ * Extract external IDs from Rebrickable part response
+ * Returns the first element from each external ID array if available
+ */
+function extractExternalIdsFromRebrickable(rebrickableParts: RebrickablePart[]): {
+  brickowlId?: string;
+  ldrawId?: string;
+  legoId?: string;
+} {
+  if (rebrickableParts.length === 0) {
+    return {
+      brickowlId: "",
+    };
+  }
+
+  const part = rebrickableParts[0];
+  const externalIds = part.external_ids;
+
+  return {
+    brickowlId: externalIds.BrickOwl?.[0] ?? "",
+    ldrawId: externalIds.LDraw?.[0],
+    legoId: externalIds.LEGO?.[0],
+  };
+}
+
+/**
  * Worker that drains the catalog refresh outbox
  * Processes pending messages and refreshes data from Bricklink
  */
@@ -178,7 +204,25 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
 
     // Fetch from Bricklink based on table type
     if (message.tableName === "parts") {
-      const partData = await catalogClient.getRefreshedPart(message.primaryKey);
+      // Fetch external IDs from Rebrickable first (gracefully handle failures)
+      let externalIds: { brickowlId?: string; ldrawId?: string; legoId?: string } = {};
+      try {
+        const rebrickableClient = new RebrickableClient();
+        const rebrickablePartsMap = await rebrickableClient.getPartsByBricklinkIds([
+          message.primaryKey,
+        ]);
+        const rebrickableParts = rebrickablePartsMap.get(message.primaryKey) ?? [];
+        externalIds = extractExternalIdsFromRebrickable(rebrickableParts);
+      } catch (error) {
+        // Log error but continue with Bricklink data only
+        console.warn(
+          `Failed to fetch external IDs from Rebrickable for part ${message.primaryKey}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      // Fetch from Bricklink and merge external IDs
+      const partData = await catalogClient.getRefreshedPart(message.primaryKey, externalIds);
       await ctx.runMutation(internal.catalog.mutations.upsertPart, { data: partData });
     } else if (message.tableName === "partColors") {
       const partColorsData = await catalogClient.getRefreshedPartColors(message.primaryKey);

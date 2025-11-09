@@ -14,9 +14,9 @@ When all items in an order are picked, the system automatically updates the orde
 
 **Convex** - Validates user authentication
 
-**Convex** - Retrieves order from `bricklinkOrders` table
+**Convex** - Retrieves order from unified `orders` table (filtered by `businessAccountId`, `provider`, and `orderId`)
 
-**Convex** - Queries all order items for the order from `bricklinkOrderItems` table
+**Convex** - Queries all order items for the order from unified `orderItems` table
 
 **Convex** - Checks if all items are picked:
 

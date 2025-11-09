@@ -127,7 +127,10 @@ export const mapCategory = (
 /**
  * Maps Bricklink item API response to local database record
  */
-export const mapPart = (bricklinkItem: BricklinkItemResponse): InsertRecord<"parts"> => {
+export const mapPart = (
+  bricklinkItem: BricklinkItemResponse,
+  externalIds?: { brickowlId?: string; ldrawId?: string; legoId?: string },
+): InsertRecord<"parts"> => {
   const now = Date.now();
 
   return {
@@ -147,6 +150,9 @@ export const mapPart = (bricklinkItem: BricklinkItemResponse): InsertRecord<"par
       ? decodeHtmlEntities(bricklinkItem.description)
       : undefined,
     isObsolete: bricklinkItem.is_obsolete,
+    brickowlId: externalIds?.brickowlId,
+    ldrawId: externalIds?.ldrawId,
+    legoId: externalIds?.legoId,
     lastFetched: now,
     createdAt: now,
   };

@@ -5,6 +5,8 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Check, X, Loader2, AlertCircle, Copy, ExternalLink } from "lucide-react";
 import { getEnv } from "@/lib/env";
 
@@ -15,7 +17,10 @@ export function BrickLinkCredentialsForm() {
 
   const saveCredentials = useMutation(api.marketplaces.shared.mutations.saveCredentials);
   const revokeCredentials = useMutation(api.marketplaces.shared.mutations.revokeCredentials);
+  const updateSyncSettings = useMutation(api.marketplaces.shared.mutations.updateSyncSettings);
   const testConnection = useAction(api.marketplaces.shared.actions.testConnection);
+  const registerWebhookAction = useAction(api.marketplaces.bricklink.actions.registerWebhook);
+  const unregisterWebhookAction = useAction(api.marketplaces.bricklink.actions.unregisterWebhook);
 
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
@@ -28,9 +33,25 @@ export function BrickLinkCredentialsForm() {
   const [isSaving, startSaveTransition] = useTransition();
   const [isTesting, startTestTransition] = useTransition();
   const [isRevoking, startRevokeTransition] = useTransition();
+  const [isUpdatingOrders, startOrdersTransition] = useTransition();
+  const [isUpdatingInventory, startInventoryTransition] = useTransition();
+  const [isRegisteringWebhook, startRegisterWebhookTransition] = useTransition();
+  const [isUnregisteringWebhook, startUnregisterWebhookTransition] = useTransition();
 
   const configured = status?.configured ?? false;
   const isActive = status?.isActive ?? false;
+  const ordersSyncEnabled = status?.ordersSyncEnabled ?? status?.syncEnabled ?? true;
+  const inventorySyncEnabled = status?.inventorySyncEnabled ?? status?.syncEnabled ?? true;
+  const webhookStatus = status?.webhookStatus ?? "unconfigured";
+  const webhookEndpoint =
+    status?.webhookEndpoint ??
+    (status?.webhookStatus === "registered" ? webhookUrl ?? undefined : undefined) ??
+    null;
+  const webhookLastCheckedAt = status?.webhookLastCheckedAt;
+  const webhookLastError = status?.webhookLastError;
+  const webhookRegisteredAt = status?.webhookRegisteredAt;
+  const isBusy = isSaving || isTesting || isRevoking;
+  const webhookBusy = isRegisteringWebhook || isUnregisteringWebhook;
 
   // Construct webhook callback URL from query data (auto-updates when mutation completes)
   const webhookUrl = useMemo(() => {
@@ -152,6 +173,115 @@ export function BrickLinkCredentialsForm() {
     });
   };
 
+  const handleToggleOrdersSync = (next: boolean) => {
+    if (!configured) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    startOrdersTransition(async () => {
+      try {
+        await updateSyncSettings({ provider: "bricklink", ordersSyncEnabled: next });
+        setSuccess(`BrickLink order sync ${next ? "enabled" : "paused"}.`);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to update order sync setting";
+        setError(message);
+      }
+    });
+  };
+
+  const handleToggleInventorySync = (next: boolean) => {
+    if (!configured) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    startInventoryTransition(async () => {
+      try {
+        await updateSyncSettings({ provider: "bricklink", inventorySyncEnabled: next });
+        setSuccess(`BrickLink inventory sync ${next ? "enabled" : "paused"}.`);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to update inventory sync setting";
+        setError(message);
+      }
+    });
+  };
+
+  const handleRegisterWebhook = () => {
+    if (!configured) {
+      setError("Save credentials before registering the webhook.");
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    startRegisterWebhookTransition(async () => {
+      try {
+        await registerWebhookAction({});
+        setSuccess("Webhook registration requested. BrickLink will now deliver order notifications.");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to register webhook";
+        setError(message);
+      }
+    });
+  };
+
+  const handleUnregisterWebhook = () => {
+    if (!configured) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    startUnregisterWebhookTransition(async () => {
+      try {
+        await unregisterWebhookAction({});
+        setSuccess("Webhook disabled. We'll continue polling for orders as a fallback.");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to disable webhook";
+        setError(message);
+      }
+    });
+  };
+
+  const renderWebhookStatusBadge = () => {
+    switch (webhookStatus) {
+      case "registered":
+        return (
+          <Badge className="gap-1.5 border-0 bg-green-100 text-green-700">
+            <Check className="size-3.5" />
+            Registered
+          </Badge>
+        );
+      case "registering":
+        return (
+          <Badge className="gap-1.5 border-0 bg-yellow-100 text-yellow-700">
+            <Loader2 className="size-3.5 animate-spin" />
+            Registering
+          </Badge>
+        );
+      case "error":
+        return (
+          <Badge className="gap-1.5 border-0 bg-red-100 text-red-700">
+            <X className="size-3.5" />
+            Error
+          </Badge>
+        );
+      case "disabled":
+        return (
+          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
+            Disabled
+          </Badge>
+        );
+      default:
+        return (
+          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
+            Not Configured
+          </Badge>
+        );
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Setup Instructions */}
@@ -200,7 +330,8 @@ export function BrickLinkCredentialsForm() {
             </li>
             <li className="font-medium">Paste them into the form below and save</li>
             <li className="font-medium">
-              Copy the Callback URL below and add it to your BrickLink API settings
+              Click <strong>Register Webhook</strong> below to configure the callback automatically.
+              You can also copy the callback URL and add it manually in BrickLink if preferred.
             </li>
           </ol>
         </div>
@@ -337,6 +468,120 @@ export function BrickLinkCredentialsForm() {
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {configured && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-4 rounded-md border bg-muted/50 p-4">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Sync Controls</h4>
+              <p className="text-xs text-muted-foreground">
+                Choose how BrickOps ingests orders and reserves inventory for BrickLink.
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2">
+              <div className="max-w-[75%] space-y-1">
+                <p className="text-sm font-medium text-foreground">Order Sync</p>
+                <p className="text-xs text-muted-foreground">
+                  Automatically ingest new BrickLink orders using webhooks and polling.
+                </p>
+              </div>
+              <Switch
+                id="bricklink-orders-sync"
+                checked={ordersSyncEnabled}
+                onCheckedChange={(value) => handleToggleOrdersSync(value === true)}
+                disabled={isBusy || isUpdatingOrders}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2">
+              <div className="max-w-[75%] space-y-1">
+                <p className="text-sm font-medium text-foreground">Inventory Sync</p>
+                <p className="text-xs text-muted-foreground">
+                  Reserve BrickLink inventory quantities when orders arrive.
+                </p>
+              </div>
+              <Switch
+                id="bricklink-inventory-sync"
+                checked={inventorySyncEnabled}
+                onCheckedChange={(value) => handleToggleInventorySync(value === true)}
+                disabled={isBusy || isUpdatingInventory}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-md border bg-muted/50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">Webhook Status</h4>
+                <p className="text-xs text-muted-foreground">
+                  Webhooks deliver orders instantly; polling continues as a fallback.
+                </p>
+              </div>
+              {renderWebhookStatusBadge()}
+            </div>
+            {webhookRegisteredAt && (
+              <div className="text-xs text-muted-foreground">
+                Registered: {new Date(webhookRegisteredAt).toLocaleString()}
+              </div>
+            )}
+            {webhookLastCheckedAt && (
+              <div className="text-xs text-muted-foreground">
+                Last verified: {new Date(webhookLastCheckedAt).toLocaleString()}
+              </div>
+            )}
+            {(webhookEndpoint ?? webhookUrl) && (
+              <div className="text-xs text-muted-foreground">
+                Current endpoint:{" "}
+                <span className="break-all font-medium text-foreground">
+                  {webhookEndpoint ?? webhookUrl}
+                </span>
+              </div>
+            )}
+            {webhookLastError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive">
+                {webhookLastError}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleRegisterWebhook}
+                disabled={isBusy || webhookBusy}
+              >
+                {isRegisteringWebhook ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Registering...
+                  </>
+                ) : (
+                  "Register Webhook"
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={handleUnregisterWebhook}
+                disabled={isBusy || webhookBusy}
+              >
+                {isUnregisteringWebhook ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Disabling...
+                  </>
+                ) : (
+                  "Disable Webhook"
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              We re-verify the webhook every few hours. If BrickLink revokes it, use “Register
+              Webhook” to restore the integration.
+            </p>
+          </div>
         </div>
       )}
 

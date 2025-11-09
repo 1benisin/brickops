@@ -81,6 +81,9 @@ export const upsertPart = internalMutation({
       yearReleased: v.optional(v.number()),
       description: v.optional(v.string()),
       isObsolete: v.optional(v.boolean()),
+      brickowlId: v.optional(v.string()),
+      ldrawId: v.optional(v.string()),
+      legoId: v.optional(v.string()),
       lastFetched: v.number(),
       createdAt: v.number(),
     }),
@@ -100,6 +103,28 @@ export const upsertPart = internalMutation({
       // Insert new part
       await ctx.db.insert("parts", args.data);
     }
+  },
+});
+
+export const updatePartBrickowlId = internalMutation({
+  args: {
+    partNumber: v.string(),
+    brickowlId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("parts")
+      .withIndex("by_no", (q) => q.eq("no", args.partNumber))
+      .first();
+
+    if (!existing) {
+      return;
+    }
+
+    await ctx.db.patch(existing._id, {
+      brickowlId: args.brickowlId,
+      updatedAt: Date.now(),
+    });
   },
 });
 

@@ -176,6 +176,9 @@ export const saveCredentials = mutation({
         ...encryptedData,
         isActive: true,
         webhookToken,
+        ordersSyncEnabled: true,
+        inventorySyncEnabled: true,
+        webhookStatus: "unconfigured",
         createdBy: userId,
         createdAt: now,
         updatedAt: now,
@@ -532,7 +535,9 @@ export const getConfiguredProviders = internalQuery({
 export const updateSyncSettings = mutation({
   args: {
     provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
-    syncEnabled: v.boolean(),
+    syncEnabled: v.optional(v.boolean()),
+    ordersSyncEnabled: v.optional(v.boolean()),
+    inventorySyncEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { businessAccountId } = await requireOwner(ctx);
@@ -548,11 +553,105 @@ export const updateSyncSettings = mutation({
       throw new ConvexError("Marketplace credentials not found");
     }
 
-    await ctx.db.patch(credentials._id, {
-      syncEnabled: args.syncEnabled,
+    if (
+      args.syncEnabled === undefined &&
+      args.ordersSyncEnabled === undefined &&
+      args.inventorySyncEnabled === undefined
+    ) {
+      throw new ConvexError("No sync setting provided");
+    }
+
+    const patch: Record<string, unknown> = {
       updatedAt: Date.now(),
-    });
+    };
+
+    if (args.syncEnabled !== undefined) {
+      patch.syncEnabled = args.syncEnabled;
+      patch.ordersSyncEnabled = args.syncEnabled;
+      patch.inventorySyncEnabled = args.syncEnabled;
+    }
+
+    if (args.ordersSyncEnabled !== undefined) {
+      patch.ordersSyncEnabled = args.ordersSyncEnabled;
+    }
+
+    if (args.inventorySyncEnabled !== undefined) {
+      patch.inventorySyncEnabled = args.inventorySyncEnabled;
+    }
+
+    await ctx.db.patch(credentials._id, patch);
 
     return null;
+  },
+});
+
+/**
+ * Update webhook registration status metadata for a credential
+ */
+export const updateWebhookStatus = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+    status: v.union(
+      v.literal("unconfigured"),
+      v.literal("registering"),
+      v.literal("registered"),
+      v.literal("disabled"),
+      v.literal("error"),
+    ),
+    endpoint: v.optional(v.string()),
+    clearEndpoint: v.optional(v.boolean()),
+    registeredAt: v.optional(v.number()),
+    lastCheckedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+    clearError: v.optional(v.boolean()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const credential = await ctx.db
+      .query("marketplaceCredentials")
+      .withIndex("by_business_provider", (q) =>
+        q.eq("businessAccountId", args.businessAccountId).eq("provider", args.provider),
+      )
+      .first();
+
+    if (!credential) {
+      return;
+    }
+
+    const patch: Record<string, unknown> = {
+      webhookStatus: args.status,
+      updatedAt: Date.now(),
+    };
+
+    if (args.endpoint !== undefined) {
+      patch.webhookEndpoint = args.endpoint;
+    } else if (args.clearEndpoint) {
+      patch.webhookEndpoint = undefined;
+    }
+
+    if (args.registeredAt !== undefined) {
+      patch.webhookRegisteredAt = args.registeredAt;
+    } else if (args.clearEndpoint) {
+      patch.webhookRegisteredAt = undefined;
+    }
+
+    if (args.lastCheckedAt !== undefined) {
+      patch.webhookLastCheckedAt = args.lastCheckedAt;
+    } else {
+      patch.webhookLastCheckedAt = Date.now();
+    }
+
+    if (args.metadata !== undefined) {
+      patch.webhookMetadata = args.metadata;
+    }
+
+    if (args.error !== undefined) {
+      patch.webhookLastError = args.error;
+    } else if (args.clearError) {
+      patch.webhookLastError = undefined;
+    }
+
+    await ctx.db.patch(credential._id, patch);
   },
 });

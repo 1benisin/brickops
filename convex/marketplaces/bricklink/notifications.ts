@@ -454,6 +454,11 @@ export const getAllActiveCredentials = internalQuery({
 
     return credentials.map((cred) => ({
       businessAccountId: cred.businessAccountId,
+      webhookToken: cred.webhookToken,
+      webhookStatus: cred.webhookStatus,
+      webhookEndpoint: cred.webhookEndpoint,
+      webhookRegisteredAt: cred.webhookRegisteredAt,
+      webhookLastCheckedAt: cred.webhookLastCheckedAt,
     }));
   },
 });

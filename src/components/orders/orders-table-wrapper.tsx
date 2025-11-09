@@ -153,6 +153,9 @@ export function OrdersTableWrapper() {
       if (filters.paymentStatus && filters.paymentStatus.kind === "enum") {
         ordersFilters.paymentStatus = { kind: "enum", value: filters.paymentStatus.value };
       }
+      if (filters.provider && filters.provider.kind === "enum") {
+        ordersFilters.provider = { kind: "enum", value: filters.provider.value };
+      }
     }
 
     return {
