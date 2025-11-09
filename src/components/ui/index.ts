@@ -6,5 +6,6 @@ export * from "./AlertDialog";
 export * from "./sheet";
 export * from "./table";
 export * from "./tabs";
+export * from "./select";
 export * from "./ThemeToggle";
 export * from "./skeleton";

@@ -15,17 +15,10 @@ import type {
 } from "../marketplaces/bricklink/storeClient";
 import { requireActiveUser } from "../users/helpers";
 import type { Id } from "../_generated/dataModel";
-
-/**
- * Check if we're in development mode
- */
-function isDevelopmentMode(): boolean {
-  // Check for Convex dev deployment or local development
-  const deploymentName = process.env.CONVEX_DEPLOYMENT;
-  return (
-    !deploymentName || deploymentName.startsWith("dev:") || deploymentName.includes("development")
-  );
-}
+import {
+  assertDevelopmentEnvironment,
+  isDevelopmentEnvironment as isDevEnvironmentHelper,
+} from "./mockHelpers";
 
 /**
  * Generate realistic test order data
@@ -580,9 +573,9 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     // Safety check: only allow in development
-    if (!isDevelopmentMode()) {
-      throw new Error("Test orders can only be created in development environments");
-    }
+    assertDevelopmentEnvironment(
+      "Test orders can only be created in development environments",
+    );
 
     // Get userId from auth context
     const { userId } = await requireActiveUser(ctx);
@@ -603,6 +596,7 @@ export const create = mutation({
     // Use existing upsertOrder mutation (same flow as real orders)
     await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
       businessAccountId: args.businessAccountId,
+      provider: "bricklink",
       orderData,
       orderItemsData,
     });
@@ -627,9 +621,9 @@ export const getOrderItems = query({
     orderId: v.string(),
   },
   handler: async (ctx, args) => {
-    if (!isDevelopmentMode()) {
-      throw new Error("Test order queries can only be used in development environments");
-    }
+    assertDevelopmentEnvironment(
+      "Test order queries can only be used in development environments",
+    );
 
     // Query items from database
     const items = await ctx.db
@@ -675,9 +669,9 @@ export const listTestOrders = query({
     businessAccountId: v.id("businessAccounts"),
   },
   handler: async (ctx, args) => {
-    if (!isDevelopmentMode()) {
-      throw new Error("Test order queries can only be used in development environments");
-    }
+    assertDevelopmentEnvironment(
+      "Test order queries can only be used in development environments",
+    );
 
     const orders = await ctx.db
       .query("orders")
@@ -705,7 +699,7 @@ export const listTestOrders = query({
 export const isDevelopmentEnvironment = query({
   args: {},
   handler: async () => {
-    return isDevelopmentMode();
+    return isDevEnvironmentHelper();
   },
 });
 
@@ -718,9 +712,9 @@ export const createBulkTestOrders = mutation({
   args: {},
   handler: async (ctx) => {
     // Safety check: only allow in development
-    if (!isDevelopmentMode()) {
-      throw new Error("Test orders can only be created in development environments");
-    }
+    assertDevelopmentEnvironment(
+      "Test orders can only be created in development environments",
+    );
 
     // Get businessAccountId and userId from auth context
     const { businessAccountId, userId } = await requireActiveUser(ctx);
@@ -780,9 +774,9 @@ export const deleteAllOrders = mutation({
   args: {},
   handler: async (ctx) => {
     // Safety check: only allow in development
-    if (!isDevelopmentMode()) {
-      throw new Error("Order deletion can only be used in development environments");
-    }
+    assertDevelopmentEnvironment(
+      "Order deletion can only be used in development environments",
+    );
 
     // Get businessAccountId from auth context
     const { businessAccountId } = await requireActiveUser(ctx);
@@ -834,9 +828,9 @@ export const deleteTestOrders = mutation({
     businessAccountId: v.id("businessAccounts"),
   },
   handler: async (ctx, args) => {
-    if (!isDevelopmentMode()) {
-      throw new Error("Test order deletion can only be used in development environments");
-    }
+    assertDevelopmentEnvironment(
+      "Test order deletion can only be used in development environments",
+    );
 
     // Find all test orders
     const orders = await ctx.db
