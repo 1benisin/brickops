@@ -331,13 +331,13 @@ export const updateInventoryItem = mutation({
       });
     }
 
-    // Set sync status to "syncing" for enabled marketplaces
+    // Set sync status to "pending" for enabled marketplaces
     // Now preserves existing data (lotId, lastSyncedSeq, etc.) automatically
     const marketplaceSyncUpdates = await updateMarketplaceSyncStatus(
       ctx,
       args.itemId,
       item.businessAccountId,
-      "syncing",
+      "pending",
     );
 
     // Update inventory item with syncing status
@@ -449,13 +449,13 @@ export const deleteInventoryItem = mutation({
       correlationId,
     });
 
-    // Set sync status to "syncing" for enabled marketplaces
+    // Set sync status to "pending" for enabled marketplaces
     // Now preserves existing data (lotId, lastSyncedSeq, etc.) automatically
     const marketplaceSyncUpdates = await updateMarketplaceSyncStatus(
       ctx,
       args.itemId,
       item.businessAccountId,
-      "syncing",
+      "pending",
     );
 
     // Update inventory item with syncing status

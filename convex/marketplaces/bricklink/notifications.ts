@@ -217,6 +217,7 @@ async function processOrderNotification(
   // Upsert order and items
   await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
     businessAccountId,
+    provider: "bricklink",
     orderData,
     orderItemsData,
   });
@@ -230,6 +231,7 @@ async function processOrderNotification(
 export const processMockOrderNotification = internalMutation({
   args: {
     businessAccountId: v.id("businessAccounts"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
     orderData: v.any(), // BricklinkOrderResponse
     orderItemsData: v.any(), // BricklinkOrderItemResponse[][]
   },
@@ -254,6 +256,7 @@ export const processMockOrderNotification = internalMutation({
     // Upsert order and items using the same mutation as real orders
     await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
       businessAccountId: args.businessAccountId,
+      provider: args.provider,
       orderData,
       orderItemsData,
     });

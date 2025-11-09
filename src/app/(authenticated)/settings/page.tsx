@@ -28,6 +28,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui";
 import { BrickLinkCredentialsForm } from "@/components/settings/BricklinkCredentialsForm";
 import { BrickOwlCredentialsForm } from "@/components/settings/BrickowlCredentialsForm";
@@ -63,6 +68,9 @@ export default function SettingsPage() {
   const isDevEnvironment = useQuery(api.orders.mocks.isDevelopmentEnvironment);
   const deleteAllOrders = useMutation(api.orders.mocks.deleteAllOrders);
   const triggerMockWebhook = useMutation(api.marketplaces.bricklink.mockWebhooks.triggerMockWebhookNotification);
+  const triggerMockBrickOwlOrder = useMutation(
+    api.marketplaces.brickowl.mockOrders.triggerMockOrder,
+  );
   const generateMockInventory = useMutation(api.inventory.testInventory.generateMockInventoryItems);
   const deleteAllInventory = useMutation(api.inventory.testInventory.deleteAllInventoryItems);
 
@@ -95,9 +103,14 @@ export default function SettingsPage() {
   );
   const [mockInventoryCount, setMockInventoryCount] = useState(30);
   const [mockWebhookQuantity, setMockWebhookQuantity] = useState(1);
+  const [mockOrderMarketplace, setMockOrderMarketplace] = useState<"bricklink" | "brickowl">(
+    "bricklink",
+  );
   const [isGeneratingInventory, setIsGeneratingInventory] = useState(false);
   const [isDeletingInventory, setIsDeletingInventory] = useState(false);
   const [inventoryDeleteDialogOpen, setInventoryDeleteDialogOpen] = useState(false);
+
+  const mockMarketplaceLabel = mockOrderMarketplace === "bricklink" ? "BrickLink" : "BrickOwl";
 
   // Tab state management with URL sync
   const [activeTab, setActiveTab] = useState(() => {
@@ -110,18 +123,27 @@ export default function SettingsPage() {
   };
 
   // Development tools handlers
-  const handleTriggerMockWebhook = async () => {
+  const handleTriggerMockOrder = async () => {
     setIsTriggeringMockWebhook(true);
     setDevMessage(null);
     try {
-      const result = await triggerMockWebhook({ quantity: mockWebhookQuantity });
+      const payload = { quantity: mockWebhookQuantity };
+      const result =
+        mockOrderMarketplace === "bricklink"
+          ? await triggerMockWebhook(payload)
+          : await triggerMockBrickOwlOrder(payload);
       setDevMessage({
         type: "success",
-        text: result.message || "Mock webhook notification processed successfully",
+        text:
+          result.message ||
+          `Mock ${mockMarketplaceLabel} order processed successfully`,
       });
       setTimeout(() => setDevMessage(null), 5000);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to trigger mock webhook";
+      const message =
+        error instanceof Error
+          ? error.message
+          : `Failed to trigger mock ${mockMarketplaceLabel} order`;
       setDevMessage({ type: "error", text: message });
     } finally {
       setIsTriggeringMockWebhook(false);
@@ -761,14 +783,31 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-6 space-y-4">
-                {/* Trigger Mock Webhook Notification */}
+                {/* Trigger Mock Marketplace Order */}
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-foreground">Mock Webhook Notification</h3>
+                  <h3 className="text-sm font-medium text-foreground">Mock Marketplace Order</h3>
                   <p className="text-xs text-muted-foreground">
-                    Simulate a BrickLink webhook notification. Creates mock orders through the full
-                    webhook processing flow using items from your inventory.
+                    Simulate marketplace order ingestion using your mock inventory. Choose BrickLink
+                    or BrickOwl to test end-to-end order handling without hitting real APIs.
                   </p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select
+                      value={mockOrderMarketplace}
+                      onValueChange={(value: "bricklink" | "brickowl") =>
+                        setMockOrderMarketplace(value)
+                      }
+                    >
+                      <SelectTrigger
+                        className="w-40"
+                        data-testid="mock-order-marketplace-select"
+                      >
+                        <SelectValue placeholder="Select marketplace" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bricklink">BrickLink</SelectItem>
+                        <SelectItem value="brickowl">BrickOwl</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Input
                       type="number"
                       min="1"
@@ -780,11 +819,13 @@ export default function SettingsPage() {
                     />
                     <Button
                       type="button"
-                      onClick={handleTriggerMockWebhook}
+                      onClick={handleTriggerMockOrder}
                       disabled={isTriggeringMockWebhook}
                       data-testid="trigger-mock-webhook-button"
                     >
-                      {isTriggeringMockWebhook ? "Processing..." : "Trigger Mock BrickLink Order"}
+                      {isTriggeringMockWebhook
+                        ? "Processing..."
+                        : `Trigger Mock ${mockMarketplaceLabel} Order`}
                     </Button>
                   </div>
                 </div>

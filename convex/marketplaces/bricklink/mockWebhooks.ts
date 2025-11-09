@@ -11,66 +11,11 @@ import { internal } from "../../_generated/api";
 import { requireActiveUser } from "../../users/helpers";
 import type { Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
-
-/**
- * Check if we're in development mode
- */
-function isDevelopmentMode(): boolean {
-  // Check for Convex dev deployment or local development
-  const deploymentName = process.env.CONVEX_DEPLOYMENT;
-  return (
-    !deploymentName || deploymentName.startsWith("dev:") || deploymentName.includes("development")
-  );
-}
-
-/**
- * Get random inventory items from database for mock order generation
- * If no inventory items exist, creates default mock inventory items
- * Imported from mocks.ts pattern
- */
-async function getRandomInventoryItems(
-  ctx: MutationCtx,
-  businessAccountId: Id<"businessAccounts">,
-  userId: Id<"users">,
-  count: number,
-): Promise<
-  Array<{
-    _id: string;
-    partNumber: string;
-    name: string;
-    colorId: string;
-    colorName?: string;
-    condition: "new" | "used";
-    location: string;
-    quantityAvailable: number;
-  }>
-> {
-  // Query all inventory items for the business account
-  const allItems = await ctx.db
-    .query("inventoryItems")
-    .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
-    .collect();
-
-  // If no items exist, we'll need to create default mock inventory items
-  // For now, throw an error to guide the user
-  if (allItems.length === 0) {
-    throw new Error(
-      "No inventory items found. Please create mock orders first, which will create default inventory items.",
-    );
-  }
-
-  // Shuffle and pick random items
-  const shuffled = [...allItems].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, Math.min(count, shuffled.length)).map((item) => ({
-    _id: item._id.toString(),
-    partNumber: item.partNumber,
-    name: item.name,
-    colorId: item.colorId,
-    condition: item.condition,
-    location: item.location,
-    quantityAvailable: item.quantityAvailable,
-  }));
-}
+import {
+  assertDevelopmentEnvironment,
+  getRandomInventoryItemsForMock,
+  type MockInventoryItem,
+} from "../../orders/mockHelpers";
 
 /**
  * Create mock order data with random parts from database
@@ -79,7 +24,6 @@ async function getRandomInventoryItems(
 async function createMockOrderDataWithParts(
   ctx: MutationCtx,
   businessAccountId: Id<"businessAccounts">,
-  userId: Id<"users">,
   orderIndex?: number,
 ): Promise<{
   orderData: any; // BricklinkOrderResponse
@@ -95,10 +39,9 @@ async function createMockOrderDataWithParts(
   const itemCount = 3;
 
   // Get random inventory items from database
-  const inventoryItems = await getRandomInventoryItems(
+  const inventoryItems = await getRandomInventoryItemsForMock(
     ctx,
     businessAccountId,
-    userId,
     itemCount + 5,
   );
 
@@ -163,31 +106,14 @@ async function createMockOrderDataWithParts(
   const items: any[] = [];
 
   for (let i = 0; i < itemCount && i < inventoryItems.length; i++) {
-    const inventoryItem = inventoryItems[i % inventoryItems.length];
+    const inventoryItem: MockInventoryItem =
+      inventoryItems[i % inventoryItems.length];
 
     // Generate random positive quantity (1-10)
     const quantity = Math.floor(Math.random() * 10) + 1;
 
     // Get the actual inventory item document to update it
-    const inventoryItemId = inventoryItem._id as Id<"inventoryItems">;
-    const inventoryItemDoc = await ctx.db.get(inventoryItemId);
-
-    if (inventoryItemDoc) {
-      // Set reserved quantity to 0 so after upsertOrder adds quantity,
-      // reserved will equal the order quantity
-      await ctx.db.patch(inventoryItemId, {
-        quantityReserved: 0,
-        updatedAt: Date.now(),
-      });
-    }
-
     const basePrice = 0.5 + Math.random() * 4.5; // $0.50-$5.00
-
-    // Get color name from colors table if available
-    const color = await ctx.db
-      .query("colors")
-      .filter((q) => q.eq(q.field("colorId"), parseInt(inventoryItem.colorId)))
-      .first();
 
     items.push({
       inventory_id: 1000000 + i,
@@ -197,15 +123,17 @@ async function createMockOrderDataWithParts(
         type: "PART",
         category_id: undefined,
       },
-      color_id: parseInt(inventoryItem.colorId),
-      color_name: color?.colorName,
+      color_id: parseInt(inventoryItem.colorId, 10),
+      color_name: inventoryItem.colorName,
       quantity: quantity,
       new_or_used: inventoryItem.condition === "new" ? "N" : "U",
       completeness: "C",
       unit_price: basePrice.toFixed(2),
       unit_price_final: basePrice.toFixed(2),
       currency_code: "USD",
-      description: `${color?.colorName || `Color ${inventoryItem.colorId}`} ${inventoryItem.name}`,
+      description: `${
+        inventoryItem.colorName || `Color ${inventoryItem.colorId}`
+      } ${inventoryItem.name}`,
       weight: (0.1 * quantity).toFixed(2),
       remarks: inventoryItem.location, // CRITICAL: Set remarks to inventory item location
     });
@@ -235,15 +163,12 @@ export const triggerMockWebhookNotification = mutation({
     quantity: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Safety check: only allow in development
-    if (!isDevelopmentMode()) {
-      throw new Error(
-        "Mock webhook notifications can only be triggered in development environments",
-      );
-    }
+    assertDevelopmentEnvironment(
+      "Mock webhook notifications can only be triggered in development environments",
+    );
 
     // Get businessAccountId and userId from auth context
-    const { businessAccountId, userId } = await requireActiveUser(ctx);
+    const { businessAccountId } = await requireActiveUser(ctx);
 
     // Default to 1 if quantity not provided
     const quantity = args.quantity ?? 1;
@@ -255,7 +180,6 @@ export const triggerMockWebhookNotification = mutation({
       const { orderData, orderItemsData } = await createMockOrderDataWithParts(
         ctx,
         businessAccountId,
-        userId,
         i,
       );
 
@@ -283,6 +207,7 @@ export const triggerMockWebhookNotification = mutation({
         internal.marketplaces.bricklink.notifications.processMockOrderNotification,
         {
           businessAccountId,
+          provider: "bricklink",
           orderData,
           orderItemsData,
         },
