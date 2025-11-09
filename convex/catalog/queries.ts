@@ -476,6 +476,18 @@ export const getColorInternal = internalQuery({
   },
 });
 
+export const getColorByBrickowlColorId = internalQuery({
+  args: {
+    brickowlColorId: v.number(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("colors")
+      .withIndex("by_brickowlColorId", (q) => q.eq("brickowlColorId", args.brickowlColorId))
+      .first();
+  },
+});
+
 /**
  * Get part data for internal use (returns raw schema, not validated return type)
  */
@@ -487,6 +499,18 @@ export const getPartInternal = internalQuery({
     return await ctx.db
       .query("parts")
       .withIndex("by_no", (q) => q.eq("no", args.partNumber))
+      .first();
+  },
+});
+
+export const getPartByBrickowlId = internalQuery({
+  args: {
+    brickowlId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("parts")
+      .withIndex("by_brickowlId", (q) => q.eq("brickowlId", args.brickowlId))
       .first();
   },
 });

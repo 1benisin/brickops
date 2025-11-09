@@ -190,5 +190,73 @@ export class RebrickableClient {
       throw apiError;
     }
   }
+
+  /**
+   * Get parts by BrickOwl IDs
+   * Returns a map of BrickOwl ID -> RebrickablePart[]
+   */
+  async getPartsByBrickowlIds(brickowlIds: string[]): Promise<Map<string, RebrickablePart[]>> {
+    const mapping = new Map<string, RebrickablePart[]>();
+    if (brickowlIds.length === 0) {
+      return mapping;
+    }
+
+    const started = Date.now();
+
+    try {
+      const batchSize = 10;
+      for (let i = 0; i < brickowlIds.length; i += batchSize) {
+        const batch = brickowlIds.slice(i, i + batchSize);
+
+        const batchPromises = batch.map(async (brickowlId) => {
+          try {
+            const result = await this.request<RebrickablePartsListResponse>({
+              path: "/lego/parts/",
+              query: {
+                brickowl_id: brickowlId,
+                page_size: 1000,
+              },
+            });
+            return { brickowlId, parts: result.data.results };
+          } catch (error) {
+            recordMetric("external.rebrickable.getPartsByBrickowlIds.error", {
+              brickowlId,
+              errorCode: error instanceof Error ? error.message : String(error),
+            });
+            return { brickowlId, parts: [] };
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        for (const { brickowlId, parts } of batchResults) {
+          mapping.set(brickowlId, parts);
+        }
+      }
+
+      const duration = Date.now() - started;
+      const totalParts = Array.from(mapping.values()).reduce((sum, parts) => sum + parts.length, 0);
+      recordMetric("external.rebrickable.getPartsByBrickowlIds", {
+        brickowlIdCount: brickowlIds.length,
+        partCount: totalParts,
+        durationMs: duration,
+      });
+
+      return mapping;
+    } catch (error) {
+      const duration = Date.now() - started;
+      const apiError = normalizeApiError("rebrickable", error, {
+        endpoint: "/lego/parts/",
+        brickowlIdCount: brickowlIds.length,
+      });
+
+      recordMetric("external.rebrickable.getPartsByBrickowlIds.error", {
+        brickowlIdCount: brickowlIds.length,
+        errorCode: apiError.error.code,
+        durationMs: duration,
+      });
+
+      throw apiError;
+    }
+  }
 }
 

@@ -39,7 +39,7 @@
 
 import type { ActionCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
-import { ConvexError } from "convex/values";
+import { ConvexError, type Value } from "convex/values";
 import { internal } from "../../_generated/api";
 import { normalizeApiError } from "../../lib/external/types";
 import { recordMetric } from "../../lib/external/metrics";
@@ -85,23 +85,36 @@ type BrickOwlCondition =
 /**
  * BrickOwl Inventory Response from API
  */
+export interface BrickOwlInventoryIdEntry {
+  id: string;
+  type?: string;
+}
+
 export interface BrickOwlInventoryResponse {
   lot_id: string;
   boid: string;
   type: BrickOwlItemType;
-  color_id?: number;
-  quantity: number;
-  price: number;
+  color_id?: number | string;
+  quantity?: number | string;
+  qty?: number | string;
+  price?: number | string;
+  base_price?: number | string;
+  final_price?: number | string;
   condition: BrickOwlCondition;
-  for_sale: 0 | 1;
-  sale_percent?: number;
-  my_cost?: number;
-  lot_weight?: number;
-  personal_note?: string;
-  public_note?: string;
-  bulk_qty?: number;
+  for_sale?: 0 | 1 | "0" | "1";
+  full_con?: BrickOwlCondition;
+  sale_percent?: number | string;
+  my_cost?: number | string;
+  lot_weight?: number | string;
+  personal_note?: string | null;
+  public_note?: string | null;
+  bulk_qty?: number | string;
   tier_price?: string;
   external_id_1?: string;
+  owl_id?: string;
+  url?: string;
+  external_lot_ids?: Record<string, string | null>;
+  ids?: BrickOwlInventoryIdEntry[];
 }
 
 /**
@@ -510,7 +523,7 @@ export class BrickOwlStoreClient {
         // Convert JSON object to form-encoded format
         const formData = new URLSearchParams();
         formData.append("key", apiKey);
-        
+
         // Add all body parameters as form fields
         Object.entries(options.body as Record<string, unknown>).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
@@ -568,7 +581,7 @@ export class BrickOwlStoreClient {
       let responseBody: unknown;
       const contentType = response.headers.get("content-type") ?? "";
       const contentLength = response.headers.get("content-length");
-      
+
       try {
         // Check if response has a body (content-length > 0 or no content-length header)
         if (contentLength === "0") {
@@ -626,12 +639,7 @@ export class BrickOwlStoreClient {
       });
 
       if (!response.ok) {
-        await this.handleErrorResponse(
-          response.status,
-          responseBody,
-          correlationId,
-          durationMs,
-        );
+        await this.handleErrorResponse(response.status, responseBody, correlationId, durationMs);
       }
 
       const data = responseBody as T;
@@ -677,6 +685,65 @@ export class BrickOwlStoreClient {
     }
   }
 
+  private toNumber(value: string | number | null | undefined): number | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (typeof value === "number") {
+      return value;
+    }
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  private toOptionalString(value: string | number | null | undefined): string | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    return typeof value === "string" ? value : value.toString();
+  }
+
+  private attachErrorData<TData extends Value>(
+    error: ConvexError<TData>,
+    data: Record<string, Value | undefined>,
+  ): void {
+    const errorWithRecord = error as ConvexError<Record<string, Value | undefined>>;
+    const existing =
+      errorWithRecord.data &&
+      typeof errorWithRecord.data === "object" &&
+      errorWithRecord.data !== null &&
+      !Array.isArray(errorWithRecord.data)
+        ? (errorWithRecord.data as Record<string, Value | undefined>)
+        : {};
+    const sanitized = Object.entries(data).reduce<Record<string, Value | undefined>>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {},
+    );
+    errorWithRecord.data = {
+      ...existing,
+      ...sanitized,
+    };
+  }
+
+  private serializeErrorBody(errorBody: unknown): Value {
+    if (typeof errorBody === "string") {
+      return errorBody;
+    }
+    if (errorBody === undefined) {
+      return "undefined";
+    }
+    try {
+      return JSON.stringify(errorBody);
+    } catch {
+      return String(errorBody);
+    }
+  }
+
   /**
    * Handle error responses from BrickOwl API
    * @param status - HTTP status code
@@ -707,11 +774,7 @@ export class BrickOwlStoreClient {
       });
 
       const err = new ConvexError(`BrickOwl rate limit: retry after 60s`);
-      // Initialize data as object if it doesn't exist or is not an object
-      if (!err.data || typeof err.data !== "object") {
-        err.data = {};
-      }
-      (err.data as { httpStatus?: number }).httpStatus = status;
+      this.attachErrorData(err, { httpStatus: status });
       throw err;
     }
 
@@ -719,23 +782,20 @@ export class BrickOwlStoreClient {
       const err = new ConvexError(
         "BrickOwl API key is invalid or expired. Please update your credentials.",
       );
-      if (!err.data || typeof err.data !== "object") {
-        err.data = {};
-      }
-      (err.data as { httpStatus?: number }).httpStatus = status;
+      this.attachErrorData(err, { httpStatus: status });
       throw err;
     }
 
     if (status === 404) {
       // 404 on create might mean endpoint not found, authentication issue, or invalid BOID
       // Check if error body is HTML (indicates wrong endpoint/auth issue)
-      const isHtmlError =
-        typeof errorBody === "string" && errorBody.trim().startsWith("<!DOCTYPE");
-      
+      const isHtmlError = typeof errorBody === "string" && errorBody.trim().startsWith("<!DOCTYPE");
+
       // Check if it's an invalid BOID error
       let message: string;
       if (isHtmlError) {
-        message = "BrickOwl API endpoint not found or authentication failed. Please check your API key and endpoint URL.";
+        message =
+          "BrickOwl API endpoint not found or authentication failed. Please check your API key and endpoint URL.";
       } else if (
         typeof errorBody === "object" &&
         errorBody !== null &&
@@ -750,22 +810,18 @@ export class BrickOwlStoreClient {
       } else {
         message = "Inventory lot not found on BrickOwl";
       }
-      
+
       const err = new ConvexError(message);
-      if (!err.data || typeof err.data !== "object") {
-        err.data = {};
-      }
-      (err.data as { httpStatus?: number; errorBody?: unknown }).httpStatus = status;
-      (err.data as { httpStatus?: number; errorBody?: unknown }).errorBody = errorBody;
+      this.attachErrorData(err, {
+        httpStatus: status,
+        errorBody: this.serializeErrorBody(errorBody),
+      });
       throw err;
     }
 
     if (status === 400) {
       const err = new ConvexError(apiError.error.message || "Invalid request data");
-      if (!err.data || typeof err.data !== "object") {
-        err.data = {};
-      }
-      (err.data as { httpStatus?: number }).httpStatus = status;
+      this.attachErrorData(err, { httpStatus: status });
       throw err;
     }
 
@@ -777,13 +833,8 @@ export class BrickOwlStoreClient {
       });
     }
 
-    const finalError = new ConvexError(
-      apiError.error.message || `BrickOwl API error: ${status}`,
-    );
-    if (!finalError.data || typeof finalError.data !== "object") {
-      finalError.data = {};
-    }
-    (finalError.data as { httpStatus?: number }).httpStatus = status;
+    const finalError = new ConvexError(apiError.error.message || `BrickOwl API error: ${status}`);
+    this.attachErrorData(finalError, { httpStatus: status });
     throw finalError;
   }
 
@@ -914,9 +965,11 @@ export class BrickOwlStoreClient {
         marketplaceId: result.lot_id,
         correlationId,
         rollbackData: {
-          previousQuantity: current.quantity,
-          previousPrice: current.price.toString(),
-          previousNotes: current.personal_note,
+          previousQuantity: this.toNumber(current.quantity ?? current.qty),
+          previousPrice: this.toOptionalString(
+            current.price ?? current.final_price ?? current.base_price,
+          ),
+          previousNotes: current.personal_note ?? undefined,
         },
       };
     } catch (error) {

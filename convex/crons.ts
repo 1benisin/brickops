@@ -16,7 +16,7 @@ crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbea
 // Drain catalog refresh outbox every 5 minutes (10 items per run = 120 API calls/hour max)
 crons.interval(
   "drain-catalog-refresh-outbox",
-  { minutes: 1 },
+  { minutes: 10 },
   internal.catalog.refreshWorker.drainCatalogRefreshOutbox,
 );
 
@@ -30,7 +30,7 @@ crons.daily(
 // Phase 3: Drain marketplace outbox every 30 seconds
 crons.interval(
   "drain-marketplace-outbox",
-  { minutes: 1 },
+  { minutes: 10 },
   internal.inventory.syncWorker.drainMarketplaceOutbox,
 );
 

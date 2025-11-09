@@ -181,6 +181,56 @@ export const getItemSyncStatusReturns = v.object({
   nextRetryAt: v.optional(v.number()),
 });
 
+const importError = v.object({
+  identifier: v.string(),
+  message: v.string(),
+});
+
+export const importSummaryValidator = v.object({
+  provider: marketplaceProvider,
+  imported: v.number(),
+  skippedExisting: v.number(),
+  skippedUnavailable: v.number(),
+  totalRemote: v.number(),
+  errors: v.array(importError),
+});
+
+const bricklinkPreviewItem = v.object({
+  inventoryId: v.number(),
+  partNumber: v.string(),
+  name: v.string(),
+  colorId: v.string(),
+  condition: itemCondition,
+  quantity: v.number(),
+  location: v.string(),
+  exists: v.boolean(),
+});
+
+export const bricklinkPreviewResultValidator = v.object({
+  provider: v.literal("bricklink"),
+  previewCount: v.number(),
+  totalRemote: v.number(),
+  items: v.array(bricklinkPreviewItem),
+});
+
+const brickowlPreviewItem = v.object({
+  lotId: v.optional(v.string()),
+  boid: v.string(),
+  partNumber: v.optional(v.string()),
+  colorId: v.optional(v.string()),
+  condition: v.string(),
+  quantity: v.number(),
+  location: v.string(),
+  exists: v.boolean(),
+});
+
+export const brickowlPreviewResultValidator = v.object({
+  provider: v.literal("brickowl"),
+  previewCount: v.number(),
+  totalRemote: v.number(),
+  items: v.array(brickowlPreviewItem),
+});
+
 // ============================================================================
 // TYPESCRIPT TYPE EXPORTS (for convenience)
 // ============================================================================
@@ -193,3 +243,6 @@ export type GetInventoryTotalsArgs = Infer<typeof getInventoryTotalsArgs>;
 
 // Partial inventory item data type (equivalent to Partial<Doc<"inventoryItems">>)
 export type PartialInventoryItemData = Infer<typeof partialInventoryItemData>;
+export type ImportSummary = Infer<typeof importSummaryValidator>;
+export type BricklinkPreviewResult = Infer<typeof bricklinkPreviewResultValidator>;
+export type BrickowlPreviewResult = Infer<typeof brickowlPreviewResultValidator>;

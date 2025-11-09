@@ -193,6 +193,8 @@ export interface GetInventoriesOptions {
   status?: string; // Y, S, B, C, N, R - can use - prefix to exclude
   categoryId?: string; // Comma-separated, can use - prefix to exclude
   colorId?: string; // Comma-separated, can use - prefix to exclude
+  page?: number;
+  pageSize?: number;
 }
 
 /**
@@ -737,6 +739,16 @@ export class BricklinkStoreClient {
    * GET /inventories
    */
   async getInventories(options?: GetInventoriesOptions): Promise<BricklinkInventoryResponse[]> {
+    const { items } = await this.getInventoriesPage(options);
+    return items;
+  }
+
+  async getInventoriesPage(
+    options?: GetInventoriesOptions,
+  ): Promise<{
+    items: BricklinkInventoryResponse[];
+    meta: BricklinkApiResponse<BricklinkInventoryResponse[]>["meta"];
+  }> {
     const query: Record<string, string> = {};
 
     if (options?.itemType) {
@@ -751,6 +763,12 @@ export class BricklinkStoreClient {
     if (options?.colorId) {
       query.color_id = options.colorId;
     }
+    if (options?.page !== undefined) {
+      query.page = String(options.page);
+    }
+    if (options?.pageSize !== undefined) {
+      query.page_size = String(options.pageSize);
+    }
 
     const response = await this.request<BricklinkApiResponse<BricklinkInventoryResponse[]>>({
       path: "/inventories",
@@ -758,7 +776,10 @@ export class BricklinkStoreClient {
       query,
     });
 
-    return response.data.data;
+    return {
+      items: response.data.data,
+      meta: response.data.meta,
+    };
   }
 
   /**

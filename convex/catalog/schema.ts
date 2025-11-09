@@ -27,6 +27,7 @@ export const catalogTables = {
     updatedAt: v.optional(v.number()),
   })
     .index("by_no", ["no"])
+    .index("by_brickowlId", ["brickowlId"])
     .index("by_categoryId", ["categoryId"])
     .index("by_type", ["type"])
     .index("by_name", ["name"])
@@ -138,6 +139,7 @@ export const catalogTables = {
     updatedAt: v.optional(v.number()),
   })
     .index("by_colorId", ["colorId"])
+    .index("by_brickowlColorId", ["brickowlColorId"])
     .searchIndex("search_color_name", {
       searchField: "colorName",
       filterFields: ["colorType"],
