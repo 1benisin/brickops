@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useCallback, useState, useEffect } from "react";
-import { Table } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTablePagination } from "@/components/ui/data-table/data-table-pagination";
 import { createOrdersColumns, type Order } from "./orders-columns";
@@ -13,10 +12,6 @@ import { useServerTableState } from "@/components/ui/data-table/hooks/use-server
 
 export function OrdersTableWrapper() {
   const columns = useMemo(() => createOrdersColumns(), []);
-
-  // Table instance and reset callback state
-  const [tableInstance, setTableInstance] = useState<Table<Order> | null>(null);
-  const [resetAllCallback, setResetAllCallback] = useState<(() => void) | null>(null);
 
   // Use the new server table state hook
   const {
@@ -281,8 +276,6 @@ export function OrdersTableWrapper() {
           </div>
         }
         emptyState={emptyState}
-        onTableReady={setTableInstance}
-        onResetAllReady={(resetAll) => setResetAllCallback(() => resetAll)}
       />
       {isRefetching && (
         <div
@@ -305,9 +298,6 @@ export function OrdersTableWrapper() {
           onPageSizeChange={handlePageSizeChange}
           onNextPage={handleNextPage}
           onPreviousPage={handlePreviousPage}
-          table={tableInstance ?? undefined}
-          onResetAll={resetAllCallback ?? undefined}
-          enableColumnVisibility={true}
         />
       )}
     </>

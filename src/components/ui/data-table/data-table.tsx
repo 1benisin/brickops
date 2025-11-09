@@ -1,6 +1,14 @@
 "use client";
 
 import React, { ReactNode, useEffect, useState, useCallback, useMemo } from "react";
+import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   ColumnDef,
   ColumnOrderState,
@@ -10,10 +18,10 @@ import {
   ColumnFiltersState,
   PaginationState,
   RowSelectionState,
+  Header,
   flexRender,
   getCoreRowModel,
   useReactTable,
-  Table as TanStackTable,
 } from "@tanstack/react-table";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { DataTableHeader } from "./data-table-header";
@@ -27,6 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+
+type SortableDragHandle = {
+  attributes: ReturnType<typeof useSortable>["attributes"];
+  listeners: ReturnType<typeof useSortable>["listeners"];
+};
 
 export type ColumnConfig<TData> = ColumnDef<TData>;
 
@@ -70,10 +84,6 @@ interface DataTableProps<TData> {
   emptyState?: ReactNode;
   // Get row ID function (for server-side pagination persistence)
   getRowId?: (row: TData) => string;
-  // Callback to expose table instance to parent
-  onTableReady?: (table: TanStackTable<TData>) => void;
-  // Callback to expose reset function to parent
-  onResetAllReady?: (resetAll: () => void) => void;
 }
 
 interface TableState {
@@ -113,8 +123,6 @@ export function DataTable<TData>({
   loadingState,
   emptyState,
   getRowId,
-  onTableReady,
-  onResetAllReady,
 }: DataTableProps<TData>) {
   // Add sorting state (for UI indication only - actual sorting is server-side)
   const [sorting, setSorting] = useState<SortingState>(sortingProp || []);
@@ -152,7 +160,7 @@ export function DataTable<TData>({
     },
     [onSortChange],
   );
-  const [tableState, setTableState, removeTableState] = useLocalStorage<TableState>(storageKey, {
+  const [tableState, setTableState] = useLocalStorage<TableState>(storageKey, {
     columnVisibility: {},
     columnSizing: {},
     columnOrder: [],
@@ -313,17 +321,6 @@ export function DataTable<TData>({
     columnResizeMode: "onChange",
   });
 
-  // Expose table instance and reset function to parent component
-  useEffect(() => {
-    if (onTableReady) {
-      onTableReady(table);
-    }
-    if (onResetAllReady) {
-      onResetAllReady(removeTableState);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, removeTableState]);
-
   // Update selected IDs when selection changes (for server-side pagination)
   useEffect(() => {
     if (!enableRowSelection || !getRowIdFn) return;
@@ -399,6 +396,73 @@ export function DataTable<TData>({
     }
   }, [table, tableState.columnOrder, pinnedStartColumns, pinnedEndColumns, setTableState]);
 
+  const pinnedStartSet = useMemo(() => new Set(pinnedStartColumns), [pinnedStartColumns]);
+  const pinnedEndSet = useMemo(() => new Set(pinnedEndColumns), [pinnedEndColumns]);
+
+  const isColumnPinned = useCallback(
+    (columnId: string) => pinnedStartSet.has(columnId) || pinnedEndSet.has(columnId),
+    [pinnedStartSet, pinnedEndSet],
+  );
+
+  const isColumnDraggable = useCallback(
+    (columnId: string) => {
+      if (!enableColumnOrdering || isColumnPinned(columnId)) {
+        return false;
+      }
+      const column = table.getColumn(columnId);
+      if (!column) {
+        return false;
+      }
+      const columnMeta = column.columnDef.meta as { disableReorder?: boolean } | undefined;
+      if (columnMeta?.disableReorder) {
+        return false;
+      }
+      return true;
+    },
+    [enableColumnOrdering, isColumnPinned, table],
+  );
+
+  const handleColumnDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const currentOrder =
+        table.getState().columnOrder && table.getState().columnOrder.length > 0
+          ? table.getState().columnOrder
+          : table.getAllLeafColumns().map((col) => col.id);
+
+      const movableOrder = currentOrder.filter(
+        (columnId) => !pinnedStartSet.has(columnId) && !pinnedEndSet.has(columnId),
+      );
+
+      const activeIndex = movableOrder.indexOf(active.id as string);
+      const overIndex = movableOrder.indexOf(over.id as string);
+
+      if (activeIndex === -1 || overIndex === -1) {
+        return;
+      }
+
+      const reorderedMovable = arrayMove(movableOrder, activeIndex, overIndex);
+
+      const newOrder = [
+        ...pinnedStartColumns.filter((id) => currentOrder.includes(id)),
+        ...reorderedMovable,
+        ...pinnedEndColumns.filter((id) => currentOrder.includes(id)),
+      ];
+
+      table.setColumnOrder(newOrder);
+    },
+    [table, pinnedStartColumns, pinnedEndColumns, pinnedStartSet, pinnedEndSet],
+  );
+
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { distance: 5 },
+  });
+  const sensors = useSensors(pointerSensor);
+
   // Memoize row rendering for performance
   const renderRow = useCallback(
     (row: ReturnType<typeof table.getRowModel>["rows"][number]) => {
@@ -464,56 +528,255 @@ export function DataTable<TData>({
       ) : (
         <div className="flex-1 overflow-x-auto overflow-y-auto rounded-md border">
           <Table className="w-auto min-w-max table-fixed" role="table">
-            <TableHeader className="sticky top-0 bg-background z-10" role="rowgroup">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} role="row">
-                  {headerGroup.headers.map((header) => {
-                    // Defensive check: ensure header and column are valid
-                    if (!header || !header.column) {
-                      return null;
-                    }
+            {enableColumnOrdering ? (
+              <DndContext sensors={sensors} onDragEnd={handleColumnDragEnd}>
+                <TableHeader className="sticky top-0 bg-background z-10" role="rowgroup">
+                  {table.getHeaderGroups().map((headerGroup) => {
+                    const sortableIds = headerGroup.headers
+                      .filter(
+                        (header) =>
+                          header &&
+                          header.column &&
+                          !header.isPlaceholder &&
+                          isColumnDraggable(header.column.id),
+                      )
+                      .map((header) => header.column.id);
+
                     return (
-                      <TableHead
-                        key={header.id}
-                        className="whitespace-nowrap"
-                        role="columnheader"
-                        aria-sort={
-                          enableSorting && header.column.getCanSort()
-                            ? header.column.getIsSorted() === "asc"
-                              ? "ascending"
-                              : header.column.getIsSorted() === "desc"
-                                ? "descending"
-                                : "none"
-                            : undefined
-                        }
-                        style={{
-                          width: header.getSize(),
-                          minWidth: header.column.columnDef.minSize,
-                          maxWidth: header.column.columnDef.maxSize,
-                        }}
+                      <SortableContext
+                        key={headerGroup.id}
+                        items={sortableIds}
+                        strategy={horizontalListSortingStrategy}
                       >
-                        {header.isPlaceholder ? null : (
-                          <DataTableHeader
-                            header={header}
-                            table={table}
-                            enableSorting={enableSorting}
-                            enableFiltering={enableFiltering}
-                            onSort={handleSort}
-                            onFilterChange={onColumnFilterChange}
-                            filterValue={
+                        <TableRow role="row" key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => {
+                            if (!header || !header.column) {
+                              return null;
+                            }
+
+                            const headerStyle = {
+                              width: header.getSize(),
+                              minWidth: header.column.columnDef.minSize,
+                              maxWidth: header.column.columnDef.maxSize,
+                            };
+
+                            if (header.isPlaceholder) {
+                              return (
+                                <TableHead
+                                  key={header.id}
+                                  className="whitespace-nowrap"
+                                  style={headerStyle}
+                                  aria-hidden="true"
+                                />
+                              );
+                            }
+
+                            const filterValue =
                               columnFiltersState !== undefined
                                 ? internalColumnFilters.find((f) => f.id === header.column.id)
                                     ?.value
-                                : columnFilters[header.column.id]
-                            }
-                          />
-                        )}
-                      </TableHead>
+                                : columnFilters[header.column.id];
+
+                            const headerContent = (
+                              <DataTableHeader
+                                header={header}
+                                table={table}
+                                enableSorting={enableSorting}
+                                enableFiltering={enableFiltering}
+                                onSort={handleSort}
+                                onFilterChange={onColumnFilterChange}
+                                filterValue={filterValue}
+                              />
+                            );
+
+                            const canResize = enableColumnSizing && header.column.getCanResize();
+                            const resizeHandler = header.getResizeHandler();
+
+                            const renderHeaderInner = (dragHandle?: SortableDragHandle) => {
+                              return (
+                                <div
+                                  className={cn(
+                                    "relative flex h-full w-full items-center",
+                                    canResize ? "pr-3" : undefined,
+                                  )}
+                                >
+                                  <div
+                                    className={cn(
+                                      "flex-1",
+                                      dragHandle &&
+                                        "cursor-grab select-none active:cursor-grabbing",
+                                    )}
+                                    {...(dragHandle?.attributes ?? {})}
+                                    {...(dragHandle?.listeners ?? {})}
+                                  >
+                                    {headerContent}
+                                  </div>
+                                  {canResize && (
+                                    <div
+                                      role="separator"
+                                      aria-orientation="vertical"
+                                      className="absolute top-0 right-0 flex h-full w-3 cursor-col-resize select-none items-center justify-center transition-colors"
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        resizeHandler(event);
+                                      }}
+                                      onTouchStart={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        resizeHandler(event);
+                                      }}
+                                      onDoubleClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        header.column.resetSize();
+                                      }}
+                                    >
+                                      <span className="h-1/2 w-px bg-border group-hover:bg-foreground" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            };
+
+                            return isColumnDraggable(header.column.id) ? (
+                              <DraggableHeaderCell
+                                key={header.id}
+                                header={header}
+                                style={headerStyle}
+                                enableSorting={enableSorting}
+                              >
+                                {(dragHandle) => renderHeaderInner(dragHandle)}
+                              </DraggableHeaderCell>
+                            ) : (
+                              <TableHead
+                                key={header.id}
+                                className="relative whitespace-nowrap group"
+                                aria-sort={
+                                  enableSorting && header.column.getCanSort()
+                                    ? header.column.getIsSorted() === "asc"
+                                      ? "ascending"
+                                      : header.column.getIsSorted() === "desc"
+                                        ? "descending"
+                                        : "none"
+                                    : undefined
+                                }
+                                style={headerStyle}
+                              >
+                                {renderHeaderInner()}
+                              </TableHead>
+                            );
+                          })}
+                        </TableRow>
+                      </SortableContext>
                     );
                   })}
-                </TableRow>
-              ))}
-            </TableHeader>
+                </TableHeader>
+              </DndContext>
+            ) : (
+              <TableHeader className="sticky top-0 bg-background z-10" role="rowgroup">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id} role="row">
+                    {headerGroup.headers.map((header) => {
+                      if (!header || !header.column) {
+                        return null;
+                      }
+
+                      const headerStyle = {
+                        width: header.getSize(),
+                        minWidth: header.column.columnDef.minSize,
+                        maxWidth: header.column.columnDef.maxSize,
+                      };
+
+                      if (header.isPlaceholder) {
+                        return (
+                          <TableHead
+                            key={header.id}
+                            className="whitespace-nowrap"
+                            style={headerStyle}
+                            aria-hidden="true"
+                          />
+                        );
+                      }
+
+                      const filterValue =
+                        columnFiltersState !== undefined
+                          ? internalColumnFilters.find((f) => f.id === header.column.id)?.value
+                          : columnFilters[header.column.id];
+
+                      const headerContent = (
+                        <DataTableHeader
+                          header={header}
+                          table={table}
+                          enableSorting={enableSorting}
+                          enableFiltering={enableFiltering}
+                          onSort={handleSort}
+                          onFilterChange={onColumnFilterChange}
+                          filterValue={filterValue}
+                        />
+                      );
+
+                      const canResize = enableColumnSizing && header.column.getCanResize();
+                      const resizeHandler = header.getResizeHandler();
+
+                      const renderHeaderInner = () => (
+                        <div
+                          className={cn(
+                            "relative flex h-full w-full items-center",
+                            canResize ? "pr-3" : undefined,
+                          )}
+                        >
+                          <div className="flex-1">{headerContent}</div>
+                          {canResize && (
+                            <div
+                              role="separator"
+                              aria-orientation="vertical"
+                              className="absolute top-0 right-0 flex h-full w-3 cursor-col-resize select-none items-center justify-center transition-colors"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                resizeHandler(event);
+                              }}
+                              onTouchStart={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                resizeHandler(event);
+                              }}
+                              onDoubleClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                header.column.resetSize();
+                              }}
+                            >
+                              <span className="h-1/2 w-px bg-border group-hover:bg-foreground" />
+                            </div>
+                          )}
+                        </div>
+                      );
+
+                      return (
+                        <TableHead
+                          key={header.id}
+                          className="relative whitespace-nowrap group"
+                          aria-sort={
+                            enableSorting && header.column.getCanSort()
+                              ? header.column.getIsSorted() === "asc"
+                                ? "ascending"
+                                : header.column.getIsSorted() === "desc"
+                                  ? "descending"
+                                  : "none"
+                              : undefined
+                          }
+                          style={headerStyle}
+                        >
+                          {renderHeaderInner()}
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+              </TableHeader>
+            )}
             <TableBody role="rowgroup">
               {table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map(renderRow)
@@ -529,6 +792,56 @@ export function DataTable<TData>({
         </div>
       )}
     </div>
+  );
+}
+
+interface DraggableHeaderCellProps<TData, TValue> {
+  header: Header<TData, TValue>;
+  style: React.CSSProperties;
+  className?: string;
+  children: (dragHandle: SortableDragHandle) => React.ReactNode;
+  enableSorting?: boolean;
+}
+
+function DraggableHeaderCell<TData, TValue>({
+  header,
+  style,
+  className,
+  children,
+  enableSorting = true,
+}: DraggableHeaderCellProps<TData, TValue>) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: header.column.id,
+  });
+
+  const draggableStyle: React.CSSProperties = {
+    ...style,
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const ariaSort =
+    enableSorting && header.column.getCanSort()
+      ? header.column.getIsSorted() === "asc"
+        ? "ascending"
+        : header.column.getIsSorted() === "desc"
+          ? "descending"
+          : "none"
+      : undefined;
+
+  return (
+    <TableHead
+      ref={setNodeRef}
+      className={cn(
+        "relative whitespace-nowrap select-none touch-none group",
+        isDragging && "opacity-60",
+        className,
+      )}
+      aria-sort={ariaSort}
+      style={draggableStyle}
+    >
+      {children({ attributes, listeners })}
+    </TableHead>
   );
 }
 
