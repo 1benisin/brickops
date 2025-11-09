@@ -10,6 +10,49 @@ import type {
   UpdateInventoryPayload,
 } from "./storeClient";
 
+function parseNumberLike(value: number | string | undefined | null): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+export function resolveBrickOwlQuantity(record: BrickOwlInventoryResponse): number {
+  const quantity = parseNumberLike(record.quantity ?? record.qty);
+  return quantity ?? 0;
+}
+
+export function resolveBrickOwlPrice(record: BrickOwlInventoryResponse): number | undefined {
+  return (
+    parseNumberLike(record.price) ??
+    parseNumberLike(record.final_price) ??
+    parseNumberLike(record.base_price) ??
+    parseNumberLike(record.my_cost)
+  );
+}
+
+export function resolveBrickOwlColorId(record: BrickOwlInventoryResponse): string {
+  const color = record.color_id;
+  if (color === undefined || color === null) {
+    return "0";
+  }
+  return typeof color === "string" ? color : String(color);
+}
+
+export function resolveBrickOwlConditionCode(record: BrickOwlInventoryResponse): string {
+  if (typeof record.condition === "string" && record.condition.length > 0) {
+    return record.condition;
+  }
+  if (typeof record.full_con === "string" && record.full_con.length > 0) {
+    return record.full_con;
+  }
+  return "used";
+}
+
 /**
  * Map BrickOwl inventory response to Convex inventory item
  * Used when importing inventory from BrickOwl to Convex
@@ -18,34 +61,27 @@ export function mapBrickOwlToConvexInventory(
   brickowlInventory: BrickOwlInventoryResponse,
   businessAccountId: Doc<"inventoryItems">["businessAccountId"],
 ): Omit<Doc<"inventoryItems">, "_id" | "_creationTime" | "createdBy" | "createdAt" | "updatedAt"> {
-  // Map condition: BrickOwl's detailed codes to our simplified "new"/"used"
-  // "new", "news", "newc", "newi" -> "new"
-  // "usedc", "usedi", "usedn", "usedg", "useda", "other" -> "used"
-  const condition: "new" | "used" = brickowlInventory.condition.startsWith("new") ? "new" : "used";
+  const conditionCode = resolveBrickOwlConditionCode(brickowlInventory);
+  const condition = mapBrickOwlConditionToConvex(conditionCode);
 
-  // Map location from personal_note field (private internal location)
-  const location = brickowlInventory.personal_note || "Main"; // Default to "Main" if no personal_note
+  const location = (brickowlInventory.personal_note ?? "").trim() || "Main";
+  const price = resolveBrickOwlPrice(brickowlInventory);
+  const notes = brickowlInventory.public_note ?? undefined;
+  const quantityAvailable = resolveBrickOwlQuantity(brickowlInventory);
+  const colorId = resolveBrickOwlColorId(brickowlInventory);
 
-  // Price is already a number in BrickOwl (unlike BrickLink's string)
-  const price = brickowlInventory.price;
-
-  // Map public_note to notes (public-facing description)
-  const notes = brickowlInventory.public_note || undefined;
-
-  // Name: BrickOwl doesn't provide name in inventory response
-  // We'll need to look up from parts catalog or use boid as placeholder
   const name = `Part ${brickowlInventory.boid}`;
 
   return {
     businessAccountId,
     name, // Will be enriched from catalog lookup
     partNumber: brickowlInventory.boid,
-    colorId: brickowlInventory.color_id?.toString() ?? "0", // Convert number to string
+    colorId,
     location,
-    quantityAvailable: brickowlInventory.quantity,
+    quantityAvailable,
     quantityReserved: 0, // BrickOwl doesn't track reserved separately
     condition,
-    price,
+    price: price ?? 0,
     notes,
   };
 }

@@ -29,6 +29,7 @@ import type * as identify_actions from "../identify/actions.js";
 import type * as identify_helpers from "../identify/helpers.js";
 import type * as identify_mutations from "../identify/mutations.js";
 import type * as inventory_helpers from "../inventory/helpers.js";
+import type * as inventory_import from "../inventory/import.js";
 import type * as inventory_mutations from "../inventory/mutations.js";
 import type * as inventory_queries from "../inventory/queries.js";
 import type * as inventory_sync from "../inventory/sync.js";
@@ -112,6 +113,7 @@ declare const fullApi: ApiFromModules<{
   "identify/helpers": typeof identify_helpers;
   "identify/mutations": typeof identify_mutations;
   "inventory/helpers": typeof inventory_helpers;
+  "inventory/import": typeof inventory_import;
   "inventory/mutations": typeof inventory_mutations;
   "inventory/queries": typeof inventory_queries;
   "inventory/sync": typeof inventory_sync;

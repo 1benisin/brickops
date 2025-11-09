@@ -29,6 +29,7 @@ Next Action - Description
 - [Edit Inventory Item](./inventory-edit.md) - Editing existing inventory items
 - [Inventory File Upload](./inventory-file-upload.md) - Batch upload via file
 - [Inventory History View](./inventory-history.md) - Viewing inventory change history
+- [Inventory Initial Import](./inventory-initial-import.md) - Importing existing marketplace lots before enabling sync
 
 ### Identification
 

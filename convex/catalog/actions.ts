@@ -1,4 +1,4 @@
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
 import { recordMetric } from "../lib/external/metrics";
@@ -268,6 +268,53 @@ export const getBrickowlPartIds = action({
         error: errorMessage,
       });
       return {};
+    }
+  },
+});
+
+/**
+ * Internal helper to fetch BrickLink part IDs from a BrickOwl BOID using Rebrickable.
+ * Returns an array of BrickLink IDs (deduplicated) or an empty array if none found.
+ */
+export const getBricklinkPartIdsFromBrickowl = internalAction({
+  args: {
+    brickowlId: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    if (process.env.DISABLE_EXTERNAL_CALLS === "true") {
+      return [];
+    }
+
+    const { RebrickableClient } = await import("../api/rebrickable");
+    const client = new RebrickableClient();
+
+    try {
+      const partsMap = await client.getPartsByBrickowlIds([args.brickowlId]);
+      const parts = partsMap.get(args.brickowlId) ?? [];
+
+      const bricklinkIds = new Set<string>();
+      for (const part of parts) {
+        const ids = part.external_ids.BrickLink ?? [];
+        for (const id of ids) {
+          if (id) {
+            bricklinkIds.add(id);
+          }
+        }
+      }
+
+      recordMetric("external.rebrickable.getBricklinkPartIdsFromBrickowl", {
+        brickowlId: args.brickowlId,
+        bricklinkIdCount: bricklinkIds.size,
+      });
+
+      return Array.from(bricklinkIds);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      recordMetric("external.rebrickable.getBricklinkPartIdsFromBrickowl.error", {
+        brickowlId: args.brickowlId,
+        errorCode: message,
+      });
+      return [];
     }
   },
 });
