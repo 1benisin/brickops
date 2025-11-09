@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { Table } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTablePagination } from "@/components/ui/data-table/data-table-pagination";
 import { createInventoryColumns, type MarketplaceSyncConfig } from "./InventoryTableColumns";
@@ -52,10 +51,6 @@ export function InventoryTableWrapper({
 
   // Client-side pagination state (when data prop is provided)
   const [clientPagination, setClientPagination] = useState({ pageIndex: 0, pageSize: 25 });
-
-  // Table instance and reset callback state
-  const [tableInstance, setTableInstance] = useState<Table<InventoryItem> | null>(null);
-  const [resetAllCallback, setResetAllCallback] = useState<(() => void) | null>(null);
 
   // Client-side sorting state (when data is provided)
   const [clientSorting, setClientSorting] = useState<Array<{ id: string; desc: boolean }>>([
@@ -595,8 +590,6 @@ export function InventoryTableWrapper({
         enableColumnVisibility={true}
         enableColumnOrdering={true}
         enableColumnSizing={true}
-        onTableReady={setTableInstance}
-        onResetAllReady={(resetAll) => setResetAllCallback(() => resetAll)}
       />
       {(data || result) && (
         <DataTablePagination
@@ -606,9 +599,6 @@ export function InventoryTableWrapper({
           onPageSizeChange={handlePageSizeChange}
           onNextPage={handleNextPage}
           onPreviousPage={handlePreviousPage}
-          table={tableInstance ?? undefined}
-          onResetAll={resetAllCallback ?? undefined}
-          enableColumnVisibility={true}
         />
       )}
 

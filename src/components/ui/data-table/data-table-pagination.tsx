@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Table } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,7 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DataTableViewOptions } from "./data-table-view-options";
 
 interface DataTablePaginationProps<TData> {
   pageSize: number;
@@ -21,9 +19,6 @@ interface DataTablePaginationProps<TData> {
   onNextPage: () => void;
   onPreviousPage: () => void;
   pageSizeOptions?: number[];
-  table?: Table<TData>;
-  onResetAll?: () => void;
-  enableColumnVisibility?: boolean;
 }
 
 export function DataTablePagination<TData>({
@@ -34,9 +29,6 @@ export function DataTablePagination<TData>({
   onNextPage,
   onPreviousPage,
   pageSizeOptions = [10, 25, 50, 100],
-  table,
-  onResetAll,
-  enableColumnVisibility = false,
 }: DataTablePaginationProps<TData>) {
   return (
     <div className="flex items-center justify-between px-2 py-4">
@@ -59,11 +51,6 @@ export function DataTablePagination<TData>({
             </SelectContent>
           </Select>
         </div>
-        {enableColumnVisibility && table && onResetAll && (
-          <div className="flex items-center">
-            <DataTableViewOptions table={table} onResetAll={onResetAll} className="h-8" />
-          </div>
-        )}
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"
