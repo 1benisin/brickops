@@ -11,7 +11,6 @@
 import type { Doc } from "../../_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "../../_generated/server";
 import { v } from "convex/values";
-import { catalogClient } from "./catalogClient";
 import { internal } from "../../_generated/api";
 import { recordMetric } from "../../lib/external/metrics";
 

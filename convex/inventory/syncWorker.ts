@@ -4,17 +4,23 @@ import { v } from "convex/values";
 import type { Id, Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import {
-  createBricklinkStoreClient,
-  createBrickOwlStoreClient,
-} from "../marketplaces/shared/helpers";
-import {
   mapConvexToBricklinkCreate,
   mapConvexToBricklinkUpdate,
 } from "../marketplaces/bricklink/storeMappers";
 import {
+  createBLInventory as createBricklinkInventory,
+  updateBLInventory as updateBricklinkInventory,
+  deleteBLInventory as deleteBricklinkInventory,
+} from "../marketplaces/bricklink/inventoryActions";
+import {
   mapConvexToBrickOwlCreate,
   mapConvexToBrickOwlUpdate,
 } from "../marketplaces/brickowl/storeMappers";
+import {
+  createInventory as createBrickOwlInventory,
+  updateInventory as updateBrickOwlInventory,
+  deleteInventory as deleteBrickOwlInventory,
+} from "../marketplaces/brickowl/inventories";
 import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
 
 /**
@@ -361,99 +367,98 @@ async function callMarketplaceAPI(
     | "validation_error";
 }> {
   try {
-    // Create provider-specific client
-    const client =
-      args.message.provider === "bricklink"
-        ? await createBricklinkStoreClient(ctx, args.item.businessAccountId)
-        : await createBrickOwlStoreClient(ctx, args.item.businessAccountId);
-
     const idempotencyKey = `${args.item._id}:${args.message.provider}:${args.message.fromSeqExclusive}-${args.message.toSeqInclusive}`;
 
-    // Handle different operation kinds
     switch (args.message.kind) {
       case "create": {
         if (args.message.provider === "bricklink") {
           const payload = mapConvexToBricklinkCreate(args.item);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (client as any).createInventory(payload, { idempotencyKey });
-          return {
-            success: result.success,
-            marketplaceId: result.marketplaceId,
-            error: result.error ? formatApiError(result.error) : undefined,
-          };
-        } else {
-          // BrickOwl: Need to fetch brickowlId from parts table
-          if (!args.item.partNumber) {
-            return {
-              success: false,
-              error: "partNumber is required for BrickOwl inventory creation",
-              errorCode: "validation_error",
-            };
-          }
+          const result = await createBricklinkInventory(ctx, {
+            businessAccountId: args.item.businessAccountId,
+            payload,
+          });
 
-          const brickowlId = await ensureBrickowlIdForPartAction(ctx, args.item.partNumber);
-
-          if (brickowlId === null) {
-            return {
-              success: false,
-              error: `Part ${args.item.partNumber} not found in catalog`,
-              errorCode: "part_missing",
-            };
-          }
-
-          if (brickowlId === "") {
-            return {
-              success: false,
-              error: `BrickOwl ID not available for part ${args.item.partNumber}.`,
-              errorCode: "missing_brickowl_id",
-            };
-          }
-
-          let brickowlColorId: number | undefined;
-          if (args.item.colorId) {
-            const bricklinkColorId = Number.parseInt(args.item.colorId, 10);
-            if (Number.isNaN(bricklinkColorId)) {
-              return {
-                success: false,
-                error: `Invalid BrickLink color ID "${args.item.colorId}" for part ${args.item.partNumber}.`,
-                errorCode: "validation_error",
-              };
-            }
-
-            const color = await ctx.runQuery(internal.catalog.queries.getColorInternal, {
-              colorId: bricklinkColorId,
-            });
-
-            if (!color || color.brickowlColorId === undefined) {
-              return {
-                success: false,
-                error: `BrickOwl color ID not available for BrickLink color ${args.item.colorId} on part ${args.item.partNumber}.`,
-                errorCode: "missing_brickowl_color",
-              };
-            }
-
-            brickowlColorId = color.brickowlColorId;
-          }
-
-          const payload = mapConvexToBrickOwlCreate(args.item, brickowlId, brickowlColorId);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (client as any).createInventory(payload, { idempotencyKey });
           return {
             success: result.success,
             marketplaceId: result.marketplaceId,
             error: result.error ? formatApiError(result.error) : undefined,
           };
         }
+
+        // BrickOwl: Need to fetch brickowlId from parts table
+        if (!args.item.partNumber) {
+          return {
+            success: false,
+            error: "partNumber is required for BrickOwl inventory creation",
+            errorCode: "validation_error",
+          };
+        }
+
+        const brickowlId = await ensureBrickowlIdForPartAction(ctx, args.item.partNumber);
+
+        if (brickowlId === null) {
+          return {
+            success: false,
+            error: `Part ${args.item.partNumber} not found in catalog`,
+            errorCode: "part_missing",
+          };
+        }
+
+        if (brickowlId === "") {
+          return {
+            success: false,
+            error: `BrickOwl ID not available for part ${args.item.partNumber}.`,
+            errorCode: "missing_brickowl_id",
+          };
+        }
+
+        let brickowlColorId: number | undefined;
+        if (args.item.colorId) {
+          const bricklinkColorId = Number.parseInt(args.item.colorId, 10);
+          if (Number.isNaN(bricklinkColorId)) {
+            return {
+              success: false,
+              error: `Invalid BrickLink color ID "${args.item.colorId}" for part ${args.item.partNumber}.`,
+              errorCode: "validation_error",
+            };
+          }
+
+          const color = await ctx.runQuery(internal.catalog.queries.getColorInternal, {
+            colorId: bricklinkColorId,
+          });
+
+          if (!color || color.brickowlColorId === undefined) {
+            return {
+              success: false,
+              error: `BrickOwl color ID not available for BrickLink color ${args.item.colorId} on part ${args.item.partNumber}.`,
+              errorCode: "missing_brickowl_color",
+            };
+          }
+
+          brickowlColorId = color.brickowlColorId;
+        }
+
+        const payload = mapConvexToBrickOwlCreate(args.item, brickowlId, brickowlColorId);
+        const result = await createBrickOwlInventory(ctx, {
+          businessAccountId: args.item.businessAccountId,
+          payload,
+          options: { idempotencyKey },
+        });
+        return {
+          success: result.success,
+          marketplaceId: result.marketplaceId,
+          error: result.error ? formatApiError(result.error) : undefined,
+        };
       }
 
       case "update": {
         // Get marketplace ID from item's sync status
-        const marketplaceId =
+        const marketplaceIdRaw =
           args.message.provider === "bricklink"
             ? args.item.marketplaceSync?.bricklink?.lotId
             : args.item.marketplaceSync?.brickowl?.lotId;
 
-        if (!marketplaceId) {
+        if (!marketplaceIdRaw) {
           // No lot yet - treat as create
           return await callMarketplaceAPI(ctx, {
             ...args,
@@ -461,63 +466,91 @@ async function callMarketplaceAPI(
           });
         }
 
-        // Get the anchor from lastSyncedAvailable for both marketplaces
         const anchorAvailable =
           args.message.provider === "bricklink"
             ? args.item.marketplaceSync?.bricklink?.lastSyncedAvailable ?? 0
             : args.item.marketplaceSync?.brickowl?.lastSyncedAvailable ?? 0;
 
         if (args.message.provider === "bricklink") {
-          // BrickLink update: Map with the anchor quantity
-          const payload = mapConvexToBricklinkUpdate(
-            args.item,
-            anchorAvailable, // Previous quantity (anchor)
-          );
+          const payload = mapConvexToBricklinkUpdate(args.item, anchorAvailable);
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (client as any).updateInventory(marketplaceId, payload, {
-            idempotencyKey,
+          const marketplaceId = Number(marketplaceIdRaw);
+          if (!Number.isFinite(marketplaceId)) {
+            return {
+              success: false,
+              error: formatApiError("Invalid BrickLink marketplace ID"),
+            };
+          }
+
+          const result = await updateBricklinkInventory(ctx, {
+            businessAccountId: args.item.businessAccountId,
+            inventoryId: marketplaceId,
+            payload,
           });
 
           return {
             success: result.success,
-            marketplaceId: marketplaceId,
-            error: result.error ? formatApiError(result.error) : undefined,
-          };
-        } else {
-          // BrickOwl update: Map with the anchor quantity (similar to Bricklink)
-          const payload = mapConvexToBrickOwlUpdate(
-            args.item,
-            anchorAvailable, // Previous quantity (anchor)
-            false, // Use relative_quantity mode (delta-based)
-          );
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (client as any).updateInventory(marketplaceId, payload, {
-            idempotencyKey,
-          });
-
-          return {
-            success: result.success,
-            marketplaceId: marketplaceId,
+            marketplaceId,
             error: result.error ? formatApiError(result.error) : undefined,
           };
         }
+
+        const payload = mapConvexToBrickOwlUpdate(
+          args.item,
+          anchorAvailable,
+          false, // Use relative_quantity mode (delta-based)
+        );
+
+        const result = await updateBrickOwlInventory(ctx, {
+          businessAccountId: args.item.businessAccountId,
+          identifier: { lotId: String(marketplaceIdRaw) },
+          payload,
+          options: { idempotencyKey },
+        });
+
+        return {
+          success: result.success,
+          marketplaceId: result.marketplaceId ?? marketplaceIdRaw,
+          error: result.error ? formatApiError(result.error) : undefined,
+        };
       }
 
       case "delete": {
-        const marketplaceId =
+        const marketplaceIdRaw =
           args.message.provider === "bricklink"
             ? args.item.marketplaceSync?.bricklink?.lotId
             : args.item.marketplaceSync?.brickowl?.lotId;
 
-        if (!marketplaceId) {
-          // Item was never synced to this marketplace - mark as success
+        if (!marketplaceIdRaw) {
           return { success: true, marketplaceId: undefined, error: undefined };
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (client as any).deleteInventory(marketplaceId, { idempotencyKey });
+        if (args.message.provider === "bricklink") {
+          const marketplaceId = Number(marketplaceIdRaw);
+          if (!Number.isFinite(marketplaceId)) {
+            return {
+              success: false,
+              error: formatApiError("Invalid BrickLink marketplace ID"),
+            };
+          }
+
+          const result = await deleteBricklinkInventory(ctx, {
+            businessAccountId: args.item.businessAccountId,
+            inventoryId: marketplaceId,
+          });
+
+          return {
+            success: result.success,
+            marketplaceId: undefined,
+            error: result.error ? formatApiError(result.error) : undefined,
+          };
+        }
+
+        const result = await deleteBrickOwlInventory(ctx, {
+          businessAccountId: args.item.businessAccountId,
+          identifier: { lotId: String(marketplaceIdRaw) },
+          options: { idempotencyKey },
+        });
         return {
           success: result.success,
           marketplaceId: undefined,

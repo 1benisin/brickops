@@ -7,27 +7,59 @@
  * Standard result format for store operations
  * Used by Story 3.4 for sync status tracking and rollback support
  */
-export interface StoreOperationResult {
-  success: boolean;
+export type StoreErrorCode =
+  | "RATE_LIMITED"
+  | "TIMEOUT"
+  | "NETWORK"
+  | "AUTH"
+  | "PERMISSION"
+  | "VALIDATION"
+  | "NOT_FOUND"
+  | "CONFLICT"
+  | "SERVER_ERROR"
+  | "INVALID_RESPONSE"
+  | "CIRCUIT_BREAKER_OPEN"
+  | "UNEXPECTED_ERROR"
+  | string;
+
+export interface StoreOperationError {
+  code: StoreErrorCode;
+  message: string;
+  retryable: boolean;
+  details?: unknown;
+  rateLimitResetAt?: string;
+  httpStatus?: number;
+}
+
+export interface StoreOperationRollbackData {
+  previousQuantity?: number;
+  previousPrice?: string;
+  previousLocation?: string;
+  previousNotes?: string;
+  originalPayload?: unknown; // Full original data for recreate after delete
+}
+
+export type StoreOperationSuccess = {
+  success: true;
+  correlationId: string; // For distributed tracing
   marketplaceId?: number | string; // Generic marketplace ID (lot_id for BrickLink, lot_id for BrickOwl)
   bricklinkOrderId?: number; // For BrickLink order operations (Epic 4)
   brickowlOrderId?: string; // For BrickOwl order operations (Epic 4)
-  error?: {
-    code: string; // e.g., "CONFLICT", "VALIDATION_ERROR", "RATE_LIMIT", "NOT_FOUND"
-    message: string; // User-friendly error message
-    details?: unknown; // Additional error context
-  };
   marketplaceStatus?: string; // Marketplace's status field if available
+  rollbackData?: StoreOperationRollbackData;
+};
+
+export type StoreOperationFailure = {
+  success: false;
   correlationId: string; // For distributed tracing
-  // Rollback support - data needed to reverse operation
-  rollbackData?: {
-    previousQuantity?: number;
-    previousPrice?: string;
-    previousLocation?: string;
-    previousNotes?: string;
-    originalPayload?: unknown; // Full original data for recreate after delete
-  };
-}
+  marketplaceId?: number | string;
+  bricklinkOrderId?: number;
+  brickowlOrderId?: string;
+  marketplaceStatus?: string;
+  error: StoreOperationError;
+};
+
+export type StoreOperationResult = StoreOperationSuccess | StoreOperationFailure;
 
 /**
  * Marketplace credentials (decrypted)

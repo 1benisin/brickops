@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query } from "../_generated/server";
+import { internalQuery, query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { requireActiveUser } from "./helpers";
@@ -96,5 +96,12 @@ export const listMembers = query({
       status: member.status,
       isCurrentUser: member._id === userId,
     }));
+  },
+});
+
+export const getActiveUserContext = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return requireActiveUser(ctx);
   },
 });

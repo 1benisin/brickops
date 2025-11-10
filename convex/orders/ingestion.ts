@@ -4,28 +4,10 @@ import { v } from "convex/values";
 import type {
   BricklinkOrderItemResponse,
   BricklinkOrderResponse,
-} from "../marketplaces/bricklink/storeClient";
-import type {
-  BrickOwlOrderItemResponse,
-  BrickOwlOrderResponse,
-} from "../marketplaces/brickowl/storeClient";
+} from "../marketplaces/bricklink/schema";
+import type { BOOrderItemResponse, BOOrderResponse } from "../marketplaces/brickowl/schema";
 import type { Id } from "../_generated/dataModel";
 import { getCurrentAvailableFromLedger, getNextSeqForItem } from "../inventory/helpers";
-
-type Provider = "bricklink" | "brickowl";
-type OrderStatus =
-  | "PENDING"
-  | "UPDATED"
-  | "PROCESSING"
-  | "READY"
-  | "PAID"
-  | "PACKED"
-  | "SHIPPED"
-  | "RECEIVED"
-  | "COMPLETED"
-  | "CANCELLED"
-  | "HOLD"
-  | "ARCHIVED";
 
 type OrderItemStatus = "picked" | "unpicked" | "skipped" | "issue";
 
@@ -302,7 +284,7 @@ function normalizeBrickOwlCondition(condition: unknown): "new" | "used" | undefi
   return undefined;
 }
 
-function normalizeBrickOwlOrder(orderData: BrickOwlOrderResponse): NormalizedOrder {
+function normalizeBrickOwlOrder(orderData: BOOrderResponse): NormalizedOrder {
   const rawOrder = orderData as Record<string, unknown>;
   const orderId = ensureOrderId(
     rawOrder.order_id ?? rawOrder.id ?? rawOrder.orderId ?? rawOrder.orderID ?? rawOrder.uuid,
@@ -388,12 +370,12 @@ function normalizeBrickOwlOrder(orderData: BrickOwlOrderResponse): NormalizedOrd
 
 function normalizeBrickOwlOrderItems(
   orderId: string,
-  rawItems: BrickOwlOrderItemResponse[] | Record<string, unknown>,
+  rawItems: BOOrderItemResponse[] | Record<string, unknown>,
 ): NormalizedOrderItem[] {
   const itemsArray = Array.isArray(rawItems)
     ? rawItems
     : Array.isArray((rawItems as Record<string, unknown>).items)
-      ? (rawItems as { items: BrickOwlOrderItemResponse[] }).items ?? []
+      ? (rawItems as { items: BOOrderItemResponse[] }).items ?? []
       : [];
 
   return itemsArray.map((item) => {
@@ -470,7 +452,7 @@ function mapOrder(provider: Provider, orderData: unknown): NormalizedOrder {
   if (provider === "bricklink") {
     return normalizeBricklinkOrder(orderData as BricklinkOrderResponse);
   }
-  return normalizeBrickOwlOrder(orderData as BrickOwlOrderResponse);
+  return normalizeBrickOwlOrder(orderData as BOOrderResponse);
 }
 
 function mapOrderItems(
@@ -481,7 +463,7 @@ function mapOrderItems(
   if (provider === "bricklink") {
     return normalizeBricklinkOrderItems(orderId, orderItemsData as BricklinkOrderItemResponse[][]);
   }
-  return normalizeBrickOwlOrderItems(orderId, orderItemsData as BrickOwlOrderItemResponse[]);
+  return normalizeBrickOwlOrderItems(orderId, orderItemsData as BOOrderItemResponse[]);
 }
 
 export const upsertOrder = internalMutation({

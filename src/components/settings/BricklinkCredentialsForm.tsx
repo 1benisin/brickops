@@ -19,8 +19,8 @@ export function BrickLinkCredentialsForm() {
   const revokeCredentials = useMutation(api.marketplaces.shared.mutations.revokeCredentials);
   const updateSyncSettings = useMutation(api.marketplaces.shared.mutations.updateSyncSettings);
   const testConnection = useAction(api.marketplaces.shared.actions.testConnection);
-  const registerWebhookAction = useAction(api.marketplaces.bricklink.actions.registerWebhook);
-  const unregisterWebhookAction = useAction(api.marketplaces.bricklink.actions.unregisterWebhook);
+  const registerWebhookAction = useAction(api.marketplaces.bricklink.webhook.registerWebhook);
+  const unregisterWebhookAction = useAction(api.marketplaces.bricklink.webhook.unregisterWebhook);
 
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
@@ -184,8 +184,7 @@ export function BrickLinkCredentialsForm() {
         await updateSyncSettings({ provider: "bricklink", ordersSyncEnabled: next });
         setSuccess(`BrickLink order sync ${next ? "enabled" : "paused"}.`);
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Unable to update order sync setting";
+        const message = err instanceof Error ? err.message : "Unable to update order sync setting";
         setError(message);
       }
     });
@@ -219,7 +218,9 @@ export function BrickLinkCredentialsForm() {
     startRegisterWebhookTransition(async () => {
       try {
         await registerWebhookAction({});
-        setSuccess("Webhook registration requested. BrickLink will now deliver order notifications.");
+        setSuccess(
+          "Webhook registration requested. BrickLink will now deliver order notifications.",
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unable to register webhook";
         setError(message);
@@ -268,17 +269,9 @@ export function BrickLinkCredentialsForm() {
           </Badge>
         );
       case "disabled":
-        return (
-          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
-            Disabled
-          </Badge>
-        );
+        return <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">Disabled</Badge>;
       default:
-        return (
-          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
-            Not Configured
-          </Badge>
-        );
+        return <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">Not Configured</Badge>;
     }
   };
 

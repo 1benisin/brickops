@@ -5,17 +5,17 @@
 
 import type { Doc } from "../../_generated/dataModel";
 import type {
-  BricklinkInventoryResponse,
-  BricklinkInventoryCreateRequest,
-  BricklinkInventoryUpdateRequest,
-} from "./storeClient";
+  BLInventoryResponse,
+  BLInventoryCreatePayload,
+  BLInventoryUpdatePayload,
+} from "./schema";
 
 /**
  * Map BrickLink inventory response to Convex inventory item
  * Used when importing inventory from BrickLink to Convex
  */
 export function mapBricklinkToConvexInventory(
-  bricklinkInventory: BricklinkInventoryResponse,
+  bricklinkInventory: BLInventoryResponse,
   businessAccountId: Doc<"inventoryItems">["businessAccountId"],
 ): Omit<Doc<"inventoryItems">, "_id" | "_creationTime" | "createdBy" | "createdAt" | "updatedAt"> {
   // Map condition: "N" -> "new", "U" -> "used"
@@ -52,7 +52,7 @@ export function mapBricklinkToConvexInventory(
  */
 export function mapConvexToBricklinkCreate(
   convexInventory: Doc<"inventoryItems">,
-): BricklinkInventoryCreateRequest {
+): BLInventoryCreatePayload {
   // Map condition: "new" -> "N", "used" -> "U"
   const new_or_used: "N" | "U" = convexInventory.condition === "new" ? "N" : "U";
 
@@ -100,7 +100,7 @@ export function mapConvexToBricklinkCreate(
 export function mapConvexToBricklinkUpdate(
   convexInventory: Doc<"inventoryItems">,
   previousQuantity?: number,
-): BricklinkInventoryUpdateRequest {
+): BricklinkInventoryUpdatePayload {
   // Format price as fixed-point string (always include)
   const unit_price = convexInventory.price ? convexInventory.price.toFixed(4) : "0.0000";
 
@@ -122,7 +122,7 @@ export function mapConvexToBricklinkUpdate(
   const remarks = convexInventory.location || "";
 
   // Build update payload - ALWAYS include all fields to match BrickOps state
-  const payload: BricklinkInventoryUpdateRequest = {
+  const payload: BLInventoryUpdatePayload = {
     unit_price,
     new_or_used,
     description,
@@ -153,7 +153,7 @@ export function calculateQuantityDelta(currentQuantity: number, previousQuantity
  * Validate BrickLink inventory fields before creation
  * Throws error if required fields are missing or invalid
  */
-export function validateBricklinkCreate(payload: BricklinkInventoryCreateRequest): void {
+export function validateBricklinkCreate(payload: BLInventoryCreatePayload): void {
   if (!payload.item.no) {
     throw new Error("item.no (part number) is required");
   }
@@ -188,7 +188,7 @@ export function validateBricklinkCreate(payload: BricklinkInventoryCreateRequest
  * Validate BrickLink inventory update fields
  * Throws error if fields are invalid
  */
-export function validateBricklinkUpdate(payload: BricklinkInventoryUpdateRequest): void {
+export function validateBricklinkUpdate(payload: BLInventoryUpdatePayload): void {
   // Validate quantity delta syntax if provided
   if (payload.quantity !== undefined && !/^[+-]\d+$/.test(payload.quantity)) {
     throw new Error('quantity must use delta syntax with +/- prefix (e.g., "+5" or "-3")');

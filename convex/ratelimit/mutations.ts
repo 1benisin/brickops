@@ -1,16 +1,17 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
-import { getRateLimitConfig } from "./rateLimitConfig";
+import { getRateLimitConfig, providerValidator } from "./rateLimitConfig";
 
-type Provider = "bricklink" | "brickowl";
+const takeTokenArgs = v.object({
+  bucket: v.string(), // e.g. "brickopsSuperAdmin" or businessAccountId
+  provider: providerValidator,
+});
 
 export const takeToken = internalMutation({
-  args: { bucket: v.string() },
-  handler: async (ctx, { bucket }) => {
+  args: takeTokenArgs,
+  handler: async (ctx, { provider, bucket }) => {
     const now = Date.now();
 
-    const [providerRaw] = bucket.split(":", 1);
-    const provider = providerRaw as Provider;
     const { capacity, windowDurationMs: windowMs } = getRateLimitConfig(provider);
 
     const rate = await ctx.db
@@ -55,13 +56,13 @@ export const takeToken = internalMutation({
     if (isNew) {
       await ctx.db.insert("rateLimits", {
         ...payload,
-        createdAt: now,
+        provider,
       });
     } else {
       await ctx.db.patch(rate!._id, payload);
     }
 
-    console.log(`Rate limit granted: ${bucket}, remaining: ${remaining} out of ${capacity}`);
+    console.debug(`Rate limit granted: ${bucket}, remaining: ${remaining} out of ${capacity}`);
 
     return { granted, resetAt, remaining } as const;
   },

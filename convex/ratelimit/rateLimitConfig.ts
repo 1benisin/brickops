@@ -3,7 +3,14 @@
  * Single source of truth for API rate limit values
  */
 
-export type MarketplaceProvider = "bricklink" | "brickowl";
+import { Infer, v } from "convex/values";
+
+export const providerValidator = v.union(
+  v.literal("bricklink"),
+  v.literal("brickowl"),
+  v.literal("rebrickable"),
+);
+export type Provider = Infer<typeof providerValidator>;
 
 export interface RateLimitConfig {
   capacity: number;
@@ -11,7 +18,7 @@ export interface RateLimitConfig {
   alertThreshold: number;
 }
 
-export const RATE_LIMIT_CONFIGS: Record<MarketplaceProvider, RateLimitConfig> = {
+export const RATE_LIMIT_CONFIGS: Record<Provider, RateLimitConfig> = {
   bricklink: {
     capacity: 210, // requests per hour
     windowDurationMs: 60 * 60 * 1000, // 1 hour
@@ -22,8 +29,13 @@ export const RATE_LIMIT_CONFIGS: Record<MarketplaceProvider, RateLimitConfig> = 
     windowDurationMs: 60 * 1000, // 1 minute
     alertThreshold: 0.8,
   },
+  rebrickable: {
+    capacity: 60, // requests per minute (1 req/sec average)
+    windowDurationMs: 60 * 1000, // 1 minute
+    alertThreshold: 0.8,
+  },
 };
 
-export function getRateLimitConfig(provider: MarketplaceProvider): RateLimitConfig {
+export function getRateLimitConfig(provider: Provider): RateLimitConfig {
   return RATE_LIMIT_CONFIGS[provider];
 }

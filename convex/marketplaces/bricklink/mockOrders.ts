@@ -31,10 +31,9 @@ async function createMockOrderDataWithParts(
   orderItemsData: BLOrderItemResponse[][];
 }> {
   const timestamp = Date.now();
-  const orderId =
-    orderIndex !== undefined
-      ? `MOCK-WEBHOOK-${timestamp}-${orderIndex}`
-      : `MOCK-WEBHOOK-${timestamp}`;
+  const orderId = orderIndex !== undefined 
+    ? `MOCK-WEBHOOK-${timestamp}-${orderIndex}`
+    : `MOCK-WEBHOOK-${timestamp}`;
   const now = new Date().toISOString();
   const buyerName = "Mock Webhook Buyer";
   const status = "PENDING";
@@ -108,7 +107,8 @@ async function createMockOrderDataWithParts(
   const items: BLOrderItemResponse[] = [];
 
   for (let i = 0; i < itemCount && i < inventoryItems.length; i++) {
-    const inventoryItem: MockInventoryItem = inventoryItems[i % inventoryItems.length];
+    const inventoryItem: MockInventoryItem =
+      inventoryItems[i % inventoryItems.length];
 
     // Generate random positive quantity (1-10)
     const quantity = Math.floor(Math.random() * 10) + 1;
@@ -215,14 +215,11 @@ export const triggerMockWebhookNotification = mutation({
       );
 
       // Update notification status to completed
-      await ctx.runMutation(
-        internal.marketplaces.bricklink.notifications.updateNotificationStatus,
-        {
-          notificationId,
-          status: "completed",
-          processedAt: Date.now(),
-        },
-      );
+      await ctx.runMutation(internal.marketplaces.bricklink.notifications.updateNotificationStatus, {
+        notificationId,
+        status: "completed",
+        processedAt: Date.now(),
+      });
 
       ordersCreated.push({
         orderId: orderData.order_id,
@@ -237,7 +234,8 @@ export const triggerMockWebhookNotification = mutation({
       ordersCreated: ordersCreated.length,
       totalItems,
       orders: ordersCreated,
-      message: `Mock webhook notification processed successfully. ${ordersCreated.length} order${ordersCreated.length === 1 ? "" : "s"} created with ${totalItems} total item${totalItems === 1 ? "" : "s"}`,
+      message: `Mock webhook notification processed successfully. ${ordersCreated.length} order${ordersCreated.length === 1 ? '' : 's'} created with ${totalItems} total item${totalItems === 1 ? '' : 's'}`,
     };
   },
 });
+

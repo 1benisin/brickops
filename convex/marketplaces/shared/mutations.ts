@@ -5,12 +5,11 @@ import {
   QueryCtx,
   internalMutation,
   internalQuery,
-  query,
 } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { encryptCredential } from "../../lib/encryption";
-import { getRateLimitConfig } from "./rateLimitConfig";
+import { getRateLimitConfig } from "../../ratelimit/rateLimitConfig";
 import { randomHex } from "../../lib/webcrypto";
 
 /**

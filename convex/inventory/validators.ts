@@ -191,44 +191,56 @@ export const importSummaryValidator = v.object({
   imported: v.number(),
   skippedExisting: v.number(),
   skippedUnavailable: v.number(),
+  skippedInvalid: v.number(),
   totalRemote: v.number(),
   errors: v.array(importError),
 });
 
-const bricklinkPreviewItem = v.object({
-  inventoryId: v.number(),
-  partNumber: v.string(),
-  name: v.string(),
-  colorId: v.string(),
-  condition: itemCondition,
-  quantity: v.number(),
-  location: v.string(),
-  exists: v.boolean(),
+const inventoryImportIssue = v.object({
+  code: v.string(),
+  message: v.string(),
 });
 
-export const bricklinkPreviewResultValidator = v.object({
-  provider: v.literal("bricklink"),
-  previewCount: v.number(),
-  totalRemote: v.number(),
-  items: v.array(bricklinkPreviewItem),
-});
-
-const brickowlPreviewItem = v.object({
-  lotId: v.optional(v.string()),
-  boid: v.string(),
+const inventoryImportCandidatePreview = v.object({
   partNumber: v.optional(v.string()),
   colorId: v.optional(v.string()),
-  condition: v.string(),
-  quantity: v.number(),
-  location: v.string(),
-  exists: v.boolean(),
+  name: v.optional(v.string()),
+  condition: v.optional(v.string()),
+  quantity: v.optional(v.number()),
+  location: v.optional(v.string()),
+  lotId: v.optional(v.string()),
+  additionalInfo: v.optional(
+    v.array(
+      v.object({
+        label: v.string(),
+        value: v.string(),
+      }),
+    ),
+  ),
 });
 
-export const brickowlPreviewResultValidator = v.object({
-  provider: v.literal("brickowl"),
-  previewCount: v.number(),
+export const inventoryImportCandidateValidator = v.object({
+  candidateId: v.string(),
+  provider: marketplaceProvider,
+  sourceId: v.string(),
+  status: v.union(
+    v.literal("ready"),
+    v.literal("skip-existing"),
+    v.literal("skip-invalid"),
+    v.literal("skip-unavailable"),
+  ),
+  issues: v.array(inventoryImportIssue),
+  preview: inventoryImportCandidatePreview,
+});
+
+export const inventoryImportValidationResultValidator = v.object({
+  provider: marketplaceProvider,
   totalRemote: v.number(),
-  items: v.array(brickowlPreviewItem),
+  readyCount: v.number(),
+  existingCount: v.number(),
+  invalidCount: v.number(),
+  unavailableCount: v.number(),
+  candidates: v.array(inventoryImportCandidateValidator),
 });
 
 // ============================================================================
@@ -244,5 +256,5 @@ export type GetInventoryTotalsArgs = Infer<typeof getInventoryTotalsArgs>;
 // Partial inventory item data type (equivalent to Partial<Doc<"inventoryItems">>)
 export type PartialInventoryItemData = Infer<typeof partialInventoryItemData>;
 export type ImportSummary = Infer<typeof importSummaryValidator>;
-export type BricklinkPreviewResult = Infer<typeof bricklinkPreviewResultValidator>;
-export type BrickowlPreviewResult = Infer<typeof brickowlPreviewResultValidator>;
+export type InventoryImportCandidate = Infer<typeof inventoryImportCandidateValidator>;
+export type InventoryImportValidationResult = Infer<typeof inventoryImportValidationResultValidator>;

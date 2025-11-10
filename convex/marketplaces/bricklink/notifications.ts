@@ -9,14 +9,41 @@ import {
   internalQuery,
   type ActionCtx,
 } from "../../_generated/server";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import type { Id } from "../../_generated/dataModel";
 import { internal } from "../../_generated/api";
-import { createBricklinkStoreClient } from "../shared/helpers";
-import type { BricklinkOrderResponse, BricklinkOrderItemResponse } from "./storeClient";
+import type { BLOrderResponse, BLOrderItemResponse } from "./schema";
+import { getOrder, getOrderItems } from "./orders";
+import { withBricklinkClient, type BricklinkApiResponse } from "./storeClient";
 
 const MAX_PROCESSING_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 60000; // 1 minute
+
+const bricklinkNotificationValidator = v.object({
+  event_type: v.union(v.literal("Order"), v.literal("Message"), v.literal("Feedback")),
+  resource_id: v.number(),
+  timestamp: v.string(),
+});
+
+type BricklinkNotification = Infer<typeof bricklinkNotificationValidator>;
+
+async function listNotifications(
+  ctx: ActionCtx,
+  businessAccountId: Id<"businessAccounts">,
+): Promise<BricklinkNotification[]> {
+  return await withBricklinkClient(ctx, {
+    businessAccountId,
+    fn: async (client) => {
+      const response = await client.request<BricklinkApiResponse<BricklinkNotification[]>>({
+        path: "/notifications",
+        method: "GET",
+      });
+
+      const data = response.data.data ?? [];
+      return data.map((notification) => bricklinkNotificationValidator.parse(notification));
+    },
+  });
+}
 
 /**
  * Get credential by webhook token (internal query)
@@ -207,14 +234,9 @@ async function processOrderNotification(
   businessAccountId: Id<"businessAccounts">,
   orderId: number,
 ) {
-  // Create store client
-  const client = await createBricklinkStoreClient(ctx, businessAccountId);
+  const orderData = await getOrder(ctx, { businessAccountId, orderId });
+  const orderItemsData = await getOrderItems(ctx, { businessAccountId, orderId });
 
-  // Fetch full order data
-  const orderData = await client.getOrder(orderId);
-  const orderItemsData = await client.getOrderItems(orderId);
-
-  // Upsert order and items
   await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
     businessAccountId,
     provider: "bricklink",
@@ -250,8 +272,8 @@ export const processMockOrderNotification = internalMutation({
     }
 
     // Type assertions for mock data
-    const orderData = args.orderData as BricklinkOrderResponse;
-    const orderItemsData = args.orderItemsData as BricklinkOrderItemResponse[][];
+    const orderData = args.orderData as BLOrderResponse;
+    const orderItemsData = args.orderItemsData as BLOrderItemResponse[][];
 
     // Upsert order and items using the same mutation as real orders
     await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
@@ -326,53 +348,38 @@ export const pollNotificationsForBusiness = internalAction({
     businessAccountId: v.id("businessAccounts"),
   },
   handler: async (ctx, args) => {
-    // Create store client
-    const client = await createBricklinkStoreClient(ctx, args.businessAccountId);
+    const notifications = await listNotifications(ctx, args.businessAccountId);
 
-    try {
-      // Fetch unread notifications
-      const notifications = await client.getNotifications();
+    console.log(
+      `[Notifications] Polled ${notifications.length} notifications for business ${args.businessAccountId}`,
+    );
 
-      console.log(
-        `[Notifications] Polled ${notifications.length} notifications for business ${args.businessAccountId}`,
+    for (const notification of notifications) {
+      const dedupeKey = `${args.businessAccountId}:${notification.event_type}:${notification.resource_id}:${notification.timestamp}`;
+
+      const notificationId = await ctx.runMutation(
+        internal.marketplaces.bricklink.notifications.upsertNotification,
+        {
+          businessAccountId: args.businessAccountId,
+          eventType: notification.event_type,
+          resourceId: notification.resource_id,
+          timestamp: notification.timestamp,
+          dedupeKey,
+        },
       );
 
-      // Process each notification
-      for (const notification of notifications) {
-        const dedupeKey = `${args.businessAccountId}:${notification.event_type}:${notification.resource_id}:${notification.timestamp}`;
+      const processResult = await ctx.runAction(
+        internal.marketplaces.bricklink.notifications.processNotification,
+        {
+          notificationId,
+        },
+      );
 
-        // Upsert notification
-        const notificationId = await ctx.runMutation(
-          internal.marketplaces.bricklink.notifications.upsertNotification,
-          {
-            businessAccountId: args.businessAccountId,
-            eventType: notification.event_type,
-            resourceId: notification.resource_id,
-            timestamp: notification.timestamp,
-            dedupeKey,
-          },
-        );
-
-        // Enqueue processing
-        await ctx.scheduler.runAfter(
-          0,
-          internal.marketplaces.bricklink.notifications.processNotification,
-          {
-            notificationId,
-          },
+      if (!processResult.success) {
+        console.error(
+          `[Notifications] Failed to process notification ${notificationId}: ${processResult.error}`,
         );
       }
-
-      // Update last polled timestamp
-      await ctx.runMutation(internal.marketplaces.bricklink.notifications.updateLastPolled, {
-        businessAccountId: args.businessAccountId,
-      });
-    } catch (error) {
-      console.error(
-        `[Notifications] Error polling notifications for business ${args.businessAccountId}:`,
-        error,
-      );
-      throw error;
     }
   },
 });

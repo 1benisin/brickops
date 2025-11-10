@@ -8,7 +8,7 @@ BrickOps uses Convex serverless functions organized by business domain with spec
 convex/
 ├── marketplaces/                  # Marketplace integrations (Stories 2.3, 3.1-3.3)
 │   ├── bricklink/                  # BrickLink marketplace integration
-│   │   ├── catalogClient.ts        # Global catalog queries (BrickOps credentials)
+│   │   ├── catalogClient.ts        # Stateless BrickLink catalog helpers (BrickOps credentials)
 │   │   ├── bricklinkMappers.ts     # Catalog data mappers
 │   │   ├── dataRefresher.ts        # Catalog refresh background jobs
 │   │   ├── notifications.ts        # BrickLink push notifications processing
@@ -28,7 +28,6 @@ convex/
 │       ├── migrations.ts           # Marketplace migrations
 │       ├── mutations.ts            # Marketplace write operations
 │       ├── queries.ts              # Marketplace read operations
-│       ├── rateLimitConfig.ts      # Rate limit configs per provider
 │       ├── schema.ts               # Marketplace table schemas
 │       └── types.ts                # Shared TypeScript interfaces (StoreOperationResult, etc.)
 ├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
@@ -72,9 +71,16 @@ convex/
 │   └── schema.ts               # User table schemas
 │
 ├── ratelimit/                  # Rate limiting domain
+│   ├── helpers.ts              # Public helper for consuming shared rate limit tokens
 │   ├── mutations.ts            # Rate limit write operations
-│   ├── rateLimitConfig.ts      # Rate limit configuration
+│   ├── rateLimitConfig.ts      # Provider validators and configuration values
 │   └── schema.ts               # Rate limit table schemas
+
+Rate limit buckets map directly to business account identifiers. Reserve the
+`brickopsAdmin` bucket for BrickOps-owned global workloads (for example,
+catalog refresh tasks). Callers should use `takeRateLimitToken(ctx, { bucket,
+provider })` from `convex/ratelimit/helpers.ts` to consume shared tokens and
+enforce provider-specific quotas.
 │
 ├── lib/                        # Shared utilities
 │   ├── dbRateLimiter.ts        # Database-backed rate limiting helpers
@@ -116,24 +122,26 @@ BrickOps uses separate specialized clients for different marketplace operations:
 **Example: BrickLink Integration**
 
 ```typescript
-// System catalog operations (BrickOps credentials)
-import { catalogClient } from "../marketplaces/bricklink/catalogClient";
-const partData = await catalogClient.getRefreshedPart("3001");
+// Catalog operations (shared BrickOps credentials)
+import { fetchBricklinkPart } from "../marketplaces/bricklink/catalogClient";
+const partData = await fetchBricklinkPart(ctx, { itemNo: "3001" });
 
 // User store operations (user BYOK credentials)
-import { createBricklinkStoreClient } from "../marketplaces/shared/helpers";
-const storeClient = await createBricklinkStoreClient(ctx, businessAccountId);
-const inventory = await storeClient.getInventories();
+import { getBLInventories } from "../marketplaces/bricklink/inventories";
+const inventory = await getBLInventories(ctx, {
+  businessAccountId,
+  filters: { page: 1, pageSize: 50 },
+});
 ```
 
 **Why Separate Clients?**
 
-| Aspect        | Catalog Client                          | Store Client                |
-| ------------- | --------------------------------------- | --------------------------- |
-| Credentials   | BrickOps env vars                       | User database (encrypted)   |
-| Rate Limiting | Static in-memory                        | Database-backed per-tenant  |
-| Scope         | Global catalog data                     | User's marketplace store    |
-| Methods       | Parts, colors, categories, price guides | Inventory, orders, settings |
+| Aspect        | Catalog Client                          | Store Helpers (Inventories/Orders/etc.) |
+| ------------- | --------------------------------------- | --------------------------------------- |
+| Credentials   | BrickOps env vars                       | User database (encrypted)               |
+| Rate Limiting | Static in-memory                        | Database-backed per-tenant              |
+| Scope         | Global catalog data                     | User's marketplace store                |
+| Methods       | Parts, colors, categories, price guides | Inventory, orders, notifications        |
 
 **Database-Backed Rate Limiting (Stories 3.2-3.3)**:
 
@@ -728,6 +736,16 @@ Each domain should have a `validators.ts` file:
 - `convex/marketplaces/shared/validators.ts` - Marketplace function validators
 
 See [Coding Standards - Type Safety](../development/coding-standards.md#type-safety-and-validator-patterns) for complete validator patterns and examples.
+
+### Inventory Import Validation Flow
+
+Marketplace inventory imports now run a structured validation pass before any mutations occur:
+
+1. **Validate actions**: `inventory.import.validateBricklinkImport` and `inventory.import.validateBrickowlImport` traverse the full remote inventory, transform each lot into an `InventoryImportCandidate`, and classify the lot as `ready`, `skip-existing`, `skip-unavailable`, or `skip-invalid`. The response surfaces per-lot issues (missing catalog mappings, color mismatches, inactive lots) that the UI can display before import.
+2. **User confirmation**: The Next.js settings page opens a confirmation dialog showing the lots that will be skipped, along with their issues. Only lots with `status === "ready"` are eligible for import.
+3. **Gated import actions**: `importBricklinkInventory` and `importBrickowlInventory` now require an explicit list of `candidateIds`. The backend reruns classification, skips non-ready lots, and persists the successful imports while recording `skippedInvalid` counts in the `ImportSummary`.
+
+This flow prevents partial imports caused by catalog mismatches, ensures owners understand which lots will be skipped, and keeps backend mutations idempotent and auditable.
 
 ---
 

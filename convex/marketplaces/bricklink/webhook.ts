@@ -3,9 +3,12 @@
  * Receives push notifications from BrickLink and enqueues them for processing
  */
 
-import { httpAction } from "../../_generated/server";
+import { action, httpAction, internalAction } from "../../_generated/server";
 import { internal } from "../../_generated/api";
+import { ConvexError, v } from "convex/values";
 import { recordMetric } from "../../lib/external/metrics";
+import { withBricklinkClient, type BricklinkApiResponse } from "./storeClient";
+import { requireUserRole } from "../../users/helpers";
 
 /**
  * HTTP endpoint for BrickLink push notifications
@@ -215,4 +218,234 @@ export const bricklinkWebhook = httpAction(async (ctx, request) => {
       },
     );
   }
+});
+
+function normalizeBaseUrl(rawUrl?: string | null): string {
+  const candidate =
+    rawUrl ??
+    process.env.CONVEX_SITE_URL ??
+    process.env.NEXT_PUBLIC_CONVEX_URL?.replace(".convex.cloud", ".convex.site");
+
+  if (!candidate) {
+    throw new ConvexError(
+      "CONVEX_SITE_URL environment variable is not configured. Provide overrideBaseUrl when invoking this action.",
+    );
+  }
+
+  return candidate.replace(/\/functions$/, "").replace(/\/+$/, "");
+}
+
+const registerWebhookAction: ReturnType<typeof action> = action({
+  args: {
+    overrideBaseUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { businessAccountId } = await requireUserRole(ctx, "owner");
+
+    const credential = await ctx.runQuery(
+      internal.marketplaces.shared.queries.getCredentialMetadata,
+      {
+        businessAccountId,
+        provider: "bricklink",
+      },
+    );
+
+    if (!credential) {
+      throw new ConvexError("BrickLink credentials not configured");
+    }
+
+    if (!credential.webhookToken) {
+      throw new ConvexError("Webhook token not generated. Save BrickLink credentials first.");
+    }
+
+    const baseUrl = normalizeBaseUrl(args.overrideBaseUrl);
+    const callbackUrl = `${baseUrl}/api/bricklink/webhook/${credential.webhookToken}`;
+
+    await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+      businessAccountId,
+      provider: "bricklink",
+      status: "registering",
+      lastCheckedAt: Date.now(),
+    });
+
+    try {
+      await withBricklinkClient(ctx, {
+        businessAccountId,
+        fn: async (client) => {
+          if (callbackUrl) {
+            await client.request<BricklinkApiResponse<null>>({
+              path: "/notifications/register",
+              method: "POST",
+              body: { url: callbackUrl },
+            });
+          } else {
+            await client.request<BricklinkApiResponse<null>>({
+              path: "/notifications/register",
+              method: "DELETE",
+            });
+          }
+        },
+      });
+
+      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+        businessAccountId,
+        provider: "bricklink",
+        status: "registered",
+        endpoint: callbackUrl,
+        registeredAt: Date.now(),
+        lastCheckedAt: Date.now(),
+        clearError: true,
+      });
+
+      return {
+        success: true,
+        status: "registered" as const,
+        endpoint: callbackUrl,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+        businessAccountId,
+        provider: "bricklink",
+        status: "error",
+        endpoint: callbackUrl,
+        error: message,
+      });
+
+      throw new ConvexError(`Failed to register BrickLink webhook: ${message}`);
+    }
+  },
+});
+
+export const registerWebhook = registerWebhookAction;
+
+const unregisterWebhookAction: ReturnType<typeof action> = action({
+  args: {},
+  handler: async (ctx) => {
+    const { businessAccountId } = await requireUserRole(ctx, "owner");
+
+    const credential = await ctx.runQuery(
+      internal.marketplaces.shared.queries.getCredentialMetadata,
+      {
+        businessAccountId,
+        provider: "bricklink",
+      },
+    );
+
+    if (!credential) {
+      throw new ConvexError("BrickLink credentials not configured");
+    }
+
+    await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+      businessAccountId,
+      provider: "bricklink",
+      status: "registering",
+      lastCheckedAt: Date.now(),
+    });
+
+    try {
+      await withBricklinkClient(ctx, {
+        businessAccountId,
+        fn: async (client) => {
+          await client.request<BricklinkApiResponse<null>>({
+            path: "/notifications/register",
+            method: "DELETE",
+          });
+        },
+      });
+
+      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+        businessAccountId,
+        provider: "bricklink",
+        status: "disabled",
+        clearEndpoint: true,
+        clearError: true,
+        lastCheckedAt: Date.now(),
+      });
+
+      return {
+        success: true,
+        status: "disabled" as const,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+        businessAccountId,
+        provider: "bricklink",
+        status: "error",
+        error: message,
+      });
+
+      throw new ConvexError(`Failed to unregister BrickLink webhook: ${message}`);
+    }
+  },
+});
+
+export const unregisterWebhook = unregisterWebhookAction;
+
+export const ensureWebhooks = internalAction({
+  args: {
+    force: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const credentials = await ctx.runQuery(
+      internal.marketplaces.bricklink.notifications.getAllActiveCredentials,
+      {},
+    );
+
+    const baseUrl = normalizeBaseUrl(null);
+    const now = Date.now();
+    const STALE_THRESHOLD_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+    for (const credential of credentials) {
+      if (!credential.webhookToken) {
+        continue;
+      }
+
+      const callbackUrl = `${baseUrl}/api/bricklink/webhook/${credential.webhookToken}`;
+
+      const shouldRefresh =
+        args.force ||
+        credential.webhookEndpoint !== callbackUrl ||
+        credential.webhookStatus !== "registered" ||
+        !credential.webhookLastCheckedAt ||
+        now - credential.webhookLastCheckedAt > STALE_THRESHOLD_MS;
+
+      if (!shouldRefresh) {
+        continue;
+      }
+
+      try {
+        await withBricklinkClient(ctx, {
+          businessAccountId: credential.businessAccountId,
+          fn: async (client) => {
+            await client.request<BricklinkApiResponse<null>>({
+              path: "/notifications/register",
+              method: "POST",
+              body: { url: callbackUrl },
+            });
+          },
+        });
+
+        await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+          businessAccountId: credential.businessAccountId,
+          provider: "bricklink",
+          status: "registered",
+          endpoint: callbackUrl,
+          registeredAt: credential.webhookRegisteredAt ?? now,
+          lastCheckedAt: now,
+          clearError: true,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+          businessAccountId: credential.businessAccountId,
+          provider: "bricklink",
+          status: "error",
+          endpoint: callbackUrl,
+          error: message,
+        });
+      }
+    }
+  },
 });

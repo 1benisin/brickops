@@ -33,12 +33,14 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui";
-import type {
-  BricklinkPreviewResult,
-  BrickowlPreviewResult,
-  ImportSummary,
-} from "@/convex/inventory/validators";
+import type { ImportSummary, InventoryImportValidationResult } from "@/convex/inventory/validators";
 import { BrickLinkCredentialsForm } from "@/components/settings/BricklinkCredentialsForm";
 import { BrickOwlCredentialsForm } from "@/components/settings/BrickowlCredentialsForm";
 import { Switch } from "@/components/ui/switch";
@@ -72,19 +74,17 @@ export default function SettingsPage() {
   const syncSettings = useQuery(api.marketplaces.shared.queries.getSyncSettings);
   const isDevEnvironment = useQuery(api.orders.mocks.isDevelopmentEnvironment);
   const deleteAllOrders = useMutation(api.orders.mocks.deleteAllOrders);
-  const triggerMockWebhook = useMutation(api.marketplaces.bricklink.mockWebhooks.triggerMockWebhookNotification);
+  const triggerMockWebhook = useMutation(
+    api.marketplaces.bricklink.mockOrders.triggerMockWebhookNotification,
+  );
   const triggerMockBrickOwlOrder = useMutation(
     api.marketplaces.brickowl.mockOrders.triggerMockOrder,
   );
   const generateMockInventory = useMutation(api.inventory.testInventory.generateMockInventoryItems);
   const deleteAllInventory = useMutation(api.inventory.testInventory.deleteAllInventoryItems);
-  const previewBricklinkInventoryAction = useAction(
-    api.inventory.import.previewBricklinkInventory,
-  );
+  const validateBricklinkImportAction = useAction(api.inventory.import.validateBricklinkImport);
   const importBricklinkInventoryAction = useAction(api.inventory.import.importBricklinkInventory);
-  const previewBrickowlInventoryAction = useAction(
-    api.inventory.import.previewBrickowlInventory,
-  );
+  const validateBrickowlImportAction = useAction(api.inventory.import.validateBrickowlImport);
   const importBrickowlInventoryAction = useAction(api.inventory.import.importBrickowlInventory);
 
   const [firstName, setFirstName] = useState("");
@@ -122,18 +122,72 @@ export default function SettingsPage() {
   const [isGeneratingInventory, setIsGeneratingInventory] = useState(false);
   const [isDeletingInventory, setIsDeletingInventory] = useState(false);
   const [inventoryDeleteDialogOpen, setInventoryDeleteDialogOpen] = useState(false);
-  const [bricklinkPreview, setBricklinkPreview] = useState<BricklinkPreviewResult | null>(null);
   const [bricklinkImportResult, setBricklinkImportResult] = useState<ImportSummary | null>(null);
-  const [bricklinkPreviewError, setBricklinkPreviewError] = useState<string | null>(null);
   const [bricklinkImportError, setBricklinkImportError] = useState<string | null>(null);
-  const [isPreviewingBricklink, setIsPreviewingBricklink] = useState(false);
   const [isImportingBricklink, setIsImportingBricklink] = useState(false);
-  const [brickowlPreview, setBrickowlPreview] = useState<BrickowlPreviewResult | null>(null);
   const [brickowlImportResult, setBrickowlImportResult] = useState<ImportSummary | null>(null);
-  const [brickowlPreviewError, setBrickowlPreviewError] = useState<string | null>(null);
   const [brickowlImportError, setBrickowlImportError] = useState<string | null>(null);
-  const [isPreviewingBrickowl, setIsPreviewingBrickowl] = useState(false);
   const [isImportingBrickowl, setIsImportingBrickowl] = useState(false);
+  const [bricklinkValidation, setBricklinkValidation] =
+    useState<InventoryImportValidationResult | null>(null);
+  const [bricklinkValidationError, setBricklinkValidationError] = useState<string | null>(null);
+  const [isBricklinkConfirmationOpen, setIsBricklinkConfirmationOpen] = useState(false);
+  const [isPreparingBricklinkImport, setIsPreparingBricklinkImport] = useState(false);
+  const [brickowlValidation, setBrickowlValidation] =
+    useState<InventoryImportValidationResult | null>(null);
+  const [brickowlValidationError, setBrickowlValidationError] = useState<string | null>(null);
+  const [isBrickowlConfirmationOpen, setIsBrickowlConfirmationOpen] = useState(false);
+  const [isPreparingBrickowlImport, setIsPreparingBrickowlImport] = useState(false);
+
+  const bricklinkIssueCandidates = useMemo(
+    () =>
+      bricklinkValidation
+        ? bricklinkValidation.candidates.filter(
+            (candidate) => candidate.status !== "ready" && candidate.status !== "skip-existing",
+          )
+        : [],
+    [bricklinkValidation],
+  );
+
+  const bricklinkReadyCandidateIds = useMemo(
+    () =>
+      bricklinkValidation
+        ? bricklinkValidation.candidates
+            .filter((candidate) => candidate.status === "ready")
+            .map((candidate) => candidate.candidateId)
+        : [],
+    [bricklinkValidation],
+  );
+
+  const bricklinkReadyCount = bricklinkValidation?.readyCount ?? bricklinkReadyCandidateIds.length;
+  const bricklinkExistingCount = bricklinkValidation?.existingCount ?? 0;
+  const bricklinkIssueCount =
+    (bricklinkValidation?.invalidCount ?? 0) + (bricklinkValidation?.unavailableCount ?? 0);
+
+  const brickowlIssueCandidates = useMemo(
+    () =>
+      brickowlValidation
+        ? brickowlValidation.candidates.filter(
+            (candidate) => candidate.status !== "ready" && candidate.status !== "skip-existing",
+          )
+        : [],
+    [brickowlValidation],
+  );
+
+  const brickowlReadyCandidateIds = useMemo(
+    () =>
+      brickowlValidation
+        ? brickowlValidation.candidates
+            .filter((candidate) => candidate.status === "ready")
+            .map((candidate) => candidate.candidateId)
+        : [],
+    [brickowlValidation],
+  );
+
+  const brickowlReadyCount = brickowlValidation?.readyCount ?? brickowlReadyCandidateIds.length;
+  const brickowlExistingCount = brickowlValidation?.existingCount ?? 0;
+  const brickowlIssueCount =
+    (brickowlValidation?.invalidCount ?? 0) + (brickowlValidation?.unavailableCount ?? 0);
 
   const mockMarketplaceLabel = mockOrderMarketplace === "bricklink" ? "BrickLink" : "BrickOwl";
 
@@ -159,9 +213,7 @@ export default function SettingsPage() {
           : await triggerMockBrickOwlOrder(payload);
       setDevMessage({
         type: "success",
-        text:
-          result.message ||
-          `Mock ${mockMarketplaceLabel} order processed successfully`,
+        text: result.message || `Mock ${mockMarketplaceLabel} order processed successfully`,
       });
       setTimeout(() => setDevMessage(null), 5000);
     } catch (error) {
@@ -236,27 +288,45 @@ export default function SettingsPage() {
     }
   };
 
-  const handlePreviewBricklinkInventory = async () => {
-    setIsPreviewingBricklink(true);
-    setBricklinkPreviewError(null);
+  const handleImportBricklinkInventory = async () => {
+    setIsPreparingBricklinkImport(true);
+    setBricklinkImportError(null);
+    setBricklinkValidationError(null);
+    setBricklinkImportResult(null);
     try {
-      const result = await previewBricklinkInventoryAction({ limit: 20 });
-      setBricklinkPreview(result);
+      const validation = await validateBricklinkImportAction({});
+      setBricklinkValidation(validation);
+      setIsBricklinkConfirmationOpen(true);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to preview BrickLink inventory.";
-      setBricklinkPreviewError(message);
+        error instanceof Error ? error.message : "Failed to validate BrickLink inventory.";
+      setBricklinkValidationError(message);
     } finally {
-      setIsPreviewingBricklink(false);
+      setIsPreparingBricklinkImport(false);
     }
   };
 
-  const handleImportBricklinkInventory = async () => {
+  const handleConfirmBricklinkImport = async () => {
+    if (!bricklinkValidation) {
+      setBricklinkImportError("Validation data is no longer available. Please try again.");
+      return;
+    }
+
+    if (bricklinkReadyCandidateIds.length === 0) {
+      setBricklinkImportError("No valid BrickLink lots are ready to import.");
+      return;
+    }
+
     setIsImportingBricklink(true);
     setBricklinkImportError(null);
     try {
-      const result = await importBricklinkInventoryAction({});
+      const result = await importBricklinkInventoryAction({
+        candidateIds: bricklinkReadyCandidateIds,
+      });
       setBricklinkImportResult(result);
+      setIsBricklinkConfirmationOpen(false);
+      setBricklinkValidation(null);
+      setBricklinkValidationError(null);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to import BrickLink inventory.";
@@ -266,27 +336,63 @@ export default function SettingsPage() {
     }
   };
 
-  const handlePreviewBrickowlInventory = async () => {
-    setIsPreviewingBrickowl(true);
-    setBrickowlPreviewError(null);
-    try {
-      const result = await previewBrickowlInventoryAction({ limit: 20 });
-      setBrickowlPreview(result);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to preview BrickOwl inventory.";
-      setBrickowlPreviewError(message);
-    } finally {
-      setIsPreviewingBrickowl(false);
+  const handleBricklinkDialogChange = (open: boolean) => {
+    if (!open && isImportingBricklink) {
+      return;
+    }
+    setIsBricklinkConfirmationOpen(open);
+    if (!open) {
+      setBricklinkValidation(null);
     }
   };
 
+  const handleCancelBricklinkImport = () => {
+    if (isImportingBricklink) {
+      return;
+    }
+    setIsBricklinkConfirmationOpen(false);
+    setBricklinkValidation(null);
+  };
+
   const handleImportBrickowlInventory = async () => {
+    setIsPreparingBrickowlImport(true);
+    setBrickowlImportError(null);
+    setBrickowlValidationError(null);
+    setBrickowlImportResult(null);
+    try {
+      const validation = await validateBrickowlImportAction({});
+      setBrickowlValidation(validation);
+      setIsBrickowlConfirmationOpen(true);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to validate BrickOwl inventory.";
+      setBrickowlValidationError(message);
+    } finally {
+      setIsPreparingBrickowlImport(false);
+    }
+  };
+
+  const handleConfirmBrickowlImport = async () => {
+    if (!brickowlValidation) {
+      setBrickowlImportError("Validation data is no longer available. Please try again.");
+      return;
+    }
+
+    if (brickowlReadyCandidateIds.length === 0) {
+      setBrickowlImportError("No valid BrickOwl lots are ready to import.");
+      return;
+    }
+
     setIsImportingBrickowl(true);
     setBrickowlImportError(null);
     try {
-      const result = await importBrickowlInventoryAction({});
+      const result = await importBrickowlInventoryAction({
+        candidateIds: brickowlReadyCandidateIds,
+      });
       setBrickowlImportResult(result);
+      setIsBrickowlConfirmationOpen(false);
+      setBrickowlValidation(null);
+      setBrickowlValidationError(null);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to import BrickOwl inventory.";
@@ -294,6 +400,24 @@ export default function SettingsPage() {
     } finally {
       setIsImportingBrickowl(false);
     }
+  };
+
+  const handleBrickowlDialogChange = (open: boolean) => {
+    if (!open && isImportingBrickowl) {
+      return;
+    }
+    setIsBrickowlConfirmationOpen(open);
+    if (!open) {
+      setBrickowlValidation(null);
+    }
+  };
+
+  const handleCancelBrickowlImport = () => {
+    if (isImportingBrickowl) {
+      return;
+    }
+    setIsBrickowlConfirmationOpen(false);
+    setBrickowlValidation(null);
   };
 
   useEffect(() => {
@@ -870,10 +994,12 @@ export default function SettingsPage() {
               <div className="mt-6 space-y-4">
                 {/* Marketplace Inventory Import */}
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-foreground">Marketplace Inventory Import</h3>
+                  <h3 className="text-sm font-medium text-foreground">
+                    Marketplace Inventory Import
+                  </h3>
                   <p className="text-xs text-muted-foreground">
-                    Preview how many lots exist on each marketplace, then import any missing lots into
-                    BrickOps before enabling automatic sync.
+                    Preview how many lots exist on each marketplace, then import any missing lots
+                    into BrickOps before enabling automatic sync.
                   </p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
@@ -886,53 +1012,18 @@ export default function SettingsPage() {
                       <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
-                          variant="outline"
-                          onClick={handlePreviewBricklinkInventory}
-                          disabled={isPreviewingBricklink}
-                        >
-                          {isPreviewingBricklink ? "Previewing..." : "Preview"}
-                        </Button>
-                        <Button
-                          type="button"
                           onClick={handleImportBricklinkInventory}
-                          disabled={isImportingBricklink}
+                          disabled={isPreparingBricklinkImport || isImportingBricklink}
                         >
-                          {isImportingBricklink ? "Importing..." : "Import All Lots"}
+                          {isImportingBricklink
+                            ? "Importing..."
+                            : isPreparingBricklinkImport
+                              ? "Checking..."
+                              : "Import All Lots"}
                         </Button>
                       </div>
-                      {bricklinkPreviewError ? (
-                        <p className="text-xs text-destructive">{bricklinkPreviewError}</p>
-                      ) : null}
-                      {bricklinkPreview ? (
-                        <div className="space-y-2 text-xs text-muted-foreground">
-                          <p>
-                            Remote lots: {bricklinkPreview.totalRemote} • Previewed{" "}
-                            {bricklinkPreview.previewCount} • Existing in BrickOps:{" "}
-                            {
-                              bricklinkPreview.items.filter((item) => item.exists)
-                                .length
-                            }
-                          </p>
-                          <ul className="space-y-1">
-                            {bricklinkPreview.items.slice(0, 5).map((item) => (
-                              <li key={item.inventoryId} className="flex justify-between gap-2">
-                                <span className="truncate">
-                                  {item.partNumber} · {item.name}
-                                </span>
-                                <span
-                                  className={
-                                    item.exists ? "text-destructive" : "text-emerald-600"
-                                  }
-                                >
-                                  {item.exists ? "Already imported" : "New"}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                          {bricklinkPreview.items.length > 5 ? (
-                            <p>Showing the first 5 preview lots.</p>
-                          ) : null}
-                        </div>
+                      {bricklinkValidationError ? (
+                        <p className="text-xs text-destructive">{bricklinkValidationError}</p>
                       ) : null}
                       {bricklinkImportError ? (
                         <p className="text-xs text-destructive">{bricklinkImportError}</p>
@@ -942,7 +1033,8 @@ export default function SettingsPage() {
                           <p>
                             Imported {bricklinkImportResult.imported} new lots. Skipped existing:{" "}
                             {bricklinkImportResult.skippedExisting}. Skipped unavailable:{" "}
-                            {bricklinkImportResult.skippedUnavailable}.
+                            {bricklinkImportResult.skippedUnavailable}. Skipped invalid:{" "}
+                            {bricklinkImportResult.skippedInvalid}.
                           </p>
                           {bricklinkImportResult.errors.length > 0 ? (
                             <div>
@@ -957,9 +1049,7 @@ export default function SettingsPage() {
                                 ))}
                               </ul>
                               {bricklinkImportResult.errors.length > 5 ? (
-                                <p className="text-muted-foreground">
-                                  Showing the first 5 errors.
-                                </p>
+                                <p className="text-muted-foreground">Showing the first 5 errors.</p>
                               ) : null}
                             </div>
                           ) : null}
@@ -976,54 +1066,18 @@ export default function SettingsPage() {
                       <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
-                          variant="outline"
-                          onClick={handlePreviewBrickowlInventory}
-                          disabled={isPreviewingBrickowl}
-                        >
-                          {isPreviewingBrickowl ? "Previewing..." : "Preview"}
-                        </Button>
-                        <Button
-                          type="button"
                           onClick={handleImportBrickowlInventory}
-                          disabled={isImportingBrickowl}
+                          disabled={isPreparingBrickowlImport || isImportingBrickowl}
                         >
-                          {isImportingBrickowl ? "Importing..." : "Import All Lots"}
+                          {isImportingBrickowl
+                            ? "Importing..."
+                            : isPreparingBrickowlImport
+                              ? "Checking..."
+                              : "Import All Lots"}
                         </Button>
                       </div>
-                      {brickowlPreviewError ? (
-                        <p className="text-xs text-destructive">{brickowlPreviewError}</p>
-                      ) : null}
-                      {brickowlPreview ? (
-                        <div className="space-y-2 text-xs text-muted-foreground">
-                          <p>
-                            Remote lots: {brickowlPreview.totalRemote} • Previewed{" "}
-                            {brickowlPreview.previewCount} • Existing in BrickOps:{" "}
-                            {
-                              brickowlPreview.items.filter((item) => item.exists)
-                                .length
-                            }
-                          </p>
-                          <ul className="space-y-1">
-                            {brickowlPreview.items.slice(0, 5).map((item) => (
-                              <li key={`${item.boid}-${item.lotId ?? "preview"}`} className="flex justify-between gap-2">
-                                <span className="truncate">
-                                  {item.partNumber ?? item.boid} ·{" "}
-                                  {item.colorId ?? "color?"}
-                                </span>
-                                <span
-                                  className={
-                                    item.exists ? "text-destructive" : "text-emerald-600"
-                                  }
-                                >
-                                  {item.exists ? "Already imported" : "New"}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                          {brickowlPreview.items.length > 5 ? (
-                            <p>Showing the first 5 preview lots.</p>
-                          ) : null}
-                        </div>
+                      {brickowlValidationError ? (
+                        <p className="text-xs text-destructive">{brickowlValidationError}</p>
                       ) : null}
                       {brickowlImportError ? (
                         <p className="text-xs text-destructive">{brickowlImportError}</p>
@@ -1033,7 +1087,8 @@ export default function SettingsPage() {
                           <p>
                             Imported {brickowlImportResult.imported} new lots. Skipped existing:{" "}
                             {brickowlImportResult.skippedExisting}. Skipped unavailable:{" "}
-                            {brickowlImportResult.skippedUnavailable}.
+                            {brickowlImportResult.skippedUnavailable}. Skipped invalid:{" "}
+                            {brickowlImportResult.skippedInvalid}.
                           </p>
                           {brickowlImportResult.errors.length > 0 ? (
                             <div>
@@ -1048,9 +1103,7 @@ export default function SettingsPage() {
                                 ))}
                               </ul>
                               {brickowlImportResult.errors.length > 5 ? (
-                                <p className="text-muted-foreground">
-                                  Showing the first 5 errors.
-                                </p>
+                                <p className="text-muted-foreground">Showing the first 5 errors.</p>
                               ) : null}
                             </div>
                           ) : null}
@@ -1073,10 +1126,7 @@ export default function SettingsPage() {
                         setMockOrderMarketplace(value)
                       }
                     >
-                      <SelectTrigger
-                        className="w-40"
-                        data-testid="mock-order-marketplace-select"
-                      >
+                      <SelectTrigger className="w-40" data-testid="mock-order-marketplace-select">
                         <SelectValue placeholder="Select marketplace" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1243,6 +1293,229 @@ export default function SettingsPage() {
       </AlertDialog>
 
       {/* User Invite Dialog */}
+      <Dialog open={isBricklinkConfirmationOpen} onOpenChange={handleBricklinkDialogChange}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Confirm BrickLink Import</DialogTitle>
+            <DialogDescription>
+              Ready to import {bricklinkReadyCount} lot{bricklinkReadyCount === 1 ? "" : "s"}.{" "}
+              {bricklinkExistingCount} lot{bricklinkExistingCount === 1 ? "" : "s"} already exist.{" "}
+              {bricklinkIssueCount} lot{bricklinkIssueCount === 1 ? "" : "s"} have issues and will
+              be skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <span>
+                Import: <span className="font-semibold text-foreground">{bricklinkReadyCount}</span>
+              </span>
+              <span>
+                Existing:{" "}
+                <span className="font-semibold text-foreground">{bricklinkExistingCount}</span>
+              </span>
+              <span>
+                Issues:{" "}
+                <span className="font-semibold text-destructive">{bricklinkIssueCount}</span>
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              You can safely import the ready lots. Items with issues remain unchanged.
+            </p>
+            {bricklinkIssueCandidates.length > 0 ? (
+              <div className="max-h-56 overflow-y-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lot</TableHead>
+                      <TableHead>Part</TableHead>
+                      <TableHead>Color</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Issue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bricklinkIssueCandidates.map((candidate) => {
+                      const lotLabel = candidate.preview.lotId ?? candidate.sourceId;
+                      const lotHref = lotLabel
+                        ? `https://www.bricklink.com/v2/inventory_detail.page?invID=${encodeURIComponent(
+                            lotLabel,
+                          )}`
+                        : undefined;
+                      const partNumber = candidate.preview.partNumber ?? "—";
+                      const colorId = candidate.preview.colorId ?? "—";
+                      const location =
+                        candidate.preview.location && candidate.preview.location.trim().length > 0
+                          ? candidate.preview.location
+                          : "—";
+                      const issueMessage =
+                        candidate.issues.length > 0
+                          ? candidate.issues.map((issue) => issue.message).join("; ")
+                          : "Will be skipped.";
+                      return (
+                        <TableRow key={candidate.candidateId}>
+                          <TableCell className="font-medium">
+                            {lotHref ? (
+                              <a
+                                href={lotHref}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary underline"
+                              >
+                                {lotLabel}
+                              </a>
+                            ) : (
+                              lotLabel
+                            )}
+                          </TableCell>
+                          <TableCell>{partNumber}</TableCell>
+                          <TableCell>{colorId}</TableCell>
+                          <TableCell>{location}</TableCell>
+                          <TableCell className="max-w-xs text-xs text-destructive">
+                            {issueMessage}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : null}
+            {bricklinkImportError ? (
+              <p className="text-sm text-destructive">{bricklinkImportError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelBricklinkImport}
+              disabled={isImportingBricklink}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmBricklinkImport}
+              disabled={isImportingBricklink || bricklinkReadyCount === 0}
+            >
+              {isImportingBricklink
+                ? "Importing..."
+                : `Import ${bricklinkReadyCount} lot${bricklinkReadyCount === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isBrickowlConfirmationOpen} onOpenChange={handleBrickowlDialogChange}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Confirm BrickOwl Import</DialogTitle>
+            <DialogDescription>
+              Ready to import {brickowlReadyCount} lot{brickowlReadyCount === 1 ? "" : "s"}.{" "}
+              {brickowlExistingCount} lot{brickowlExistingCount === 1 ? "" : "s"} already exist.{" "}
+              {brickowlIssueCount} lot{brickowlIssueCount === 1 ? "" : "s"} have issues and will be
+              skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <span>
+                Import: <span className="font-semibold text-foreground">{brickowlReadyCount}</span>
+              </span>
+              <span>
+                Existing:{" "}
+                <span className="font-semibold text-foreground">{brickowlExistingCount}</span>
+              </span>
+              <span>
+                Issues: <span className="font-semibold text-destructive">{brickowlIssueCount}</span>
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              You can safely import the ready lots. Items with issues will remain untouched.
+            </p>
+            {brickowlIssueCandidates.length > 0 ? (
+              <div className="max-h-56 overflow-y-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lot</TableHead>
+                      <TableHead>Part</TableHead>
+                      <TableHead>Color</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Issue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {brickowlIssueCandidates.map((candidate) => {
+                      const lotLabel = candidate.preview.lotId ?? candidate.sourceId;
+                      const lotHref = lotLabel
+                        ? `https://www.brickowl.com/search/inventory?query=${encodeURIComponent(
+                            lotLabel,
+                          )}`
+                        : undefined;
+                      const partNumber = candidate.preview.partNumber ?? "—";
+                      const colorId = candidate.preview.colorId ?? "—";
+                      const location =
+                        candidate.preview.location && candidate.preview.location.trim().length > 0
+                          ? candidate.preview.location
+                          : "—";
+                      const issueMessage =
+                        candidate.issues.length > 0
+                          ? candidate.issues.map((issue) => issue.message).join("; ")
+                          : "Will be skipped.";
+                      return (
+                        <TableRow key={candidate.candidateId}>
+                          <TableCell className="font-medium">
+                            {lotHref ? (
+                              <a
+                                href={lotHref}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary underline"
+                              >
+                                {lotLabel}
+                              </a>
+                            ) : (
+                              lotLabel
+                            )}
+                          </TableCell>
+                          <TableCell>{partNumber}</TableCell>
+                          <TableCell>{colorId}</TableCell>
+                          <TableCell>{location}</TableCell>
+                          <TableCell className="max-w-xs text-xs text-destructive">
+                            {issueMessage}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : null}
+            {brickowlImportError ? (
+              <p className="text-sm text-destructive">{brickowlImportError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelBrickowlImport}
+              disabled={isImportingBrickowl}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmBrickowlImport}
+              disabled={isImportingBrickowl || brickowlReadyCount === 0}
+            >
+              {isImportingBrickowl
+                ? "Importing..."
+                : `Import ${brickowlReadyCount} lot${brickowlReadyCount === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>

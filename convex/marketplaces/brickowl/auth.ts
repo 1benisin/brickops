@@ -41,12 +41,15 @@ export function validateApiKey(apiKey: string): boolean {
  * @param apiKey User's BrickOwl API key
  * @param isPostRequest Whether this is a POST request (affects content type)
  * @returns Headers object (API key is NOT in headers - it goes in query params for GET or body for POST)
- * 
+ *
  * NOTE: BrickOwl API authentication:
  * - GET requests: API key goes in query parameter `key=API_KEY`
  * - POST requests: API key goes in form-encoded body with `key=API_KEY`
  */
-export function buildAuthHeaders(apiKey: string, isPostRequest: boolean = false): Record<string, string> {
+export function buildAuthHeaders(
+  apiKey: string,
+  isPostRequest: boolean = false,
+): Record<string, string> {
   if (!validateApiKey(apiKey)) {
     throw new Error("Invalid BrickOwl API key format");
   }

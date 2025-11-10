@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { action, internalAction } from "../../_generated/server";
 import { ConvexError, v } from "convex/values";
 import { api, internal } from "../../_generated/api";
-import { createBrickOwlStoreClient } from "../shared/helpers";
+import { setOrderNotifyTarget } from "./notifications";
 
 const DEFAULT_VERIFY_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -53,8 +53,6 @@ export const registerWebhook = action({
       throw new ConvexError("BrickOwl credentials not configured");
     }
 
-    const client = await createBrickOwlStoreClient(ctx, businessAccountId);
-
     await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
       businessAccountId,
       provider: "brickowl",
@@ -63,7 +61,7 @@ export const registerWebhook = action({
     });
 
     try {
-      await client.setOrderNotifyTarget(target);
+      await setOrderNotifyTarget(ctx, { businessAccountId, target });
 
       await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
         businessAccountId,
@@ -114,8 +112,6 @@ export const unregisterWebhook = action({
       throw new ConvexError("BrickOwl credentials not configured");
     }
 
-    const client = await createBrickOwlStoreClient(ctx, businessAccountId);
-
     await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
       businessAccountId,
       provider: "brickowl",
@@ -124,7 +120,7 @@ export const unregisterWebhook = action({
     });
 
     try {
-      await client.setOrderNotifyTarget(null);
+      await setOrderNotifyTarget(ctx, { businessAccountId, target: null });
 
       await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
         businessAccountId,
@@ -187,8 +183,10 @@ export const ensureWebhooks = internalAction({
       }
 
       try {
-        const client = await createBrickOwlStoreClient(ctx, credential.businessAccountId);
-        await client.setOrderNotifyTarget(target);
+        await setOrderNotifyTarget(ctx, {
+          businessAccountId: credential.businessAccountId,
+          target,
+        });
 
         await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
           businessAccountId: credential.businessAccountId,

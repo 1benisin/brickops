@@ -45,7 +45,7 @@ crons.interval(
 crons.interval(
   "verify-bricklink-webhook",
   { hours: 6 },
-  internal.marketplaces.bricklink.actions.ensureWebhooks,
+  internal.marketplaces.bricklink.webhook.ensureWebhooks,
   {},
 );
 

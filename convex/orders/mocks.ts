@@ -7,12 +7,12 @@
 
 import { mutation, query } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "../_generated/api";
 import type {
   BricklinkOrderResponse,
   BricklinkOrderItemResponse,
-} from "../marketplaces/bricklink/storeClient";
+} from "../marketplaces/bricklink/schema";
 import { requireActiveUser } from "../users/helpers";
 import type { Id } from "../_generated/dataModel";
 import {
@@ -573,9 +573,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     // Safety check: only allow in development
-    assertDevelopmentEnvironment(
-      "Test orders can only be created in development environments",
-    );
+    assertDevelopmentEnvironment("Test orders can only be created in development environments");
 
     // Get userId from auth context
     const { userId } = await requireActiveUser(ctx);
@@ -621,9 +619,7 @@ export const getOrderItems = query({
     orderId: v.string(),
   },
   handler: async (ctx, args) => {
-    assertDevelopmentEnvironment(
-      "Test order queries can only be used in development environments",
-    );
+    assertDevelopmentEnvironment("Test order queries can only be used in development environments");
 
     // Query items from database
     const items = await ctx.db
@@ -634,26 +630,51 @@ export const getOrderItems = query({
       .collect();
 
     // Convert back to BricklinkOrderItemResponse format (same as API)
-    const orderItems: BricklinkOrderItemResponse[] = items.map((item) => ({
-      inventory_id: item.inventoryId,
-      item: {
-        no: item.itemNo,
-        name: item.itemName,
-        type: item.itemType,
-        category_id: item.itemCategoryId,
-      },
-      color_id: item.colorId,
-      color_name: item.colorName,
-      quantity: item.quantity,
-      new_or_used: item.newOrUsed as "N" | "U",
-      completeness: item.completeness as "C" | "B" | "S" | undefined,
-      unit_price: item.unitPrice.toFixed(2),
-      unit_price_final: item.unitPriceFinal.toFixed(2),
-      currency_code: item.currencyCode,
-      remarks: item.remarks,
-      description: item.description,
-      weight: item.weight?.toFixed(2),
-    }));
+    const orderItems: BricklinkOrderItemResponse[] = items.map((item) => {
+      if (item.provider !== "bricklink") {
+        throw new ConvexError("Order item provider does not match Bricklink");
+      }
+
+      if (
+        item.itemName === undefined ||
+        item.itemType === undefined ||
+        item.colorId === undefined ||
+        item.unitPrice === undefined ||
+        item.unitPriceFinal === undefined ||
+        item.currencyCode === undefined ||
+        item.condition === undefined
+      ) {
+        throw new ConvexError("Order item is missing required Bricklink fields");
+      }
+
+      const inventoryId =
+        item.providerItemId !== undefined && Number.isFinite(Number(item.providerItemId))
+          ? Number(item.providerItemId)
+          : undefined;
+
+      const newOrUsed = item.condition === "new" ? "N" : "U";
+
+      return {
+        inventory_id: inventoryId,
+        item: {
+          no: item.itemNo,
+          name: item.itemName,
+          type: item.itemType,
+          category_id: item.itemCategoryId,
+        },
+        color_id: item.colorId,
+        color_name: item.colorName,
+        quantity: item.quantity,
+        new_or_used: newOrUsed,
+        completeness: item.completeness as "C" | "B" | "S" | undefined,
+        unit_price: item.unitPrice.toFixed(2),
+        unit_price_final: item.unitPriceFinal.toFixed(2),
+        currency_code: item.currencyCode,
+        remarks: item.remarks,
+        description: item.description,
+        weight: item.weight !== undefined ? item.weight.toFixed(2) : undefined,
+      };
+    });
 
     // Return in batches format (nested arrays, single batch)
     return [orderItems];
@@ -669,9 +690,7 @@ export const listTestOrders = query({
     businessAccountId: v.id("businessAccounts"),
   },
   handler: async (ctx, args) => {
-    assertDevelopmentEnvironment(
-      "Test order queries can only be used in development environments",
-    );
+    assertDevelopmentEnvironment("Test order queries can only be used in development environments");
 
     const orders = await ctx.db
       .query("orders")
@@ -712,9 +731,7 @@ export const createBulkTestOrders = mutation({
   args: {},
   handler: async (ctx) => {
     // Safety check: only allow in development
-    assertDevelopmentEnvironment(
-      "Test orders can only be created in development environments",
-    );
+    assertDevelopmentEnvironment("Test orders can only be created in development environments");
 
     // Get businessAccountId and userId from auth context
     const { businessAccountId, userId } = await requireActiveUser(ctx);
@@ -774,9 +791,7 @@ export const deleteAllOrders = mutation({
   args: {},
   handler: async (ctx) => {
     // Safety check: only allow in development
-    assertDevelopmentEnvironment(
-      "Order deletion can only be used in development environments",
-    );
+    assertDevelopmentEnvironment("Order deletion can only be used in development environments");
 
     // Get businessAccountId from auth context
     const { businessAccountId } = await requireActiveUser(ctx);

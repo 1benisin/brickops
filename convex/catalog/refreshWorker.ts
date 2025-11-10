@@ -3,8 +3,15 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import { catalogClient } from "../marketplaces/bricklink/catalogClient";
+import {
+  fetchBricklinkCategory,
+  fetchBricklinkColor,
+  fetchBricklinkPart,
+  fetchBricklinkPartColors,
+  fetchBricklinkPriceGuide,
+} from "../marketplaces/bricklink/catalogClient";
 import { RebrickableClient, type RebrickablePart } from "../api/rebrickable";
+import { takeRateLimitToken } from "../ratelimit/helpers";
 
 /**
  * Query to get pending outbox messages ready for processing
@@ -193,8 +200,9 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
     }
 
     // Take rate limit token
-    const token = await ctx.runMutation(internal.ratelimit.mutations.takeToken, {
-      bucket: "bricklink:global",
+    const token = await takeRateLimitToken(ctx, {
+      bucket: "brickopsAdmin",
+      provider: "bricklink",
     });
 
     if (!token.granted) {
@@ -222,10 +230,13 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
       }
 
       // Fetch from Bricklink and merge external IDs
-      const partData = await catalogClient.getRefreshedPart(message.primaryKey, externalIds);
+      const partData = await fetchBricklinkPart(ctx, {
+        itemNo: message.primaryKey,
+        externalIds,
+      });
       await ctx.runMutation(internal.catalog.mutations.upsertPart, { data: partData });
     } else if (message.tableName === "partColors") {
-      const partColorsData = await catalogClient.getRefreshedPartColors(message.primaryKey);
+      const partColorsData = await fetchBricklinkPartColors(ctx, { itemNo: message.primaryKey });
       await ctx.runMutation(internal.catalog.mutations.upsertPartColors, {
         data: partColorsData,
       });
@@ -233,10 +244,11 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
       if (!message.secondaryKey) {
         throw new Error("secondaryKey (colorId) required for partPrices");
       }
-      const priceGuides = await catalogClient.getRefreshedPriceGuide(
-        message.primaryKey,
-        parseInt(message.secondaryKey),
-      );
+      const colorId = Number.parseInt(message.secondaryKey, 10);
+      const priceGuides = await fetchBricklinkPriceGuide(ctx, {
+        itemNo: message.primaryKey,
+        colorId,
+      });
 
       // Upsert all 4 price guide variants
       await ctx.runMutation(internal.catalog.mutations.upsertPriceGuide, {
@@ -248,12 +260,14 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
         ],
       });
     } else if (message.tableName === "colors") {
-      const colorData = await catalogClient.getRefreshedColor(parseInt(message.primaryKey));
+      const colorId = Number.parseInt(message.primaryKey, 10);
+      const colorData = await fetchBricklinkColor(ctx, { colorId });
       await ctx.runMutation(internal.marketplaces.bricklink.dataRefresher.upsertColor, {
         data: colorData,
       });
     } else if (message.tableName === "categories") {
-      const categoryData = await catalogClient.getRefreshedCategory(parseInt(message.primaryKey));
+      const categoryId = Number.parseInt(message.primaryKey, 10);
+      const categoryData = await fetchBricklinkCategory(ctx, { categoryId });
       await ctx.runMutation(internal.catalog.mutations.upsertCategory, {
         data: categoryData,
       });

@@ -77,7 +77,7 @@ describe("External API validation", () => {
     expect(events).toEqual(
       expect.arrayContaining([
         "external.brickognize.health",
-        "external.bricklink.health",
+        "external.bricklink.catalog.health",
         "external.brickowl.health",
       ]),
     );

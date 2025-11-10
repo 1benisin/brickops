@@ -3,7 +3,7 @@ import { ExternalHttpClient, RequestOptions, RequestResult } from "../lib/extern
 import { RateLimitConfig } from "../lib/external/httpClient";
 import { recordMetric } from "../lib/external/metrics";
 import { HealthCheckResult, normalizeApiError } from "../lib/external/types";
-import { getRateLimitConfig } from "../marketplaces/shared/rateLimitConfig";
+import { getRateLimitConfig } from "../ratelimit/rateLimitConfig";
 
 const BASE_URL = "https://rebrickable.com/api/v3";
 const HEALTH_ENDPOINT = "/lego/colors/";
@@ -120,9 +120,7 @@ export class RebrickableClient {
    * Returns a map of BrickLink ID -> RebrickablePart[]
    * Uses bulk lookup when possible to minimize API calls
    */
-  async getPartsByBricklinkIds(
-    bricklinkIds: string[],
-  ): Promise<Map<string, RebrickablePart[]>> {
+  async getPartsByBricklinkIds(bricklinkIds: string[]): Promise<Map<string, RebrickablePart[]>> {
     const mapping = new Map<string, RebrickablePart[]>();
     if (bricklinkIds.length === 0) {
       return mapping;
@@ -259,4 +257,3 @@ export class RebrickableClient {
     }
   }
 }
-
