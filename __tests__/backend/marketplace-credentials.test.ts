@@ -1,8 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { saveCredentials, getConfiguredProviders } from "@/convex/marketplaces/shared/mutations";
-import { getSyncSettings } from "@/convex/marketplaces/shared/queries";
+import {
+  getConfiguredProviders,
+  getSyncSettings,
+  saveCredentials,
+} from "@/convex/marketplaces/shared/credentials";
 import * as encryption from "@/convex/lib/encryption";
 import {
   buildSeedData,
@@ -113,4 +116,3 @@ describe("marketplace credential defaults", () => {
     expect(configuredProviders).not.toContain("brickowl");
   });
 });
-

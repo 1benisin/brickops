@@ -4,7 +4,7 @@ import { randomHex } from "../lib/webcrypto";
 import { ConvexError, v } from "convex/values";
 import { checkAndConsumeRateLimitDirect } from "../lib/dbRateLimiter";
 import { api } from "../_generated/api";
-import { requireActiveUser } from "./helpers";
+import { requireActiveUser } from "./authorization";
 
 export const updateProfile = mutation({
   args: {

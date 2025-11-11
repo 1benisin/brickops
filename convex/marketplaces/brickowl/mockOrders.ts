@@ -1,6 +1,6 @@
 import { mutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { requireActiveUser } from "../../users/helpers";
+import { requireActiveUser } from "../../users/authorization";
 import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
@@ -40,8 +40,7 @@ async function createMockBrickOwlOrder(
   const items: Record<string, unknown>[] = [];
 
   for (let i = 0; i < itemCount && i < inventoryItems.length; i++) {
-    const inventoryItem: MockInventoryItem =
-      inventoryItems[i % inventoryItems.length];
+    const inventoryItem: MockInventoryItem = inventoryItems[i % inventoryItems.length];
     const quantity = Math.floor(Math.random() * 10) + 1;
     const basePrice = 0.5 + Math.random() * 4.5;
 
@@ -79,14 +78,12 @@ async function createMockBrickOwlOrder(
 
   const subtotal = items.reduce((sum, item) => {
     const price = typeof item.price === "number" ? item.price : Number(item.price);
-    const quantity =
-      typeof item.quantity === "number" ? item.quantity : Number(item.quantity);
+    const quantity = typeof item.quantity === "number" ? item.quantity : Number(item.quantity);
     return sum + price * quantity;
   }, 0);
   const shippingTotal = 5;
   const totalQuantity = items.reduce((sum, item) => {
-    const quantity =
-      typeof item.quantity === "number" ? item.quantity : Number(item.quantity);
+    const quantity = typeof item.quantity === "number" ? item.quantity : Number(item.quantity);
     return sum + quantity;
   }, 0);
 
@@ -169,9 +166,7 @@ export const triggerMockOrder = mutation({
       });
 
       const orderId =
-        typeof orderData.order_id === "string"
-          ? orderData.order_id
-          : String(orderData.order_id);
+        typeof orderData.order_id === "string" ? orderData.order_id : String(orderData.order_id);
 
       ordersCreated.push({
         orderId,
@@ -179,10 +174,7 @@ export const triggerMockOrder = mutation({
       });
     }
 
-    const totalItems = ordersCreated.reduce(
-      (sum, order) => sum + order.itemCount,
-      0,
-    );
+    const totalItems = ordersCreated.reduce((sum, order) => sum + order.itemCount, 0);
 
     return {
       success: true,
@@ -195,4 +187,3 @@ export const triggerMockOrder = mutation({
     };
   },
 });
-

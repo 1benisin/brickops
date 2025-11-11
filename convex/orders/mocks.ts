@@ -7,13 +7,10 @@
 
 import { mutation, query } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "../_generated/api";
-import type {
-  BricklinkOrderResponse,
-  BricklinkOrderItemResponse,
-} from "../marketplaces/bricklink/storeClient";
-import { requireActiveUser } from "../users/helpers";
+import type { BLOrderResponse, BLOrderItemResponse } from "../marketplaces/bricklink/orders/schema";
+import { requireActiveUser } from "../users/authorization";
 import type { Id } from "../_generated/dataModel";
 import {
   assertDevelopmentEnvironment,
@@ -32,8 +29,8 @@ function _createTestOrderData(overrides?: {
   status?: string;
   itemCount?: number;
 }): {
-  orderData: BricklinkOrderResponse;
-  orderItemsData: BricklinkOrderItemResponse[][];
+  orderData: BLOrderResponse;
+  orderItemsData: BLOrderItemResponse[][];
 } {
   const orderId = overrides?.orderId || `TEST-${Date.now()}`;
   const now = new Date().toISOString();
@@ -44,7 +41,7 @@ function _createTestOrderData(overrides?: {
   const itemCount = overrides?.itemCount || 3;
 
   // Create realistic test order
-  const orderData: BricklinkOrderResponse = {
+  const orderData: BLOrderResponse = {
     order_id: orderId,
     date_ordered: now,
     date_status_changed: now,
@@ -96,7 +93,7 @@ function _createTestOrderData(overrides?: {
   };
 
   // Create test order items with variety
-  const items: BricklinkOrderItemResponse[] = [];
+  const items: BLOrderItemResponse[] = [];
 
   // Realistic LEGO parts for variety
   const testParts = [
@@ -146,7 +143,7 @@ function _createTestOrderData(overrides?: {
 
   // Bricklink returns items in batches (nested arrays)
   // We'll put all items in a single batch
-  const orderItemsData: BricklinkOrderItemResponse[][] = [items];
+  const orderItemsData: BLOrderItemResponse[][] = [items];
 
   return { orderData, orderItemsData };
 }
@@ -394,8 +391,8 @@ async function createTestOrderDataWithParts(
     itemCount?: number;
   },
 ): Promise<{
-  orderData: BricklinkOrderResponse;
-  orderItemsData: BricklinkOrderItemResponse[][];
+  orderData: BLOrderResponse;
+  orderItemsData: BLOrderItemResponse[][];
 }> {
   const orderId = overrides?.orderId || `TEST-${Date.now()}`;
   const now = new Date().toISOString();
@@ -421,7 +418,7 @@ async function createTestOrderDataWithParts(
   }
 
   // Create realistic test order
-  const orderData: BricklinkOrderResponse = {
+  const orderData: BLOrderResponse = {
     order_id: orderId,
     date_ordered: now,
     date_status_changed: now,
@@ -474,7 +471,7 @@ async function createTestOrderDataWithParts(
 
   // Create test order items from existing inventory items
   // This ensures we have matching inventory items for picking
-  const items: BricklinkOrderItemResponse[] = [];
+  const items: BLOrderItemResponse[] = [];
 
   for (let i = 0; i < itemCount && i < inventoryItems.length; i++) {
     const inventoryItem = inventoryItems[i % inventoryItems.length];
@@ -534,7 +531,7 @@ async function createTestOrderDataWithParts(
   orderData.cost.grand_total = (subtotal + 5.0).toFixed(2);
 
   // Bricklink returns items in batches (nested arrays)
-  const orderItemsData: BricklinkOrderItemResponse[][] = [items];
+  const orderItemsData: BLOrderItemResponse[][] = [items];
 
   return { orderData, orderItemsData };
 }
@@ -573,9 +570,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     // Safety check: only allow in development
-    assertDevelopmentEnvironment(
-      "Test orders can only be created in development environments",
-    );
+    assertDevelopmentEnvironment("Test orders can only be created in development environments");
 
     // Get userId from auth context
     const { userId } = await requireActiveUser(ctx);
@@ -621,9 +616,7 @@ export const getOrderItems = query({
     orderId: v.string(),
   },
   handler: async (ctx, args) => {
-    assertDevelopmentEnvironment(
-      "Test order queries can only be used in development environments",
-    );
+    assertDevelopmentEnvironment("Test order queries can only be used in development environments");
 
     // Query items from database
     const items = await ctx.db
@@ -633,27 +626,52 @@ export const getOrderItems = query({
       )
       .collect();
 
-    // Convert back to BricklinkOrderItemResponse format (same as API)
-    const orderItems: BricklinkOrderItemResponse[] = items.map((item) => ({
-      inventory_id: item.inventoryId,
-      item: {
-        no: item.itemNo,
-        name: item.itemName,
-        type: item.itemType,
-        category_id: item.itemCategoryId,
-      },
-      color_id: item.colorId,
-      color_name: item.colorName,
-      quantity: item.quantity,
-      new_or_used: item.newOrUsed as "N" | "U",
-      completeness: item.completeness as "C" | "B" | "S" | undefined,
-      unit_price: item.unitPrice.toFixed(2),
-      unit_price_final: item.unitPriceFinal.toFixed(2),
-      currency_code: item.currencyCode,
-      remarks: item.remarks,
-      description: item.description,
-      weight: item.weight?.toFixed(2),
-    }));
+    // Convert back to BLOrderItemResponse format (same as API)
+    const orderItems: BLOrderItemResponse[] = items.map((item) => {
+      if (item.provider !== "bricklink") {
+        throw new ConvexError("Order item provider does not match Bricklink");
+      }
+
+      if (
+        item.itemName === undefined ||
+        item.itemType === undefined ||
+        item.colorId === undefined ||
+        item.unitPrice === undefined ||
+        item.unitPriceFinal === undefined ||
+        item.currencyCode === undefined ||
+        item.condition === undefined
+      ) {
+        throw new ConvexError("Order item is missing required Bricklink fields");
+      }
+
+      const inventoryId =
+        item.providerItemId !== undefined && Number.isFinite(Number(item.providerItemId))
+          ? Number(item.providerItemId)
+          : undefined;
+
+      const newOrUsed = item.condition === "new" ? "N" : "U";
+
+      return {
+        inventory_id: inventoryId,
+        item: {
+          no: item.itemNo,
+          name: item.itemName,
+          type: item.itemType,
+          category_id: item.itemCategoryId,
+        },
+        color_id: item.colorId,
+        color_name: item.colorName,
+        quantity: item.quantity,
+        new_or_used: newOrUsed,
+        completeness: item.completeness as "C" | "B" | "S" | undefined,
+        unit_price: item.unitPrice.toFixed(2),
+        unit_price_final: item.unitPriceFinal.toFixed(2),
+        currency_code: item.currencyCode,
+        remarks: item.remarks,
+        description: item.description,
+        weight: item.weight !== undefined ? item.weight.toFixed(2) : undefined,
+      };
+    });
 
     // Return in batches format (nested arrays, single batch)
     return [orderItems];
@@ -669,9 +687,7 @@ export const listTestOrders = query({
     businessAccountId: v.id("businessAccounts"),
   },
   handler: async (ctx, args) => {
-    assertDevelopmentEnvironment(
-      "Test order queries can only be used in development environments",
-    );
+    assertDevelopmentEnvironment("Test order queries can only be used in development environments");
 
     const orders = await ctx.db
       .query("orders")
@@ -712,9 +728,7 @@ export const createBulkTestOrders = mutation({
   args: {},
   handler: async (ctx) => {
     // Safety check: only allow in development
-    assertDevelopmentEnvironment(
-      "Test orders can only be created in development environments",
-    );
+    assertDevelopmentEnvironment("Test orders can only be created in development environments");
 
     // Get businessAccountId and userId from auth context
     const { businessAccountId, userId } = await requireActiveUser(ctx);
@@ -774,9 +788,7 @@ export const deleteAllOrders = mutation({
   args: {},
   handler: async (ctx) => {
     // Safety check: only allow in development
-    assertDevelopmentEnvironment(
-      "Order deletion can only be used in development environments",
-    );
+    assertDevelopmentEnvironment("Order deletion can only be used in development environments");
 
     // Get businessAccountId from auth context
     const { businessAccountId } = await requireActiveUser(ctx);

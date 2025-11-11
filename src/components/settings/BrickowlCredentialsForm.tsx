@@ -10,13 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Check, X, Loader2, AlertCircle } from "lucide-react";
 
 export function BrickOwlCredentialsForm() {
-  const status = useQuery(api.marketplaces.shared.queries.getCredentialStatus, {
+  const status = useQuery(api.marketplaces.shared.credentials.getCredentialStatus, {
     provider: "brickowl",
   });
 
-  const saveCredentials = useMutation(api.marketplaces.shared.mutations.saveCredentials);
-  const revokeCredentials = useMutation(api.marketplaces.shared.mutations.revokeCredentials);
-  const updateSyncSettings = useMutation(api.marketplaces.shared.mutations.updateSyncSettings);
+  const saveCredentials = useMutation(api.marketplaces.shared.credentials.saveCredentials);
+  const revokeCredentials = useMutation(api.marketplaces.shared.credentials.revokeCredentials);
+  const updateSyncSettings = useMutation(api.marketplaces.shared.credentials.updateSyncSettings);
   const testConnection = useAction(api.marketplaces.shared.actions.testConnection);
   const registerWebhookAction = useAction(api.marketplaces.brickowl.actions.registerWebhook);
   const unregisterWebhookAction = useAction(api.marketplaces.brickowl.actions.unregisterWebhook);
@@ -143,8 +143,7 @@ export function BrickOwlCredentialsForm() {
         await updateSyncSettings({ provider: "brickowl", ordersSyncEnabled: next });
         setSuccess(`BrickOwl order sync ${next ? "enabled" : "paused"}.`);
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Unable to update order sync setting";
+        const message = err instanceof Error ? err.message : "Unable to update order sync setting";
         setError(message);
       }
     });
@@ -234,17 +233,9 @@ export function BrickOwlCredentialsForm() {
           </Badge>
         );
       case "disabled":
-        return (
-          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
-            Disabled
-          </Badge>
-        );
+        return <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">Disabled</Badge>;
       default:
-        return (
-          <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">
-            Not Configured
-          </Badge>
-        );
+        return <Badge className="gap-1.5 border-0 bg-gray-200 text-gray-700">Not Configured</Badge>;
     }
   };
 
@@ -327,7 +318,10 @@ export function BrickOwlCredentialsForm() {
               {renderWebhookStatusBadge()}
             </div>
             <div className="space-y-2">
-              <label htmlFor="brickowl-webhook-target" className="text-xs font-medium text-foreground">
+              <label
+                htmlFor="brickowl-webhook-target"
+                className="text-xs font-medium text-foreground"
+              >
                 Notification Target (public IP or relay URL)
               </label>
               <Input
@@ -339,7 +333,8 @@ export function BrickOwlCredentialsForm() {
               />
               <p className="text-[11px] leading-relaxed text-muted-foreground">
                 Leave blank to use the default <code>BRICKOWL_WEBHOOK_TARGET</code> environment
-                variable. BrickOwl sends GET requests to <code>http://IP:42500/brick_owl_order_notify</code>.
+                variable. BrickOwl sends GET requests to{" "}
+                <code>http://IP:42500/brick_owl_order_notify</code>.
               </p>
             </div>
             {webhookEndpoint && (

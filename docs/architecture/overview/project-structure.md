@@ -5,13 +5,17 @@ brickops/
 ├── convex/                         # Convex backend functions and schema
 │   ├── marketplaces/               # Marketplace integrations (Stories 2.3, 3.1-3.3)
 │   │   ├── bricklink/              # BrickLink marketplace integration
-│   │   │   ├── catalogClient.ts    # Catalog queries (BrickOps credentials)
-│   │   │   ├── bricklinkMappers.ts # Catalog data mappers
-│   │   │   ├── dataRefresher.ts    # Catalog refresh jobs
+│   │   │   ├── catalog/            # BrickLink catalog domain helpers
+│   │   │   │   ├── actions.ts      # BrickLink catalog API actions
+│   │   │   │   ├── client.ts       # Stateless catalog helpers (BrickOps credentials)
+│   │   │   │   ├── refresh/        # Catalog refresh mutations/background jobs
+│   │   │   │   │   └── index.ts    # Queue scheduling and cleanup
+│   │   │   │   ├── schema.ts       # Catalog validators and response types
+│   │   │   │   └── transformers.ts # Catalog data mappers
 │   │   │   ├── notifications.ts   # BrickLink notifications processing
 │   │   │   ├── oauth.ts            # OAuth 1.0a signing helpers
 │   │   │   ├── storeClient.ts      # Store client (inventory + orders, user credentials)
-│   │   │   ├── storeMappers.ts     # Store data mappers
+│   │   │   ├── inventory/transformers.ts # BrickLink inventory data mappers
 │   │   │   └── webhook.ts          # Webhook endpoint handlers
 │   │   ├── brickowl/               # BrickOwl marketplace integration
 │   │   │   ├── auth.ts             # API key authentication helpers
@@ -23,7 +27,6 @@ brickops/
 │   │       ├── migrations.ts       # Marketplace migrations
 │   │       ├── mutations.ts        # Marketplace write operations
 │   │       ├── queries.ts          # Marketplace read operations
-│   │       ├── rateLimitConfig.ts  # Rate limit configurations per provider
 │   │       ├── schema.ts           # Marketplace table schemas
 │   │       └── types.ts            # Shared TypeScript interfaces
 │   ├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
@@ -47,7 +50,7 @@ brickops/
 │   │   ├── sync.ts                 # Marketplace sync orchestration
 │   │   ├── syncWorker.ts           # Background sync processing
 │   │   ├── types.ts                # Inventory types
-│   │   ├── testInventory.ts        # Inventory test utilities
+│   │   ├── mocks.ts                # Inventory test utilities
 │   │   └── validators.ts           # Inventory input validation
 │   ├── orders/                     # Orders domain functions
 │   │   ├── ingestion.ts           # Order ingestion from marketplaces
@@ -56,9 +59,14 @@ brickops/
 │   │   ├── schema.ts               # Order table schemas
 │   │   └── mocks.ts                # Order test mocks
 │   ├── ratelimit/                  # Rate limiting domain
+│   │   ├── helpers.ts              # Helper for consuming shared rate limit tokens
 │   │   ├── mutations.ts            # Rate limit write operations
-│   │   ├── rateLimitConfig.ts      # Rate limit configuration
+│   │   ├── rateLimitConfig.ts      # Provider validators and configuration
 │   │   └── schema.ts               # Rate limit table schemas
+
+Rate limit buckets map to business account IDs by default. Use the dedicated
+`brickopsAdmin` bucket only for global BrickOps workloads and call
+`takeRateLimitToken` when acquiring tokens inside actions.
 │   ├── users/                      # User management domain (Story 1.3)
 │   │   ├── actions.ts              # User-related actions (email, invitations)
 │   │   ├── helpers.ts              # User business logic and RBAC

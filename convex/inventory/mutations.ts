@@ -6,13 +6,13 @@ import {
   now,
   requireUser,
   assertBusinessMembership,
-  requireOwnerRole,
   getNextSeqForItem,
   getCurrentAvailableFromLedger,
   getLastSyncedSeq,
   enqueueMarketplaceSync,
   ensureBrickowlIdForPart,
 } from "./helpers";
+import { requireUserRole } from "../users/authorization";
 import {
   addInventoryItemArgs,
   addInventoryItemReturns,
@@ -193,11 +193,10 @@ export const updateInventoryItem = mutation({
   args: updateInventoryItemArgs,
   returns: updateInventoryItemReturns,
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
+    const { user } = await requireUserRole(ctx, "owner");
     const item = await ctx.db.get(args.itemId);
     if (!item) throw new ConvexError("Inventory item not found");
     assertBusinessMembership(user, item.businessAccountId);
-    requireOwnerRole(user); // AC: 3.4.1 - owner role required
 
     const nextAvailable = args.quantityAvailable ?? item.quantityAvailable;
     const nextReserved = args.quantityReserved ?? item.quantityReserved ?? 0;
@@ -354,11 +353,10 @@ export const deleteInventoryItem = mutation({
   args: deleteInventoryItemArgs,
   returns: deleteInventoryItemReturns,
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
+    const { user } = await requireUserRole(ctx, "owner");
     const item = await ctx.db.get(args.itemId);
     if (!item) throw new ConvexError("Inventory item not found");
     assertBusinessMembership(user, item.businessAccountId);
-    requireOwnerRole(user); // AC: 3.4.1 - owner role required
 
     // Capture previous state for potential rollback
 

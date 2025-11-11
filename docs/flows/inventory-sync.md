@@ -51,7 +51,7 @@ When inventory items are created or updated, changes are queued for synchronizat
 
 **Convex** - Maps inventory item to marketplace format:
 
-- **Bricklink**: Uses `mapConvexToBricklinkCreate` or `mapConvexToBricklinkUpdate`
+- **Bricklink**: Uses `mapConvexToBlCreate` or `mapConvexToBlUpdate`
 - **Brickowl**: Uses `mapConvexToBrickOwlCreate` or `mapConvexToBrickOwlUpdate`
 - Maps part number, color, condition, quantity, price, location
 
@@ -83,10 +83,10 @@ When inventory items are created or updated, changes are queued for synchronizat
 - `convex/inventory/sync.ts::syncToMarketplace` - Provider-specific sync
 - `convex/inventory/sync.ts::updateSyncStatuses` - Status update mutation
 - `convex/inventory/helpers.ts::enqueueMarketplaceSync` - Outbox enqueue helper
-- `convex/marketplaces/bricklink/storeMappers.ts` - Bricklink data mapping
+- `convex/marketplaces/bricklink/inventory/transformers.ts` - Bricklink data mapping
 - `convex/marketplaces/brickowl/storeMappers.ts` - Brickowl data mapping
 - `convex/marketplaces/bricklink/storeClient.ts` - Bricklink API client
-- `convex/marketplaces/brickowl/storeClient.ts` - Brickowl API client
+- `convex/marketplaces/brickowl/inventories.ts` - BrickOwl inventory API helpers
 
 ## Notes
 

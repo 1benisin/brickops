@@ -8,13 +8,17 @@ BrickOps uses Convex serverless functions organized by business domain with spec
 convex/
 ├── marketplaces/                  # Marketplace integrations (Stories 2.3, 3.1-3.3)
 │   ├── bricklink/                  # BrickLink marketplace integration
-│   │   ├── catalogClient.ts        # Global catalog queries (BrickOps credentials)
-│   │   ├── bricklinkMappers.ts     # Catalog data mappers
-│   │   ├── dataRefresher.ts        # Catalog refresh background jobs
+│   │   ├── catalog/                # BrickLink catalog domain helpers
+│   │   │   ├── actions.ts          # BrickLink catalog API actions
+│   │   │   ├── client.ts           # Stateless BrickLink catalog helpers (BrickOps credentials)
+│   │   │   ├── refresh/            # Catalog refresh mutations/background jobs
+│   │   │   │   └── index.ts        # Queue scheduling and cleanup mutations
+│   │   │   ├── schema.ts           # Catalog validators and response types
+│   │   │   └── transformers.ts     # Catalog data mappers
 │   │   ├── notifications.ts        # BrickLink push notifications processing
 │   │   ├── oauth.ts                # Shared OAuth 1.0a signing helpers
 │   │   ├── storeClient.ts          # User store client (inventory + orders, BYOK credentials)
-│   │   ├── storeMappers.ts         # Store data mappers (inventory + orders)
+│   │   ├── inventory/transformers.ts # BrickLink inventory data mappers
 │   │   └── webhook.ts              # Webhook endpoint handlers
 │   │
 │   ├── brickowl/                   # BrickOwl marketplace integration
@@ -23,14 +27,18 @@ convex/
 │   │   └── storeMappers.ts         # Store data mappers (inventory + orders)
 │   │
 │   └── shared/                     # Shared marketplace orchestration
-│       ├── actions.ts              # External marketplace API actions
-│       ├── helpers.ts              # Marketplace business logic and client factories
-│       ├── migrations.ts           # Marketplace migrations
-│       ├── mutations.ts            # Marketplace write operations
-│       ├── queries.ts              # Marketplace read operations
-│       ├── rateLimitConfig.ts      # Rate limit configs per provider
+│       ├── auth.ts                 # Owner guard shared by queries/mutations/actions
+│       ├── credentials.ts          # Credential queries + mutations
+│       ├── credentialHelpers.ts    # Provider-specific validation/encryption utilities
+│       ├── getCredentialDoc.ts     # Indexed credential lookup helper
+│       ├── rateLimits.ts           # Rate limit queries + mutations
+│       ├── rateLimitHelpers.ts     # Pure helpers for rate-limit calculations
+│       ├── webhooks.ts             # Webhook status mutations
+│       ├── webhookTokens.ts        # Webhook token utilities
 │       ├── schema.ts               # Marketplace table schemas
-│       └── types.ts                # Shared TypeScript interfaces (StoreOperationResult, etc.)
+│       ├── storeTypes.ts           # Shared StoreOperationResult + helpers
+│       ├── credentialTypes.ts      # Marketplace credential DTOs
+│       └── rateLimitTypes.ts       # Rate limit DTOs
 ├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
 │   ├── actions.ts              # External API orchestration
 │   ├── helpers.ts              # Catalog business logic helpers
@@ -54,7 +62,7 @@ convex/
 │   ├── sync.ts                 # Marketplace sync orchestration
 │   ├── syncWorker.ts           # Background sync processing
 │   ├── types.ts                # Inventory types
-│   ├── testInventory.ts        # Inventory test utilities
+│   ├── mocks.ts                # Inventory test utilities
 │   └── validators.ts           # Inventory input validation
 │
 ├── orders/                     # Orders domain functions
@@ -72,9 +80,16 @@ convex/
 │   └── schema.ts               # User table schemas
 │
 ├── ratelimit/                  # Rate limiting domain
+│   ├── helpers.ts              # Public helper for consuming shared rate limit tokens
 │   ├── mutations.ts            # Rate limit write operations
-│   ├── rateLimitConfig.ts      # Rate limit configuration
+│   ├── rateLimitConfig.ts      # Provider validators and configuration values
 │   └── schema.ts               # Rate limit table schemas
+
+Rate limit buckets map directly to business account identifiers. Reserve the
+`brickopsAdmin` bucket for BrickOps-owned global workloads (for example,
+catalog refresh tasks). Callers should use `takeRateLimitToken(ctx, { bucket,
+provider })` from `convex/ratelimit/helpers.ts` to consume shared tokens and
+enforce provider-specific quotas.
 │
 ├── lib/                        # Shared utilities
 │   ├── dbRateLimiter.ts        # Database-backed rate limiting helpers
@@ -116,24 +131,26 @@ BrickOps uses separate specialized clients for different marketplace operations:
 **Example: BrickLink Integration**
 
 ```typescript
-// System catalog operations (BrickOps credentials)
-import { catalogClient } from "../marketplaces/bricklink/catalogClient";
-const partData = await catalogClient.getRefreshedPart("3001");
+// Catalog operations (shared BrickOps credentials)
+import { fetchBlPart } from "../marketplaces/bricklink/client";
+const partData = await fetchBlPart(ctx, { itemNo: "3001" });
 
 // User store operations (user BYOK credentials)
-import { createBricklinkStoreClient } from "../marketplaces/shared/helpers";
-const storeClient = await createBricklinkStoreClient(ctx, businessAccountId);
-const inventory = await storeClient.getInventories();
+import { getBLInventories } from "../marketplaces/bricklink/inventories";
+const inventory = await getBLInventories(ctx, {
+  businessAccountId,
+  filters: { page: 1, pageSize: 50 },
+});
 ```
 
 **Why Separate Clients?**
 
-| Aspect        | Catalog Client                          | Store Client                |
-| ------------- | --------------------------------------- | --------------------------- |
-| Credentials   | BrickOps env vars                       | User database (encrypted)   |
-| Rate Limiting | Static in-memory                        | Database-backed per-tenant  |
-| Scope         | Global catalog data                     | User's marketplace store    |
-| Methods       | Parts, colors, categories, price guides | Inventory, orders, settings |
+| Aspect        | Catalog Client                          | Store Helpers (Inventories/Orders/etc.) |
+| ------------- | --------------------------------------- | --------------------------------------- |
+| Credentials   | BrickOps env vars                       | User database (encrypted)               |
+| Rate Limiting | Static in-memory                        | Database-backed per-tenant              |
+| Scope         | Global catalog data                     | User's marketplace store                |
+| Methods       | Parts, colors, categories, price guides | Inventory, orders, notifications        |
 
 **Database-Backed Rate Limiting (Stories 3.2-3.3)**:
 
@@ -141,7 +158,13 @@ All user store operations use persistent rate limiting via the `marketplaceRateL
 
 ```typescript
 // Pre-flight quota check before API request
-const quota = await ctx.runQuery(internal.marketplaces.shared.queries.getQuotaState, {
+const rateLimit = await ctx.runQuery(
+  internal.marketplaces.shared.rateLimits.getRateLimitState,
+  {
+    businessAccountId,
+    provider: "bricklink",
+  },
+);
   businessAccountId,
   provider: "bricklink",
 });
@@ -149,7 +172,13 @@ const quota = await ctx.runQuery(internal.marketplaces.shared.queries.getQuotaSt
 // Make API request...
 
 // Post-request quota recording
-await ctx.runMutation(internal.marketplaces.shared.mutations.incrementQuota, {
+await ctx.runMutation(
+  internal.marketplaces.shared.rateLimits.incrementRateLimitUsage,
+  {
+    businessAccountId,
+    provider: "bricklink",
+  },
+);
   businessAccountId,
   provider: "bricklink",
 });
@@ -345,7 +374,7 @@ export const getPartDetails = mutation({ ... });
 
 // Internal API (server-only)
 export const checkAndScheduleRefresh = internalMutation({ ... });
-export const processRefreshQueue = internalAction({ ... });
+export const drainCatalogRefreshOutbox = internalAction({ ... });
 ```
 
 ### Critical Patterns for BrickOps
@@ -361,7 +390,9 @@ export const getPart = query({
     const part = await ctx.db.query("parts")...;
 
     // ❌ ERROR: Queries cannot schedule or write!
-    await ctx.scheduler.runAfter(0, internal.catalog.refresh, { ... });
+    await ctx.scheduler.runAfter(0, internal.catalog.refreshWorker.processSingleOutboxMessage, {
+      ...,
+    });
 
     return part;
   },
@@ -386,16 +417,16 @@ export async function getPart(ctx: MutationCtx, partNumber: string): Promise<Doc
 
   if (!part) {
     // Schedule high-priority refresh for missing part
-    await ctx.runMutation(internal.marketplaces.bricklink.dataRefresher.checkAndScheduleRefresh, {
+    await ctx.runMutation(internal.marketplaces.bricklink.catalog.refresh.checkAndScheduleRefresh, {
       tableName: "parts",
       primaryKey: partNumber,
-      priority: "HIGH",
+      priority: 1,
     });
     throw new ConvexError(`Part ${partNumber} not found, refresh scheduled`);
   }
 
   // Schedule standard freshness check
-  await ctx.runMutation(internal.marketplaces.bricklink.dataRefresher.checkAndScheduleRefresh, {
+  await ctx.runMutation(internal.marketplaces.bricklink.catalog.refresh.checkAndScheduleRefresh, {
     tableName: "parts",
     primaryKey: partNumber,
     lastFetched: part.lastFetched,
@@ -430,7 +461,11 @@ export const updatePart = mutation({
     await ctx.db.patch(partId, data);
 
     // ❌ Not awaited - may fail silently!
-    ctx.scheduler.runAfter(0, internal.catalog.refresh, { ... });
+    ctx.scheduler.runAfter(
+      0,
+      internal.catalog.refreshWorker.processSingleOutboxMessage,
+      { ... },
+    );
   },
 });
 ```
@@ -444,7 +479,11 @@ export const updatePart = mutation({
     await ctx.db.patch(partId, data);
 
     // ✅ Properly awaited
-    await ctx.scheduler.runAfter(0, internal.catalog.refresh, { ... });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.catalog.refreshWorker.processSingleOutboxMessage,
+      { ... },
+    );
   },
 });
 ```
@@ -454,12 +493,12 @@ export const updatePart = mutation({
 **✅ CORRECT - Proper separation:**
 
 ```typescript
-// convex/catalog/actions.ts (or bricklink/dataRefresher.ts)
+// convex/catalog/refreshWorker.ts
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 
 // Action orchestrates external API and persistence
-export const processRefreshQueue = internalAction({
+export const drainCatalogRefreshOutbox = internalAction({
   args: {},
   handler: async (ctx) => {
     // Read queue (query)
@@ -729,6 +768,16 @@ Each domain should have a `validators.ts` file:
 
 See [Coding Standards - Type Safety](../development/coding-standards.md#type-safety-and-validator-patterns) for complete validator patterns and examples.
 
+### Inventory Import Validation Flow
+
+Marketplace inventory imports now run a structured validation pass before any mutations occur:
+
+1. **Validate actions**: `inventory.import.validateBricklinkImport` and `inventory.import.validateBrickowlImport` traverse the full remote inventory, transform each lot into an `InventoryImportCandidate`, and classify the lot as `ready`, `skip-existing`, `skip-unavailable`, or `skip-invalid`. The response surfaces per-lot issues (missing catalog mappings, color mismatches, inactive lots) that the UI can display before import.
+2. **User confirmation**: The Next.js settings page opens a confirmation dialog showing the lots that will be skipped, along with their issues. Only lots with `status === "ready"` are eligible for import.
+3. **Gated import actions**: `importBricklinkInventory` and `importBrickowlInventory` now require an explicit list of `candidateIds`. The backend reruns classification, skips non-ready lots, and persists the successful imports while recording `skippedInvalid` counts in the `ImportSummary`.
+
+This flow prevents partial imports caused by catalog mismatches, ensures owners understand which lots will be skipped, and keeps backend mutations idempotent and auditable.
+
 ---
 
 ## Scheduled Jobs and Cron
@@ -761,14 +810,18 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Process inventory sync queue every 30 seconds
-crons.interval("inventory sync", { seconds: 30 }, internal.inventory.sync.processPendingChanges);
+// Drain catalog refresh outbox every 10 minutes
+crons.interval(
+  "drain-catalog-refresh-outbox",
+  { minutes: 10 },
+  internal.catalog.refreshWorker.drainCatalogRefreshOutbox,
+);
 
-// Refresh stale catalog data (runs daily)
+// Clean up old catalog refresh jobs daily
 crons.daily(
-  "catalog refresh",
+  "cleanup-catalog-refresh-outbox",
   { hourUTC: 2, minuteUTC: 0 },
-  internal.marketplaces.bricklink.dataRefresher.processRefreshQueue,
+  internal.marketplaces.bricklink.catalog.refresh.cleanupOutbox,
 );
 
 export default crons;

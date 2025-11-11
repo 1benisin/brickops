@@ -51,7 +51,7 @@ Background cron job periodically syncs orders from Bricklink and Brickowl market
 - `convex/crons.ts` - Cron job definitions (if implemented)
 - `convex/marketplaces/shared/actions.ts` - Order sync action (if implemented)
 - `convex/marketplaces/bricklink/storeClient.ts::getOrders` - Bricklink orders API
-- `convex/marketplaces/brickowl/storeClient.ts::getOrders` - Brickowl orders API
+- `convex/marketplaces/brickowl/orders.ts::getOrder` - BrickOwl orders API
 - `docs/architecture/frontend/core-workflows.md` - Mentions 15-minute cron
 
 ## Notes

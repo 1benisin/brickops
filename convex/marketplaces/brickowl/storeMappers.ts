@@ -5,10 +5,10 @@
 
 import type { Doc } from "../../_generated/dataModel";
 import type {
-  BrickOwlInventoryResponse,
-  CreateInventoryPayload,
-  UpdateInventoryPayload,
-} from "./storeClient";
+  BOInventoryResponse,
+  BOInventoryCreatePayload,
+  BOInventoryUpdatePayload,
+} from "./schema";
 
 function parseNumberLike(value: number | string | undefined | null): number | undefined {
   if (value === undefined || value === null) {
@@ -21,12 +21,12 @@ function parseNumberLike(value: number | string | undefined | null): number | un
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-export function resolveBrickOwlQuantity(record: BrickOwlInventoryResponse): number {
+export function resolveBrickOwlQuantity(record: BOInventoryResponse): number {
   const quantity = parseNumberLike(record.quantity ?? record.qty);
   return quantity ?? 0;
 }
 
-export function resolveBrickOwlPrice(record: BrickOwlInventoryResponse): number | undefined {
+export function resolveBrickOwlPrice(record: BOInventoryResponse): number | undefined {
   return (
     parseNumberLike(record.price) ??
     parseNumberLike(record.final_price) ??
@@ -35,7 +35,7 @@ export function resolveBrickOwlPrice(record: BrickOwlInventoryResponse): number 
   );
 }
 
-export function resolveBrickOwlColorId(record: BrickOwlInventoryResponse): string {
+export function resolveBrickOwlColorId(record: BOInventoryResponse): string {
   const color = record.color_id;
   if (color === undefined || color === null) {
     return "0";
@@ -43,7 +43,7 @@ export function resolveBrickOwlColorId(record: BrickOwlInventoryResponse): strin
   return typeof color === "string" ? color : String(color);
 }
 
-export function resolveBrickOwlConditionCode(record: BrickOwlInventoryResponse): string {
+export function resolveBrickOwlConditionCode(record: BOInventoryResponse): string {
   if (typeof record.condition === "string" && record.condition.length > 0) {
     return record.condition;
   }
@@ -58,25 +58,39 @@ export function resolveBrickOwlConditionCode(record: BrickOwlInventoryResponse):
  * Used when importing inventory from BrickOwl to Convex
  */
 export function mapBrickOwlToConvexInventory(
-  brickowlInventory: BrickOwlInventoryResponse,
+  brickowlInventory: BOInventoryResponse,
   businessAccountId: Doc<"inventoryItems">["businessAccountId"],
 ): Omit<Doc<"inventoryItems">, "_id" | "_creationTime" | "createdBy" | "createdAt" | "updatedAt"> {
   const conditionCode = resolveBrickOwlConditionCode(brickowlInventory);
   const condition = mapBrickOwlConditionToConvex(conditionCode);
 
-  const location = (brickowlInventory.personal_note ?? "").trim() || "Main";
+  const location = (brickowlInventory.personal_note ?? "").trim();
   const price = resolveBrickOwlPrice(brickowlInventory);
   const notes = brickowlInventory.public_note ?? undefined;
   const quantityAvailable = resolveBrickOwlQuantity(brickowlInventory);
-  const colorId = resolveBrickOwlColorId(brickowlInventory);
 
-  const name = `Part ${brickowlInventory.boid}`;
+  const rawBoid = brickowlInventory.boid?.trim() ?? "";
+  const boidSegments = rawBoid.split("-").filter((segment) => segment.length > 0);
+  const boidPartNumber = boidSegments[0] ?? rawBoid;
+  const boidColorSuffix =
+    boidSegments.length > 1 ? boidSegments[boidSegments.length - 1] : undefined;
+
+  let colorId = resolveBrickOwlColorId(brickowlInventory)?.trim();
+  if ((!colorId || colorId === "0") && boidColorSuffix) {
+    const normalizedSuffix = boidColorSuffix.trim();
+    if (/^\d+$/.test(normalizedSuffix)) {
+      colorId = normalizedSuffix;
+    }
+  }
+  const resolvedColorId = colorId && colorId.length > 0 ? colorId : "0";
+
+  const name = rawBoid ? `Part ${rawBoid}` : "Unknown BrickOwl Part";
 
   return {
     businessAccountId,
     name, // Will be enriched from catalog lookup
-    partNumber: brickowlInventory.boid,
-    colorId,
+    partNumber: boidPartNumber,
+    colorId: resolvedColorId,
     location,
     quantityAvailable,
     quantityReserved: 0, // BrickOwl doesn't track reserved separately
@@ -94,7 +108,7 @@ export function mapConvexToBrickOwlCreate(
   convexInventory: Doc<"inventoryItems">,
   brickowlId: string,
   brickowlColorId?: number,
-): CreateInventoryPayload {
+): BOInventoryCreatePayload {
   // Map condition: "new" -> "new", "used" -> "usedn" (Used Like New - matches our inventory model)
   const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedn" as const);
 
@@ -135,7 +149,7 @@ export function mapConvexToBrickOwlUpdate(
   convexInventory: Doc<"inventoryItems">,
   previousQuantity?: number,
   useAbsolute: boolean = false,
-): UpdateInventoryPayload {
+): BOInventoryUpdatePayload {
   // Price is a number (not string like BrickLink)
   const price = convexInventory.price;
 
@@ -210,7 +224,7 @@ export function mapConvexConditionToBrickOwl(convexCondition: "new" | "used"): "
  * Validate BrickOwl inventory create payload
  * Throws error if required fields are missing or invalid
  */
-export function validateBrickOwlCreate(payload: CreateInventoryPayload): void {
+export function validateBrickOwlCreate(payload: BOInventoryCreatePayload): void {
   if (!payload.boid) {
     throw new Error("boid (part number) is required");
   }
@@ -245,7 +259,7 @@ export function validateBrickOwlCreate(payload: CreateInventoryPayload): void {
  * Validate BrickOwl inventory update payload
  * Throws error if fields are invalid
  */
-export function validateBrickOwlUpdate(payload: UpdateInventoryPayload): void {
+export function validateBrickOwlUpdate(payload: BOInventoryUpdatePayload): void {
   // Validate that both quantity modes are not used simultaneously
   if (payload.absolute_quantity !== undefined && payload.relative_quantity !== undefined) {
     throw new Error("Cannot use both absolute_quantity and relative_quantity");
