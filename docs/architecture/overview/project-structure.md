@@ -5,13 +5,17 @@ brickops/
 ├── convex/                         # Convex backend functions and schema
 │   ├── marketplaces/               # Marketplace integrations (Stories 2.3, 3.1-3.3)
 │   │   ├── bricklink/              # BrickLink marketplace integration
-│   │   │   ├── catalogClient.ts    # Stateless catalog helpers (BrickOps credentials)
-│   │   │   ├── bricklinkMappers.ts # Catalog data mappers
-│   │   │   ├── dataRefresher.ts    # Catalog refresh jobs
+│   │   │   ├── catalog/            # BrickLink catalog domain helpers
+│   │   │   │   ├── actions.ts      # BrickLink catalog API actions
+│   │   │   │   ├── client.ts       # Stateless catalog helpers (BrickOps credentials)
+│   │   │   │   ├── refresh/        # Catalog refresh mutations/background jobs
+│   │   │   │   │   └── index.ts    # Queue scheduling and cleanup
+│   │   │   │   ├── schema.ts       # Catalog validators and response types
+│   │   │   │   └── transformers.ts # Catalog data mappers
 │   │   │   ├── notifications.ts   # BrickLink notifications processing
 │   │   │   ├── oauth.ts            # OAuth 1.0a signing helpers
 │   │   │   ├── storeClient.ts      # Store client (inventory + orders, user credentials)
-│   │   │   ├── storeMappers.ts     # Store data mappers
+│   │   │   ├── inventory/transformers.ts # BrickLink inventory data mappers
 │   │   │   └── webhook.ts          # Webhook endpoint handlers
 │   │   ├── brickowl/               # BrickOwl marketplace integration
 │   │   │   ├── auth.ts             # API key authentication helpers
@@ -46,7 +50,7 @@ brickops/
 │   │   ├── sync.ts                 # Marketplace sync orchestration
 │   │   ├── syncWorker.ts           # Background sync processing
 │   │   ├── types.ts                # Inventory types
-│   │   ├── testInventory.ts        # Inventory test utilities
+│   │   ├── mocks.ts                # Inventory test utilities
 │   │   └── validators.ts           # Inventory input validation
 │   ├── orders/                     # Orders domain functions
 │   │   ├── ingestion.ts           # Order ingestion from marketplaces

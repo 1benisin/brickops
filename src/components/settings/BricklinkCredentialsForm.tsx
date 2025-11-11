@@ -11,16 +11,20 @@ import { Check, X, Loader2, AlertCircle, Copy, ExternalLink } from "lucide-react
 import { getEnv } from "@/lib/env";
 
 export function BrickLinkCredentialsForm() {
-  const status = useQuery(api.marketplaces.shared.queries.getCredentialStatus, {
+  const status = useQuery(api.marketplaces.shared.credentials.getCredentialStatus, {
     provider: "bricklink",
   });
 
-  const saveCredentials = useMutation(api.marketplaces.shared.mutations.saveCredentials);
-  const revokeCredentials = useMutation(api.marketplaces.shared.mutations.revokeCredentials);
-  const updateSyncSettings = useMutation(api.marketplaces.shared.mutations.updateSyncSettings);
+  const saveCredentials = useMutation(api.marketplaces.shared.credentials.saveCredentials);
+  const revokeCredentials = useMutation(api.marketplaces.shared.credentials.revokeCredentials);
+  const updateSyncSettings = useMutation(api.marketplaces.shared.credentials.updateSyncSettings);
   const testConnection = useAction(api.marketplaces.shared.actions.testConnection);
-  const registerWebhookAction = useAction(api.marketplaces.bricklink.webhook.registerWebhook);
-  const unregisterWebhookAction = useAction(api.marketplaces.bricklink.webhook.unregisterWebhook);
+  const registerWebhookAction = useAction(
+    api.marketplaces.bricklink.notifications.actions.registerWebhook,
+  );
+  const unregisterWebhookAction = useAction(
+    api.marketplaces.bricklink.notifications.actions.unregisterWebhook,
+  );
 
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");

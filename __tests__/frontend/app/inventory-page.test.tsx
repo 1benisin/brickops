@@ -31,7 +31,7 @@ jest.mock("convex/react", () => {
             counts: { items: 0 },
             totals: { available: 0, reserved: 0 },
           } as unknown;
-        case api.marketplaces.shared.queries.getSyncSettings:
+        case api.marketplaces.shared.credentials.getSyncSettings:
           return undefined;
         default:
           return undefined;

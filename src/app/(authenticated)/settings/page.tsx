@@ -70,18 +70,18 @@ export default function SettingsPage() {
   const removeUser = useMutation(api.users.mutations.removeUser);
   const createUserInvite = useMutation(api.users.mutations.createUserInvite);
   const updatePreferences = useMutation(api.users.mutations.updatePreferences);
-  const updateSyncSettings = useMutation(api.marketplaces.shared.mutations.updateSyncSettings);
-  const syncSettings = useQuery(api.marketplaces.shared.queries.getSyncSettings);
+  const updateSyncSettings = useMutation(api.marketplaces.shared.credentials.updateSyncSettings);
+  const syncSettings = useQuery(api.marketplaces.shared.credentials.getSyncSettings);
   const isDevEnvironment = useQuery(api.orders.mocks.isDevelopmentEnvironment);
   const deleteAllOrders = useMutation(api.orders.mocks.deleteAllOrders);
   const triggerMockWebhook = useMutation(
-    api.marketplaces.bricklink.mockOrders.triggerMockWebhookNotification,
+    api.marketplaces.bricklink.orders.mocks.triggerMockWebhookNotification,
   );
   const triggerMockBrickOwlOrder = useMutation(
     api.marketplaces.brickowl.mockOrders.triggerMockOrder,
   );
-  const generateMockInventory = useMutation(api.inventory.testInventory.generateMockInventoryItems);
-  const deleteAllInventory = useMutation(api.inventory.testInventory.deleteAllInventoryItems);
+  const generateMockInventory = useMutation(api.inventory.mocks.generateMockInventoryItems);
+  const deleteAllInventory = useMutation(api.inventory.mocks.deleteAllInventoryItems);
   const validateBricklinkImportAction = useAction(api.inventory.import.validateBricklinkImport);
   const importBricklinkInventoryAction = useAction(api.inventory.import.importBricklinkInventory);
   const validateBrickowlImportAction = useAction(api.inventory.import.validateBrickowlImport);

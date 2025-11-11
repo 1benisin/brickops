@@ -3,7 +3,7 @@ import { ExternalHttpClient, RequestOptions, RequestResult } from "../lib/extern
 import { RateLimitConfig } from "../lib/external/httpClient";
 import { recordMetric } from "../lib/external/metrics";
 import { HealthCheckResult, normalizeApiError } from "../lib/external/types";
-import { getRateLimitConfig } from "../ratelimit/rateLimitConfig";
+import { getRateLimitConfig } from "../ratelimiter/rateLimitConfig";
 
 const BASE_URL = "https://rebrickable.com/api/v3";
 const HEALTH_ENDPOINT = "/lego/colors/";

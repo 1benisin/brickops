@@ -271,6 +271,8 @@ Do not supply a request body with this method.
 
 If successful, this method returns a list of the the summary of an order resource as "data" in the response body.
 
+> BrickLink returns the complete result set for this endpoint; there is no pagination support.
+
 Each entry in the list includes followings:
 
 - order_id

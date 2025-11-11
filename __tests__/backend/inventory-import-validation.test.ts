@@ -22,7 +22,7 @@ vi.mock("@/convex/marketplaces/bricklink/inventories", () => ({
   getBLInventories: mockListInventories,
 }));
 
-vi.mock("@/convex/marketplaces/brickowl/inventories", () => ({
+vi.mock("@/convex/marketplaces/brickowl/inventory/actions", () => ({
   listInventories: mockListBrickOwlInventories,
 }));
 

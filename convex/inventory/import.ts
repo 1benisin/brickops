@@ -23,15 +23,12 @@ import type { Doc, Id } from "../_generated/dataModel";
 // Convex validation utilities and error helpers.
 import { ConvexError, v } from "convex/values";
 // Response types from third-party marketplace clients.
-import type { BLInventoryResponse } from "../marketplaces/bricklink/schema";
-import { getBLInventories } from "../marketplaces/bricklink/inventoryActions";
-import type {
-  BOInventoryResponse,
-  BOInventoryIdEntry,
-} from "../marketplaces/brickowl/schema";
-import { listInventories as listBrickOwlInventories } from "../marketplaces/brickowl/inventories";
+import type { BLInventoryResponse } from "../marketplaces/bricklink/inventory/schema";
+import { getBLInventories } from "../marketplaces/bricklink/inventory/actions";
+import type { BOInventoryResponse, BOInventoryIdEntry } from "../marketplaces/brickowl/schema";
+import { listInventories as listBrickOwlInventories } from "../marketplaces/brickowl/inventory/actions";
 // Mappers that convert marketplace payloads into our internal inventory shape.
-import { mapBricklinkToConvexInventory } from "../marketplaces/bricklink/storeMappers";
+import { mapBlToConvexInventory } from "../marketplaces/bricklink/inventory/transformers";
 import {
   mapBrickOwlConditionToConvex,
   mapBrickOwlToConvexInventory,
@@ -514,7 +511,7 @@ function transformBricklinkRecord(
   record: BLInventoryResponse,
   businessAccountId: Id<"businessAccounts">,
 ): { args: AddInventoryItemArgs; key: InventoryKeyData } {
-  const base = mapBricklinkToConvexInventory(record, businessAccountId);
+  const base = mapBlToConvexInventory(record, businessAccountId);
   const location = base.location?.trim() ?? "";
 
   const quantityAvailable = Math.max(

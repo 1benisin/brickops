@@ -4,14 +4,14 @@ import { v } from "convex/values";
 import type { Id, Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import {
-  mapConvexToBricklinkCreate,
-  mapConvexToBricklinkUpdate,
-} from "../marketplaces/bricklink/storeMappers";
+  mapConvexToBlCreate,
+  mapConvexToBlUpdate,
+} from "../marketplaces/bricklink/inventory/transformers";
 import {
   createBLInventory as createBricklinkInventory,
   updateBLInventory as updateBricklinkInventory,
   deleteBLInventory as deleteBricklinkInventory,
-} from "../marketplaces/bricklink/inventoryActions";
+} from "../marketplaces/bricklink/inventory/actions";
 import {
   mapConvexToBrickOwlCreate,
   mapConvexToBrickOwlUpdate,
@@ -20,8 +20,10 @@ import {
   createInventory as createBrickOwlInventory,
   updateInventory as updateBrickOwlInventory,
   deleteInventory as deleteBrickOwlInventory,
-} from "../marketplaces/brickowl/inventories";
+} from "../marketplaces/brickowl/inventory/actions";
 import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
+
+type InventoryItemDoc = Doc;
 
 /**
  * Phase 3: Worker that drains the marketplace outbox
@@ -353,7 +355,7 @@ async function callMarketplaceAPI(
       fromSeqExclusive: number;
       toSeqInclusive: number;
     };
-    item: Doc<"inventoryItems">;
+    item: InventoryItemDoc;
     delta: number;
   },
 ): Promise<{
@@ -372,16 +374,17 @@ async function callMarketplaceAPI(
     switch (args.message.kind) {
       case "create": {
         if (args.message.provider === "bricklink") {
-          const payload = mapConvexToBricklinkCreate(args.item);
+          const payload = mapConvexToBlCreate(args.item);
           const result = await createBricklinkInventory(ctx, {
             businessAccountId: args.item.businessAccountId,
             payload,
           });
 
+          const formattedError = result.success ? undefined : formatApiError(result.error);
           return {
             success: result.success,
             marketplaceId: result.marketplaceId,
-            error: result.error ? formatApiError(result.error) : undefined,
+            error: formattedError,
           };
         }
 
@@ -444,10 +447,11 @@ async function callMarketplaceAPI(
           payload,
           options: { idempotencyKey },
         });
+        const formattedError = result.success ? undefined : formatApiError(result.error);
         return {
           success: result.success,
           marketplaceId: result.marketplaceId,
-          error: result.error ? formatApiError(result.error) : undefined,
+          error: formattedError,
         };
       }
 
@@ -472,7 +476,7 @@ async function callMarketplaceAPI(
             : args.item.marketplaceSync?.brickowl?.lastSyncedAvailable ?? 0;
 
         if (args.message.provider === "bricklink") {
-          const payload = mapConvexToBricklinkUpdate(args.item, anchorAvailable);
+          const payload = mapConvexToBlUpdate(args.item, anchorAvailable);
 
           const marketplaceId = Number(marketplaceIdRaw);
           if (!Number.isFinite(marketplaceId)) {
@@ -488,10 +492,11 @@ async function callMarketplaceAPI(
             payload,
           });
 
+          const formattedError = result.success ? undefined : formatApiError(result.error);
           return {
             success: result.success,
             marketplaceId,
-            error: result.error ? formatApiError(result.error) : undefined,
+            error: formattedError,
           };
         }
 
@@ -508,10 +513,11 @@ async function callMarketplaceAPI(
           options: { idempotencyKey },
         });
 
+        const formattedError = result.success ? undefined : formatApiError(result.error);
         return {
           success: result.success,
           marketplaceId: result.marketplaceId ?? marketplaceIdRaw,
-          error: result.error ? formatApiError(result.error) : undefined,
+          error: formattedError,
         };
       }
 
@@ -539,10 +545,11 @@ async function callMarketplaceAPI(
             inventoryId: marketplaceId,
           });
 
+          const formattedError = result.success ? undefined : formatApiError(result.error);
           return {
             success: result.success,
             marketplaceId: undefined,
-            error: result.error ? formatApiError(result.error) : undefined,
+            error: formattedError,
           };
         }
 
@@ -551,10 +558,11 @@ async function callMarketplaceAPI(
           identifier: { lotId: String(marketplaceIdRaw) },
           options: { idempotencyKey },
         });
+        const formattedError = result.success ? undefined : formatApiError(result.error);
         return {
           success: result.success,
           marketplaceId: undefined,
-          error: result.error ? formatApiError(result.error) : undefined,
+          error: formattedError,
         };
       }
 

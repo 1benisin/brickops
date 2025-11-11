@@ -1,11 +1,11 @@
-import { checkBricklinkCatalogHealth } from "../../marketplaces/bricklink/catalogClient";
+import { checkBlCatalogHealth } from "../../marketplaces/bricklink/client";
 import { BrickognizeClient } from "./brickognize";
 import { BrickowlClient } from "./brickowl";
 import { HealthCheckResult } from "./types";
 
 export const validateBrickognize = async () => new BrickognizeClient().healthCheck();
 
-export const validateBricklink = async () => checkBricklinkCatalogHealth();
+export const validateBricklink = async () => checkBlCatalogHealth();
 
 export const validateBrickowl = async () => new BrickowlClient().healthCheck();
 

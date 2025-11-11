@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { BricklinkCatalogCtx } from "@/convex/marketplaces/bricklink/catalogClient";
+import type { BLCatalogCtx } from "@/convex/marketplaces/bricklink/client";
+import type { BLEnvelope } from "@/convex/marketplaces/bricklink/shared/envelope";
 import {
-  checkBricklinkCatalogHealth,
-  fetchBricklinkColor,
-  fetchBricklinkPriceGuide,
-} from "@/convex/marketplaces/bricklink/catalogClient";
+  checkBlCatalogHealth,
+  fetchBlColor,
+  fetchBlPriceGuide,
+  makeBlCatalogRequest,
+} from "@/convex/marketplaces/bricklink/client";
 import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
 import * as env from "@/convex/lib/external/env";
 
@@ -57,7 +59,7 @@ describe("BrickLink catalog client", () => {
     const now = new Date("2024-01-01T00:00:00.000Z");
     vi.setSystemTime(now);
 
-    const envSpy = vi.spyOn(env, "getBricklinkCredentials");
+    const envSpy = vi.spyOn(env, "getBlCredentials");
     const envGet = vi.fn(async (key: string) => {
       const values: Record<string, string> = {
         BRICKLINK_CONSUMER_KEY: "ctx-ck",
@@ -83,8 +85,8 @@ describe("BrickLink catalog client", () => {
     const events: string[] = [];
     addMetricListener((event) => events.push(event.name));
 
-    const ctx: BricklinkCatalogCtx = { env: { get: envGet } };
-    const result = await fetchBricklinkColor(ctx, { colorId: 21 });
+    const ctx: BLCatalogCtx = { env: { get: envGet } };
+    const result = await fetchBlColor(ctx, { colorId: 21 });
 
     expect(envGet).toHaveBeenCalledTimes(4);
     expect(envSpy).not.toHaveBeenCalled();
@@ -140,7 +142,7 @@ describe("BrickLink catalog client", () => {
     const events: string[] = [];
     addMetricListener((event) => events.push(event.name));
 
-    const result = await fetchBricklinkPriceGuide(undefined, {
+    const result = await fetchBlPriceGuide(undefined, {
       itemNo: "3001",
       colorId: 5,
     });
@@ -178,13 +180,45 @@ describe("BrickLink catalog client", () => {
     expect(requestEvents).toHaveLength(4);
   });
 
+  it("uses provided credentials override when making catalog requests", async () => {
+    const envSpy = vi.spyOn(env, "getBlCredentials");
+    const credentials = {
+      consumerKey: "override-ck",
+      consumerSecret: "override-cs",
+      tokenValue: "override-at",
+      tokenSecret: "override-ts",
+    };
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        meta: {},
+        data: { sample: true },
+      }),
+    );
+
+    const result = await makeBlCatalogRequest<BLEnvelope>(
+      undefined,
+      { path: "/colors" },
+      { credentials },
+    );
+
+    expect(envSpy).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.data).toEqual({
+      meta: {},
+      data: { sample: true },
+    });
+
+    envSpy.mockRestore();
+  });
+
   it("captures health check failures with structured errors", async () => {
     fetchMock.mockResolvedValueOnce(textResponse('{"error":"down"}', 503));
 
     const events: Array<{ name: string }> = [];
     addMetricListener((event) => events.push({ name: event.name }));
 
-    const result = await checkBricklinkCatalogHealth();
+    const result = await checkBlCatalogHealth();
 
     expect(result.ok).toBe(false);
     expect(result.status).toBe(503);

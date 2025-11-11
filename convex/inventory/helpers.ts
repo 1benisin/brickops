@@ -57,16 +57,6 @@ export function assertBusinessMembership(user: Doc<"users">, businessAccountId: 
 }
 
 /**
- * Require user has owner role
- * Helper function - not a Convex function
- */
-export function requireOwnerRole(user: Doc<"users">) {
-  if (user.role !== "owner") {
-    throw new ConvexError("Only business account owners can manage inventory");
-  }
-}
-
-/**
  * Ensure a part has a BrickOwl ID by enqueueing a catalog refresh when missing.
  * If the part cannot be found in the catalog we throw immediately.
  */
@@ -93,9 +83,7 @@ export async function ensureBrickowlIdForPart(ctx: MutationCtx, partNumber: stri
     .withIndex("by_table_primary_secondary", (q) =>
       q.eq("tableName", "parts").eq("primaryKey", partNumber).eq("secondaryKey", undefined),
     )
-    .filter((q) =>
-      q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")),
-    )
+    .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
     .first();
 
   let messageId = existingMessage?._id;
@@ -116,11 +104,9 @@ export async function ensureBrickowlIdForPart(ctx: MutationCtx, partNumber: stri
   }
 
   if (messageId) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.catalog.refreshWorker.processSingleOutboxMessage,
-      { messageId },
-    );
+    await ctx.scheduler.runAfter(0, internal.catalog.refreshWorker.processSingleOutboxMessage, {
+      messageId,
+    });
   }
 }
 

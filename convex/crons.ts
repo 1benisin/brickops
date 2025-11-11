@@ -24,7 +24,7 @@ crons.interval(
 crons.daily(
   "cleanup-catalog-refresh-outbox",
   { hourUTC: 2, minuteUTC: 0 },
-  internal.marketplaces.bricklink.dataRefresher.cleanupOutbox,
+  internal.marketplaces.bricklink.catalog.refresh.cleanupOutbox,
 );
 
 // Phase 3: Drain marketplace outbox every 30 seconds
@@ -38,14 +38,14 @@ crons.interval(
 crons.interval(
   "poll-bricklink-notifications",
   { minutes: 10 },
-  internal.marketplaces.bricklink.notifications.pollAllNotifications,
+  internal.marketplaces.bricklink.notifications.actions.pollAllNotifications,
 );
 
 // Verify BrickLink webhook registration every 6 hours
 crons.interval(
   "verify-bricklink-webhook",
   { hours: 6 },
-  internal.marketplaces.bricklink.webhook.ensureWebhooks,
+  internal.marketplaces.bricklink.notifications.actions.ensureWebhooks,
   {},
 );
 

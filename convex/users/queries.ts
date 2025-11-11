@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalQuery, query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { ConvexError } from "convex/values";
-import { requireActiveUser } from "./helpers";
+import { requireActiveUser } from "./authorization";
 
 export const getCurrentUser = query({
   args: {},

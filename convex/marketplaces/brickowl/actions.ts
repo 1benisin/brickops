@@ -1,27 +1,10 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { action, internalAction } from "../../_generated/server";
 import { ConvexError, v } from "convex/values";
-import { api, internal } from "../../_generated/api";
+import { internal } from "../../_generated/api";
 import { setOrderNotifyTarget } from "./notifications";
+import { requireOwner } from "../shared/auth";
 
 const DEFAULT_VERIFY_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-
-async function requireOwner(ctx: Parameters<typeof registerWebhook.handler>[0]) {
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
-    throw new ConvexError("Authentication required");
-  }
-
-  const currentUser = await ctx.runQuery(api.users.queries.getCurrentUser, {});
-  if (currentUser.role !== "owner") {
-    throw new ConvexError("Only account owners can manage webhook configuration");
-  }
-
-  return {
-    userId,
-    businessAccountId: currentUser.businessAccount._id,
-  };
-}
 
 function resolveBrickOwlTarget(target?: string | null): string {
   const candidate = target ?? process.env.BRICKOWL_WEBHOOK_TARGET;
@@ -42,7 +25,7 @@ export const registerWebhook = action({
     const target = resolveBrickOwlTarget(args.target);
 
     const credential = await ctx.runQuery(
-      internal.marketplaces.shared.queries.getCredentialMetadata,
+      internal.marketplaces.shared.credentials.getCredentialMetadata,
       {
         businessAccountId,
         provider: "brickowl",
@@ -53,7 +36,7 @@ export const registerWebhook = action({
       throw new ConvexError("BrickOwl credentials not configured");
     }
 
-    await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+    await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
       businessAccountId,
       provider: "brickowl",
       status: "registering",
@@ -63,7 +46,7 @@ export const registerWebhook = action({
     try {
       await setOrderNotifyTarget(ctx, { businessAccountId, target });
 
-      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+      await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
         businessAccountId,
         provider: "brickowl",
         status: "registered",
@@ -83,7 +66,7 @@ export const registerWebhook = action({
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+      await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
         businessAccountId,
         provider: "brickowl",
         status: "error",
@@ -101,7 +84,7 @@ export const unregisterWebhook = action({
     const { businessAccountId } = await requireOwner(ctx);
 
     const credential = await ctx.runQuery(
-      internal.marketplaces.shared.queries.getCredentialMetadata,
+      internal.marketplaces.shared.credentials.getCredentialMetadata,
       {
         businessAccountId,
         provider: "brickowl",
@@ -112,7 +95,7 @@ export const unregisterWebhook = action({
       throw new ConvexError("BrickOwl credentials not configured");
     }
 
-    await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+    await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
       businessAccountId,
       provider: "brickowl",
       status: "registering",
@@ -122,7 +105,7 @@ export const unregisterWebhook = action({
     try {
       await setOrderNotifyTarget(ctx, { businessAccountId, target: null });
 
-      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+      await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
         businessAccountId,
         provider: "brickowl",
         status: "disabled",
@@ -138,7 +121,7 @@ export const unregisterWebhook = action({
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+      await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
         businessAccountId,
         provider: "brickowl",
         status: "error",
@@ -164,9 +147,7 @@ export const ensureWebhooks = internalAction({
     for (const credential of activeCredentials) {
       const metadata = (credential.webhookMetadata as { target?: string } | undefined) ?? {};
       const target =
-        credential.webhookEndpoint ??
-        metadata.target ??
-        process.env.BRICKOWL_WEBHOOK_TARGET;
+        credential.webhookEndpoint ?? metadata.target ?? process.env.BRICKOWL_WEBHOOK_TARGET;
 
       if (!target) {
         continue;
@@ -188,7 +169,7 @@ export const ensureWebhooks = internalAction({
           target,
         });
 
-        await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+        await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
           businessAccountId: credential.businessAccountId,
           provider: "brickowl",
           status: "registered",
@@ -202,7 +183,7 @@ export const ensureWebhooks = internalAction({
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        await ctx.runMutation(internal.marketplaces.shared.mutations.updateWebhookStatus, {
+        await ctx.runMutation(internal.marketplaces.shared.webhooks.updateWebhookStatus, {
           businessAccountId: credential.businessAccountId,
           provider: "brickowl",
           status: "error",
@@ -213,4 +194,3 @@ export const ensureWebhooks = internalAction({
     }
   },
 });
-

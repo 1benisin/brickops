@@ -1,15 +1,28 @@
 import { internalMutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
-import type {
-  BricklinkOrderItemResponse,
-  BricklinkOrderResponse,
-} from "../marketplaces/bricklink/schema";
+import type { BLOrderItemResponse, BLOrderResponse } from "../marketplaces/bricklink/orders/schema";
 import type { BOOrderItemResponse, BOOrderResponse } from "../marketplaces/brickowl/schema";
 import type { Id } from "../_generated/dataModel";
 import { getCurrentAvailableFromLedger, getNextSeqForItem } from "../inventory/helpers";
 
 type OrderItemStatus = "picked" | "unpicked" | "skipped" | "issue";
+
+type Provider = "bricklink" | "brickowl";
+
+type OrderStatus =
+  | "PENDING"
+  | "UPDATED"
+  | "PROCESSING"
+  | "READY"
+  | "PAID"
+  | "PACKED"
+  | "SHIPPED"
+  | "RECEIVED"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "HOLD"
+  | "ARCHIVED";
 
 interface NormalizedOrder {
   orderId: string;
@@ -93,7 +106,7 @@ const BRICKOWL_STATUS_MAP: Record<string, OrderStatus> = {
   cancelled: "CANCELLED",
 };
 
-const BRICKLINK_ALERT_STATUSES = new Set(["OCR", "NPB", "NPX", "NRS", "NSS"]);
+const BL_ALERT_STATUSES = new Set(["OCR", "NPB", "NPX", "NRS", "NSS"]);
 
 function toTimestamp(value: unknown): number | undefined {
   if (typeof value === "number" && !Number.isNaN(value)) {
@@ -139,9 +152,9 @@ function ensureOrderId(raw: unknown): string {
   throw new Error("Order payload missing required order identifier");
 }
 
-function normalizeBricklinkStatus(status: string): OrderStatus {
+function normalizeBlStatus(status: string): OrderStatus {
   const normalized = status.toUpperCase().trim();
-  if (BRICKLINK_ALERT_STATUSES.has(normalized)) {
+  if (BL_ALERT_STATUSES.has(normalized)) {
     return "HOLD";
   }
 
@@ -167,13 +180,13 @@ function normalizeBricklinkStatus(status: string): OrderStatus {
   throw new Error(`Unknown BrickLink order status: ${status}`);
 }
 
-function normalizeBricklinkOrder(order: BricklinkOrderResponse): NormalizedOrder {
+function normalizeBlOrder(order: BLOrderResponse): NormalizedOrder {
   return {
     orderId: order.order_id,
     externalOrderKey: order.resource_id ? String(order.resource_id) : order.order_id,
     dateOrdered: toTimestamp(order.date_ordered) ?? Date.now(),
     dateStatusChanged: toTimestamp(order.date_status_changed),
-    status: normalizeBricklinkStatus(order.status),
+    status: normalizeBlStatus(order.status),
     providerStatus: order.status,
     buyerName: order.buyer_name,
     buyerEmail: order.buyer_email,
@@ -209,9 +222,9 @@ function normalizeBricklinkOrder(order: BricklinkOrderResponse): NormalizedOrder
   };
 }
 
-function normalizeBricklinkOrderItems(
+function normalizeBlOrderItems(
   orderId: string,
-  batches: BricklinkOrderItemResponse[][],
+  batches: BLOrderItemResponse[][],
 ): NormalizedOrderItem[] {
   const normalized: NormalizedOrderItem[] = [];
 
@@ -450,7 +463,7 @@ async function findInventoryItem(
 
 function mapOrder(provider: Provider, orderData: unknown): NormalizedOrder {
   if (provider === "bricklink") {
-    return normalizeBricklinkOrder(orderData as BricklinkOrderResponse);
+    return normalizeBlOrder(orderData as BLOrderResponse);
   }
   return normalizeBrickOwlOrder(orderData as BOOrderResponse);
 }
@@ -461,7 +474,7 @@ function mapOrderItems(
   orderItemsData: unknown,
 ): NormalizedOrderItem[] {
   if (provider === "bricklink") {
-    return normalizeBricklinkOrderItems(orderId, orderItemsData as BricklinkOrderItemResponse[][]);
+    return normalizeBlOrderItems(orderId, orderItemsData as BLOrderItemResponse[][]);
   }
   return normalizeBrickOwlOrderItems(orderId, orderItemsData as BOOrderItemResponse[]);
 }

@@ -38,9 +38,9 @@ When a user requests part catalog data, the system checks if data exists and is 
 - Marks message as "inflight" to prevent double processing
 - Takes rate limit token from "bricklink:global" bucket
 - Calls Bricklink API to fetch fresh data:
-  - `fetchBricklinkPart(ctx, { itemNo: partNumber })`
-  - `fetchBricklinkPartColors(ctx, { itemNo: partNumber })`
-  - `fetchBricklinkPriceGuide(ctx, { itemNo: partNumber, colorId })`
+  - `fetchBlPart(ctx, { itemNo: partNumber })`
+  - `fetchBlPartColors(ctx, { itemNo: partNumber })`
+  - `fetchBlPriceGuide(ctx, { itemNo: partNumber, colorId })`
 - Updates database via upsert mutations
 - Marks message as "succeeded"
 
@@ -64,7 +64,7 @@ When a user requests part catalog data, the system checks if data exists and is 
 - `convex/catalog/actions.ts::enqueueRefreshPart` - Enqueue refresh action
 - `convex/catalog/refreshWorker.ts::drainCatalogRefreshOutbox` - Batch worker
 - `convex/catalog/refreshWorker.ts::processSingleOutboxMessage` - Immediate worker
-- `convex/marketplaces/bricklink/catalogClient.ts` - Stateless Bricklink catalog helpers
+- `convex/marketplaces/bricklink/client.ts` - Stateless Bricklink catalog helpers
 - `convex/crons.ts` - Cron job definitions
 
 ## Notes

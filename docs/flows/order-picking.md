@@ -55,7 +55,7 @@ User selects one or multiple orders from the orders page, navigates to the picki
 
 **Convex** - Returns success result
 
-**Frontend** - Calls `api.marketplaces.shared.mutations.updateOrderStatusIfFullyPicked` with order ID
+**Frontend** - Calls `api.orders.mutations.updateOrderStatusIfFullyPicked` with order ID
 
 **Convex** - Checks if all items in order are picked
 
@@ -93,7 +93,7 @@ User selects one or multiple orders from the orders page, navigates to the picki
 - `convex/marketplaces/shared/mutations.ts::markOrderItemAsPicked` - Mark item as picked mutation
 - `convex/marketplaces/shared/mutations.ts::markOrderItemAsSkipped` - Mark item as skipped mutation
 - `convex/marketplaces/shared/mutations.ts::markOrderItemAsIssue` - Mark item as having issue mutation
-- `convex/marketplaces/shared/mutations.ts::updateOrderStatusIfFullyPicked` - Auto-update order status mutation
+- `convex/orders/mutations.ts::updateOrderStatusIfFullyPicked` - Auto-update order status mutation
 
 ## Notes
 

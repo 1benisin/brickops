@@ -6,13 +6,13 @@ Background cron job polls Bricklink API for new notifications as a safety net fo
 
 ## Flow Steps
 
-**Convex Cron** - Runs `pollNotificationsForAllBusinesses` on schedule (every 3 minutes)
+**Convex Cron** - Runs `pollAllNotifications` on schedule (every 3 minutes)
 
 **Convex** - Queries all active `marketplaceCredentials` with provider "bricklink"
 
 **Convex** - For each business account:
 
-- Calls `api.marketplaces.bricklink.notifications.pollNotificationsForBusiness` action
+- Calls `api.marketplaces.bricklink.notifications.actions.pollNotificationsForBusiness` action
 
 **Convex** - Creates Bricklink store client with business credentials
 
@@ -27,11 +27,11 @@ Background cron job polls Bricklink API for new notifications as a safety net fo
 **Convex** - For each notification:
 
 - Generates `dedupeKey`: `{businessAccountId}:{event_type}:{resource_id}:{timestamp}`
-- Calls `api.marketplaces.bricklink.notifications.upsertNotification` (idempotent)
+- Calls `api.marketplaces.bricklink.notifications.actions.upsertNotification` (idempotent)
 - Checks if notification already exists by `dedupeKey`
   - If exists: Returns existing ID (prevents duplicate processing)
   - If new: Creates notification with status "pending"
-- Schedules `api.marketplaces.bricklink.notifications.processNotification` action
+- Schedules `api.marketplaces.bricklink.notifications.actions.processNotification` action
 
 **Convex** - Updates `marketplaceCredentials.lastCentralPolledAt` timestamp
 
@@ -40,10 +40,10 @@ Background cron job polls Bricklink API for new notifications as a safety net fo
 ## Related Files
 
 - `convex/crons.ts` - Cron job definitions
-- `convex/marketplaces/bricklink/notifications.ts::pollNotificationsForBusiness` - Polling action
-- `convex/marketplaces/bricklink/notifications.ts::pollNotificationsForAllBusinesses` - Multi-business poller
-- `convex/marketplaces/bricklink/notifications.ts::updateLastPolled` - Timestamp update
-- `convex/marketplaces/bricklink/storeClient.ts::getNotifications` - Bricklink API call
+- `convex/marketplaces/bricklink/notifications/actions.ts::pollNotificationsForBusiness` - Polling action
+- `convex/marketplaces/bricklink/notifications/actions.ts::pollAllNotifications` - Multi-business poller
+- `convex/marketplaces/bricklink/notifications/actions.ts::updateLastPolled` - Timestamp update
+- `convex/marketplaces/bricklink/notifications/utilities.ts::listNotifications` - Bricklink API call
 
 ## Notes
 

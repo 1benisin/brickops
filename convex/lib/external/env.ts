@@ -39,7 +39,7 @@ export const getSecret = (key: EnvKey): string => {
   return value;
 };
 
-export type BricklinkCredentials = {
+export type BLCredentials = {
   consumerKey: string;
   consumerSecret: string;
   accessToken: string;
@@ -50,7 +50,7 @@ export const getBrickowlApiKey = () => getSecret("BRICKOWL_API_KEY");
 
 export const getRebrickableApiKey = () => getSecret("REBRICKABLE_API_KEY");
 
-export const getBricklinkCredentials = (): BricklinkCredentials => ({
+export const getBlCredentials = (): BLCredentials => ({
   consumerKey: getSecret("BRICKLINK_CONSUMER_KEY"),
   consumerSecret: getSecret("BRICKLINK_CONSUMER_SECRET"),
   accessToken: getSecret("BRICKLINK_ACCESS_TOKEN"),

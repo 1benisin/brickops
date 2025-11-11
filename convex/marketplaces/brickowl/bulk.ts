@@ -5,10 +5,9 @@ import {
   boBulkRequestEntrySchema,
   boBulkBatchPayloadSchema,
 } from "./schema";
-import { createBrickOwlHttpClient } from "./credentials";
-import { createBrickOwlRequestState } from "./credentials";
-import { normalizeBrickOwlError } from "./storeClient";
-import type { StoreOperationError } from "../shared/types";
+import { withBrickOwlClient, createBrickOwlRequestState } from "./shared/client";
+import { normalizeBrickOwlError } from "./errors";
+import type { StoreOperationError } from "../shared/storeTypes";
 
 export interface BrickOwlBulkOptions {
   chunkSize?: number;
@@ -74,113 +73,111 @@ export async function executeBulkRequests(
     chunks.push(validatedRequests.slice(index, index + chunkSize));
   }
 
-  const client = await createBrickOwlHttpClient(ctx, businessAccountId);
-  const requestState = createBrickOwlRequestState();
+  return await withBrickOwlClient(ctx, {
+    businessAccountId,
+    fn: async (client) => {
+      const requestState = createBrickOwlRequestState();
+      const results: BrickOwlBulkResponse[] = [];
+      const errors: BrickOwlBulkResult["errors"] = [];
 
-  const results: BrickOwlBulkResponse[] = [];
-  const errors: BrickOwlBulkResult["errors"] = [];
+      let succeeded = 0;
+      let failed = 0;
+      const delayBetweenBatches = options.delayBetweenBatchesMs ?? 0;
 
-  let succeeded = 0;
-  let failed = 0;
-  const delayBetweenBatches = options.delayBetweenBatchesMs ?? 0;
+      for (let batchIndex = 0; batchIndex < chunks.length; batchIndex += 1) {
+        const chunk = chunks[batchIndex];
+        const batchKey = options.idempotencyKey
+          ? `${options.idempotencyKey}-batch-${batchIndex}`
+          : undefined;
 
-  for (let batchIndex = 0; batchIndex < chunks.length; batchIndex += 1) {
-    const chunk = chunks[batchIndex];
-    const batchKey = options.idempotencyKey
-      ? `${options.idempotencyKey}-batch-${batchIndex}`
-      : undefined;
+        try {
+          const payload = boBulkBatchPayloadSchema.parse({ requests: chunk });
 
-    try {
-      const payload = boBulkBatchPayloadSchema.parse({ requests: chunk });
+          const response = await client.requestWithRetry<unknown[]>(
+            {
+              path: "/bulk/batch",
+              method: "POST",
+              body: payload,
+              idempotencyKey: batchKey,
+              isIdempotent: !!batchKey,
+            },
+            requestState,
+          );
 
-      const response = await client.requestWithRetry<unknown[]>(
-        {
-          path: "/bulk/batch",
-          method: "POST",
-          body: payload,
-          idempotencyKey: batchKey,
-          isIdempotent: !!batchKey,
-        },
-        requestState,
-      );
+          response.forEach((entry, requestIndex) => {
+            const aggregateIndex = batchIndex * chunkSize + requestIndex;
+            const originalRequest = validatedRequests[aggregateIndex];
 
-      response.forEach((entry, requestIndex) => {
-        const aggregateIndex = batchIndex * chunkSize + requestIndex;
-        const originalRequest = validatedRequests[aggregateIndex];
-
-        if (isErrorResponse(entry)) {
-          const normalized = normalizeBrickOwlError(entry);
-          failed += 1;
-          results.push({
-            success: false,
-            error: normalized,
+            if (isErrorResponse(entry)) {
+              const normalized = normalizeBrickOwlError(entry);
+              failed += 1;
+              results.push({
+                success: false,
+                error: normalized,
+              });
+              errors.push({
+                batchIndex,
+                requestIndex,
+                request: originalRequest,
+                error: normalized,
+              });
+            } else {
+              succeeded += 1;
+              results.push({
+                success: true,
+                data: entry,
+              });
+            }
           });
-          errors.push({
-            batchIndex,
-            requestIndex,
-            request: originalRequest,
-            error: normalized,
-          });
-        } else {
-          succeeded += 1;
-          results.push({
-            success: true,
-            data: entry,
+        } catch (rawError) {
+          const normalized = normalizeBrickOwlError(rawError);
+
+          chunk.forEach((request, requestIndex) => {
+            failed += 1;
+            results.push({
+              success: false,
+              error: normalized,
+            });
+            errors.push({
+              batchIndex,
+              requestIndex,
+              request,
+              error: normalized,
+            });
           });
         }
-      });
-    } catch (rawError) {
-      const normalized = normalizeBrickOwlError(rawError);
 
-      chunk.forEach((request, requestIndex) => {
-        failed += 1;
-        results.push({
-          success: false,
-          error: normalized,
-        });
-        errors.push({
-          batchIndex,
-          requestIndex,
-          request,
-          error: normalized,
-        });
-      });
-    }
+        const progress: BrickOwlBulkProgress = {
+          completed: Math.min((batchIndex + 1) * chunk.length, validatedRequests.length),
+          total: validatedRequests.length,
+          currentBatch: batchIndex + 1,
+          totalBatches: chunks.length,
+        };
 
-    const progress: BrickOwlBulkProgress = {
-      completed: Math.min((batchIndex + 1) * chunk.length, validatedRequests.length),
-      total: validatedRequests.length,
-      currentBatch: batchIndex + 1,
-      totalBatches: chunks.length,
-    };
+        if (options.onProgress) {
+          await options.onProgress(progress);
+        }
 
-    if (options.onProgress) {
-      await options.onProgress(progress);
-    }
+        if (delayBetweenBatches > 0 && batchIndex < chunks.length - 1) {
+          await delay(delayBetweenBatches);
+        }
+      }
 
-    if (delayBetweenBatches > 0 && batchIndex < chunks.length - 1) {
-      await delay(delayBetweenBatches);
-    }
-  }
-
-  return {
-    total: validatedRequests.length,
-    succeeded,
-    failed,
-    results,
-    errors,
-  };
+      return {
+        total: validatedRequests.length,
+        succeeded,
+        failed,
+        results,
+        errors,
+      };
+    },
+  });
 }
 
 function isErrorResponse(entry: unknown): entry is { error?: unknown; message?: unknown } {
-  return (
-    typeof entry === "object" &&
-    entry !== null &&
-    ("error" in entry || "message" in entry)
-  );
+  return typeof entry === "object" && entry !== null && ("error" in entry || "message" in entry);
 }
 
 async function delay(durationMs: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, durationMs));
 }
-

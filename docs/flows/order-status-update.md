@@ -10,7 +10,7 @@ When all items in an order are picked, the system automatically updates the orde
 
 **User** - Completes picking items for an order (see `orders.md` flow)
 
-**Frontend** - Calls `api.marketplaces.shared.mutations.updateOrderStatusIfFullyPicked` with order ID
+**Frontend** - Calls `api.orders.mutations.updateOrderStatusIfFullyPicked` with order ID
 
 **Convex** - Validates user authentication
 
@@ -55,7 +55,7 @@ When all items in an order are picked, the system automatically updates the orde
 
 ## Related Files
 
-- `convex/marketplaces/shared/mutations.ts::updateOrderStatusIfFullyPicked` - Auto-update mutation
+- `convex/orders/mutations.ts::updateOrderStatusIfFullyPicked` - Auto-update mutation
 - `convex/marketplaces/bricklink/storeClient.ts::updateOrderStatus` - Marketplace API call (future)
 - `src/components/picking/picking-interface.tsx` - Picking interface (triggers update)
 

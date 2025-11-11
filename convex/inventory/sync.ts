@@ -5,9 +5,9 @@ import type { Id, Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import { recordMetric } from "../lib/external/metrics";
 import {
-  mapConvexToBricklinkCreate,
-  mapConvexToBricklinkUpdate,
-} from "../marketplaces/bricklink/storeMappers";
+  mapConvexToBlCreate,
+  mapConvexToBlUpdate,
+} from "../marketplaces/bricklink/inventory/transformers";
 import {
   mapConvexToBrickOwlCreate,
   mapConvexToBrickOwlUpdate,
@@ -18,12 +18,14 @@ import {
   createBLInventory as createBricklinkInventory,
   updateBLInventory as updateBricklinkInventory,
   deleteBLInventory as deleteBricklinkInventory,
-} from "../marketplaces/bricklink/inventoryActions";
+} from "../marketplaces/bricklink/inventory/actions";
 import {
   createInventory as createBrickOwlInventory,
   updateInventory as updateBrickOwlInventory,
   deleteInventory as deleteBrickOwlInventory,
-} from "../marketplaces/brickowl/inventories";
+} from "../marketplaces/brickowl/inventory/actions";
+
+type InventoryItemDoc = Doc;
 
 /**
  * Update sync status after immediate sync attempt
@@ -88,7 +90,7 @@ export const syncInventoryChange = internalAction({
     businessAccountId: v.id("businessAccounts"),
     inventoryItemId: v.id("inventoryItems"),
     changeType: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
-    // newData: Doc<"inventoryItems">,
+    // newData: InventoryItemDoc,
     previousData: partialInventoryItemData,
     correlationId: v.string(),
   },
@@ -105,7 +107,7 @@ export const syncInventoryChange = internalAction({
 
     // Get configured providers
     const providers: Array<"bricklink" | "brickowl"> = await ctx.runQuery(
-      internal.marketplaces.shared.mutations.getConfiguredProviders,
+      internal.marketplaces.shared.credentials.getConfiguredProviders,
       {
         businessAccountId: args.businessAccountId,
       },
@@ -160,8 +162,8 @@ async function syncToMarketplace(
     businessAccountId: Id<"businessAccounts">;
     inventoryItemId: Id<"inventoryItems">;
     changeType: "create" | "update" | "delete";
-    newData: Partial<Doc<"inventoryItems">>;
-    previousData: Partial<Doc<"inventoryItems">>;
+    newData: Partial<InventoryItemDoc>;
+    previousData: Partial<InventoryItemDoc>;
     correlationId: string;
   },
 ): Promise<{ success: boolean; error?: unknown; marketplaceId?: string | number }> {
@@ -221,22 +223,23 @@ async function syncCreate(
   args: {
     businessAccountId: Id<"businessAccounts">;
     inventoryItemId: Id<"inventoryItems">;
-    newData: Partial<Doc<"inventoryItems">>;
-    previousData: Partial<Doc<"inventoryItems">>;
+    newData: Partial<InventoryItemDoc>;
+    previousData: Partial<InventoryItemDoc>;
   },
   idempotencyKey: string,
 ) {
   if (marketplace === "bricklink") {
-    const payload = mapConvexToBricklinkCreate(args.newData as Doc<"inventoryItems">);
+    const payload = mapConvexToBlCreate(args.newData as InventoryItemDoc);
     const result = await createBricklinkInventory(ctx, {
       businessAccountId: args.businessAccountId,
       payload,
     });
 
+    const formattedError = result.success ? undefined : formatApiError(result.error);
     return {
       success: result.success,
       marketplaceId: result.marketplaceId,
-      error: result.error ? formatApiError(result.error) : undefined,
+      error: formattedError,
     };
   }
 
@@ -294,7 +297,7 @@ async function syncCreate(
   }
 
   const payload = mapConvexToBrickOwlCreate(
-    inventoryData as Doc<"inventoryItems">,
+    inventoryData as InventoryItemDoc,
     brickowlId,
     brickowlColorId,
   );
@@ -305,10 +308,11 @@ async function syncCreate(
   });
   const marketplaceId = result.marketplaceId;
 
+  const formattedError = result.success ? undefined : formatApiError(result.error);
   return {
     success: result.success,
     marketplaceId,
-    error: result.error ? formatApiError(result.error) : undefined,
+    error: formattedError,
   };
 }
 
@@ -318,8 +322,8 @@ async function syncUpdate(
   args: {
     businessAccountId: Id<"businessAccounts">;
     inventoryItemId: Id<"inventoryItems">;
-    newData: Partial<Doc<"inventoryItems">>;
-    previousData: Partial<Doc<"inventoryItems">>;
+    newData: Partial<InventoryItemDoc>;
+    previousData: Partial<InventoryItemDoc>;
   },
   idempotencyKey: string,
 ) {
@@ -340,10 +344,7 @@ async function syncUpdate(
     (args.previousData?.quantityAvailable as number | undefined) ?? undefined;
 
   if (marketplace === "bricklink") {
-    const payload = mapConvexToBricklinkUpdate(
-      args.newData as Doc<"inventoryItems">,
-      previousQuantity,
-    );
+    const payload = mapConvexToBlUpdate(args.newData as InventoryItemDoc, previousQuantity);
 
     const marketplaceId = Number(marketplaceIdRaw);
     if (!Number.isFinite(marketplaceId)) {
@@ -360,17 +361,15 @@ async function syncUpdate(
       payload,
     });
 
+    const formattedError = result.success ? undefined : formatApiError(result.error);
     return {
       success: result.success,
       marketplaceId,
-      error: result.error ? formatApiError(result.error) : undefined,
+      error: formattedError,
     };
   }
 
-  const payload = mapConvexToBrickOwlUpdate(
-    args.newData as Doc<"inventoryItems">,
-    previousQuantity,
-  );
+  const payload = mapConvexToBrickOwlUpdate(args.newData as InventoryItemDoc, previousQuantity);
 
   const result = await updateBrickOwlInventory(ctx, {
     businessAccountId: args.businessAccountId,
@@ -379,10 +378,11 @@ async function syncUpdate(
     options: { idempotencyKey },
   });
 
+  const formattedError = result.success ? undefined : formatApiError(result.error);
   return {
     success: result.success,
     marketplaceId: result.marketplaceId ?? marketplaceIdRaw,
-    error: result.error ? formatApiError(result.error) : undefined,
+    error: formattedError,
   };
 }
 
@@ -391,7 +391,7 @@ async function syncDelete(
   marketplace: "bricklink" | "brickowl",
   args: {
     businessAccountId: Id<"businessAccounts">;
-    previousData: Partial<Doc<"inventoryItems">>;
+    previousData: Partial<InventoryItemDoc>;
   },
   idempotencyKey: string,
 ) {
@@ -419,10 +419,11 @@ async function syncDelete(
       inventoryId: marketplaceId,
     });
 
+    const formattedError = result.success ? undefined : formatApiError(result.error);
     return {
       success: result.success,
       marketplaceId: undefined,
-      error: result.error ? formatApiError(result.error) : undefined,
+      error: formattedError,
     };
   }
 
@@ -431,10 +432,11 @@ async function syncDelete(
     identifier: { lotId: String(marketplaceIdRaw) },
     options: { idempotencyKey },
   });
+  const formattedError = result.success ? undefined : formatApiError(result.error);
   return {
     success: result.success,
     marketplaceId: undefined,
-    error: result.error ? formatApiError(result.error) : undefined,
+    error: formattedError,
   };
 }
 
@@ -481,7 +483,7 @@ export const retryFailedSync = internalAction({
           return { success: true };
         }
 
-        lastErrorMessage = result.error ? formatApiError(result.error) : undefined;
+        lastErrorMessage = result.success ? undefined : formatApiError(result.error);
         attempt++;
         if (attempt < maxRetries) {
           // Exponential backoff: 1s, 2s, 4s

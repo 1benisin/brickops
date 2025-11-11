@@ -62,7 +62,7 @@ const EmptyState = () => (
 export function InventoryTable() {
   const items = useQuery(api.inventory.queries.listInventoryItems);
   const totals = useQuery(api.inventory.queries.getInventoryTotals);
-  const syncConfig = useQuery(api.marketplaces.shared.queries.getMarketplaceSyncConfig);
+  const syncConfig = useQuery(api.marketplaces.shared.credentials.getMarketplaceSyncConfig);
 
   // Loading state
   if (items === undefined || totals === undefined || syncConfig === undefined) {

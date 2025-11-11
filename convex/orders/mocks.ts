@@ -9,11 +9,8 @@ import { mutation, query } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "../_generated/api";
-import type {
-  BricklinkOrderResponse,
-  BricklinkOrderItemResponse,
-} from "../marketplaces/bricklink/schema";
-import { requireActiveUser } from "../users/helpers";
+import type { BLOrderResponse, BLOrderItemResponse } from "../marketplaces/bricklink/orders/schema";
+import { requireActiveUser } from "../users/authorization";
 import type { Id } from "../_generated/dataModel";
 import {
   assertDevelopmentEnvironment,
@@ -32,8 +29,8 @@ function _createTestOrderData(overrides?: {
   status?: string;
   itemCount?: number;
 }): {
-  orderData: BricklinkOrderResponse;
-  orderItemsData: BricklinkOrderItemResponse[][];
+  orderData: BLOrderResponse;
+  orderItemsData: BLOrderItemResponse[][];
 } {
   const orderId = overrides?.orderId || `TEST-${Date.now()}`;
   const now = new Date().toISOString();
@@ -44,7 +41,7 @@ function _createTestOrderData(overrides?: {
   const itemCount = overrides?.itemCount || 3;
 
   // Create realistic test order
-  const orderData: BricklinkOrderResponse = {
+  const orderData: BLOrderResponse = {
     order_id: orderId,
     date_ordered: now,
     date_status_changed: now,
@@ -96,7 +93,7 @@ function _createTestOrderData(overrides?: {
   };
 
   // Create test order items with variety
-  const items: BricklinkOrderItemResponse[] = [];
+  const items: BLOrderItemResponse[] = [];
 
   // Realistic LEGO parts for variety
   const testParts = [
@@ -146,7 +143,7 @@ function _createTestOrderData(overrides?: {
 
   // Bricklink returns items in batches (nested arrays)
   // We'll put all items in a single batch
-  const orderItemsData: BricklinkOrderItemResponse[][] = [items];
+  const orderItemsData: BLOrderItemResponse[][] = [items];
 
   return { orderData, orderItemsData };
 }
@@ -394,8 +391,8 @@ async function createTestOrderDataWithParts(
     itemCount?: number;
   },
 ): Promise<{
-  orderData: BricklinkOrderResponse;
-  orderItemsData: BricklinkOrderItemResponse[][];
+  orderData: BLOrderResponse;
+  orderItemsData: BLOrderItemResponse[][];
 }> {
   const orderId = overrides?.orderId || `TEST-${Date.now()}`;
   const now = new Date().toISOString();
@@ -421,7 +418,7 @@ async function createTestOrderDataWithParts(
   }
 
   // Create realistic test order
-  const orderData: BricklinkOrderResponse = {
+  const orderData: BLOrderResponse = {
     order_id: orderId,
     date_ordered: now,
     date_status_changed: now,
@@ -474,7 +471,7 @@ async function createTestOrderDataWithParts(
 
   // Create test order items from existing inventory items
   // This ensures we have matching inventory items for picking
-  const items: BricklinkOrderItemResponse[] = [];
+  const items: BLOrderItemResponse[] = [];
 
   for (let i = 0; i < itemCount && i < inventoryItems.length; i++) {
     const inventoryItem = inventoryItems[i % inventoryItems.length];
@@ -534,7 +531,7 @@ async function createTestOrderDataWithParts(
   orderData.cost.grand_total = (subtotal + 5.0).toFixed(2);
 
   // Bricklink returns items in batches (nested arrays)
-  const orderItemsData: BricklinkOrderItemResponse[][] = [items];
+  const orderItemsData: BLOrderItemResponse[][] = [items];
 
   return { orderData, orderItemsData };
 }
@@ -629,8 +626,8 @@ export const getOrderItems = query({
       )
       .collect();
 
-    // Convert back to BricklinkOrderItemResponse format (same as API)
-    const orderItems: BricklinkOrderItemResponse[] = items.map((item) => {
+    // Convert back to BLOrderItemResponse format (same as API)
+    const orderItems: BLOrderItemResponse[] = items.map((item) => {
       if (item.provider !== "bricklink") {
         throw new ConvexError("Order item provider does not match Bricklink");
       }
