@@ -1,123 +1,109 @@
 # Core Workflows
 
-## Order Processing and Inventory Sync
+These diagrams show how the Next.js frontend coordinates with Convex domains and external providers for the most important user journeys. Each step references the current UI routes and backend modules so you can trace behaviour directly in the codebase.
+
+## Order Sync & Management
 
 ```mermaid
 sequenceDiagram
-    participant User as User (Web UI)
-    participant Order as OrderProcessingService
-    participant Marketplace as MarketplaceIntegrationService
-    participant Inventory as InventoryService
-    participant BL as Bricklink API
-    participant BO as Brickowl API
-    participant DB as Convex DB
+    participant User as User (Orders UI)
+    participant Next as Next.js Orders Route (`src/app/(authenticated)/orders`)
+    participant Sync as Convex Marketplace Sync (`convex/marketplaces/*/orders/actions.ts`)
+    participant Orders as Convex Orders Domain (`convex/orders/*.ts`)
+    participant Inventory as Convex Inventory Domain
+    participant Bricklink as Bricklink API
+    participant Brickowl as BrickOwl API
+    participant DB as Convex Database
 
-    Note over Order: Every 15 minutes (Convex Cron)
-    Order->>Marketplace: syncOrdersFromMarketplaces()
-    Marketplace->>BL: GET /orders (new/updated)
-    BL-->>Marketplace: Order data
-    Marketplace->>BO: GET /orders (new/updated)
-    BO-->>Marketplace: Order data
+    Note over Sync: Scheduled via `convex/crons.ts`
+    Sync->>Bricklink: Fetch updated orders (OAuth 1.0a)
+    Bricklink-->>Sync: Order payloads
+    Sync->>Brickowl: Fetch updated orders (API key)
+    Brickowl-->>Sync: Order payloads
+    Sync->>Orders: `upsert` mutations per provider
+    Sync->>Inventory: Reserve quantities for new orders
+    Orders->>DB: Persist marketplace + normalized orders
 
-    loop For each new order
-        Marketplace->>DB: Store MarketplaceOrder
-        Marketplace->>Inventory: reserveInventory(orderItems)
-        Inventory->>DB: Update quantity reserved
-        DB-->>User: Real-time order notification
-    end
+    User->>Next: Open orders page / change filters
+    Next->>Orders: `listOrders` query (server-driven filters)
+    Orders-->>Next: Paginated order results + status
+    Next-->>User: Render order table with live updates
 
-    User->>Order: View order management table
-    Order->>DB: Query orders with filters
-    DB-->>User: Real-time order updates
-
-    User->>Order: Mark orders as picked
-    Order->>Marketplace: updateOrderStatus(orderId, "picked")
-    Marketplace->>BL: PUT /orders/{id}
-    Marketplace->>BO: PUT /orders/{id}/status
-    Order->>DB: Update local order status
-    DB-->>User: Status confirmation
+    User->>Next: Mark order as picked / update status
+    Next->>Orders: `updateOrderStatus` mutation
+    Orders->>Sync: Invoke provider-specific action (if needed)
+    Sync->>Bricklink: Update order status
+    Sync->>Brickowl: Update order status
+    Orders->>DB: Persist local status change
+    DB-->>Next: Real-time subscription emits update
 ```
 
-## Part Identification and Inventory Addition
+## Part Identification & Inventory Addition
 
 ```mermaid
 sequenceDiagram
-    participant User as User (Mobile/Web)
-    participant UI as Next.js Frontend
-    participant Identify as PartIdentificationService
-    participant Catalog as CatalogService
-    participant Inventory as InventoryService
+    participant User as User (Identify UI)
+    participant Next as Next.js Identify Route (`src/app/(authenticated)/identify`)
+    participant Identify as Convex Identify Actions (`convex/identify/actions.ts`)
+    participant Catalog as Convex Catalog Domain (`convex/catalog/*.ts`)
+    participant Inventory as Convex Inventory Mutations (`convex/inventory/mutations.ts`)
     participant Brickognize as Brickognize API
-    participant Bricklink as Bricklink API
-    participant DB as Convex DB
+    participant DB as Convex Database
     participant Files as Convex File Storage
 
-    User->>UI: Capture part image
-    UI->>Files: Upload image
-    Files-->>UI: File URL
+    User->>Next: Capture photo / upload part image
+    Next->>Files: Upload image (Convex storage)
+    Files-->>Next: Image URL
 
-    UI->>Identify: identifyPartFromImage(imageData)
+    Next->>Identify: `requestIdentification` action (image URL)
     Identify->>Brickognize: POST /identify
-    Brickognize-->>Identify: Identification results + confidence
+    Brickognize-->>Identify: Candidate parts + confidence
+    Identify->>Catalog: `getPartDetails` / `searchParts` for validation
+    Catalog-->>Identify: Part metadata (local cache or external refresh)
+    Identify-->>Next: Candidate list + confidence
 
-    Identify->>Catalog: validatePartNumber(partNumber)
-    alt Part exists in BrickOps catalog
-        Catalog->>DB: Query cached part data
-        DB-->>Catalog: Part details
-    else Part not in catalog
-        Catalog->>Bricklink: GET /items/{type}/{no}
-        Bricklink-->>Catalog: Part details
-        Catalog->>DB: Cache part data
-    end
-
-    Catalog-->>Identify: Part validation + details
-    Identify-->>UI: Identification results + confidence
-
-    UI-->>User: Display results with confidence score
-    User->>UI: Confirm part + enter quantity/location
-    UI->>Inventory: addInventoryItem(partDetails, quantity, location)
-    Inventory->>DB: Store inventory item
-    DB-->>UI: Real-time inventory update
+    User->>Next: Confirm part & enter quantity/location
+    Next->>Inventory: `addInventoryItem` mutation
+    Inventory->>DB: Persist inventory lot and history entry
+    DB-->>Next: Subscription returns updated inventory state
+    Next-->>User: Confirmation + link back to inventory grid
 ```
 
-## Pick Session Workflow with Issue Resolution
+## Pick Session Lifecycle
 
 ```mermaid
 sequenceDiagram
-    participant User as Picker (Mobile)
-    participant UI as Next.js Frontend
-    participant Pick as PickSessionService
-    participant Inventory as InventoryService
-    participant Todo as TodoService
-    participant Order as OrderProcessingService
-    participant DB as Convex DB
+    participant Picker as Picker (Picking UI)
+    participant Next as Next.js Picking Route (`src/app/(authenticated)/picking`)
+    participant Orders as Convex Orders Domain
+    participant Inventory as Convex Inventory Domain
+    participant Pick as Convex Picking Helpers (`convex/orders/*` & `convex/inventory/*`)
+    participant DB as Convex Database
 
-    User->>UI: Select orders + Start Picking
-    UI->>Pick: createPickSession(userId, orderIds)
-    Pick->>Pick: generateOptimizedPickPath(orderIds)
-    Pick->>DB: Store pick session + path
-    DB-->>UI: Real-time session created
+    Picker->>Next: Start pick session with selected orders
+    Next->>Orders: `createPickSession` mutation
+    Orders->>Pick: Generate optimized pick path & queue
+    Pick->>DB: Persist session + task list
+    DB-->>Next: Session snapshot (subscription)
 
-    loop For each item in pick path
-        UI-->>User: Display part card (image, location, quantity)
-        User->>UI: Navigate to location
-        alt Part found and picked
-            User->>UI: Mark as picked + confirm quantity
-            UI->>Pick: markPartPicked(sessionId, partNumber, quantity)
-            Pick->>Inventory: adjustQuantity(available--, sold++)
-            Pick->>DB: Update session progress
-            DB-->>UI: Real-time progress update
-        else Part not found or insufficient
-            User->>UI: Report issue
-            UI->>Pick: reportPickingIssue(...)
-            Pick->>Todo: createTodoItem(...)
-            Pick->>Inventory: showAlternativeLocations(...)
+    loop For each pick task
+        Next-->>Picker: Show item card (location, quantity, image)
+        alt Item picked successfully
+            Picker->>Next: Confirm pick
+            Next->>Inventory: `markLotPicked` mutation (adjust available/sold)
+            Inventory->>DB: Persist quantity change & history
+        else Issue reported
+            Picker->>Next: Report issue / shortage
+            Next->>Orders: `reportPickIssue` mutation
+            Orders->>Pick: Record todo & reroute remaining tasks
         end
+        DB-->>Next: Updated session & inventory state
     end
 
-    User->>UI: Complete pick session
-    UI->>Pick: completePickSession(sessionId)
-    Pick->>Order: updateOrderStatus(orderIds, "picked")
-    Pick->>DB: Archive completed session
-    DB-->>UI: Session completion confirmation
+    Picker->>Next: Complete session
+    Next->>Orders: `completePickSession` mutation
+    Orders->>DB: Mark associated orders as picked
+    DB-->>Next: Emit completion event for UI + dashboards
 ```
+
+Use these flows alongside the architecture diagrams to trace concrete file locations (`src/app/...`, `src/components/...`, `convex/...`) when adding new behaviour or debugging existing features.

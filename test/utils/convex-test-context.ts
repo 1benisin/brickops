@@ -17,8 +17,34 @@ type TableSeed = Record<string, unknown> & {
 
 type SeedData = Record<string, TableSeed[]>;
 
+type FieldRef<T> = { kind: "field"; name: keyof T & string };
+
 type ChainableQuery<T> = {
-  eq: (field: keyof T & string, value: unknown) => ChainableQuery<T>;
+  eq: (field: FieldInput<T>, value: unknown) => ChainableQuery<T>;
+  lt: (field: FieldInput<T>, value: unknown) => ChainableQuery<T>;
+  lte: (field: FieldInput<T>, value: unknown) => ChainableQuery<T>;
+  gt: (field: FieldInput<T>, value: unknown) => ChainableQuery<T>;
+  gte: (field: FieldInput<T>, value: unknown) => ChainableQuery<T>;
+  order: (field: FieldInput<T>, direction?: "asc" | "desc") => ChainableQuery<T>;
+  field: (field: keyof T & string) => FieldRef<T>;
+};
+
+type FieldInput<T> = keyof T & string | FieldRef<T>;
+
+type FilterExpression<T> = {
+  evaluate: (doc: T) => boolean;
+};
+
+type FilterBuilder<T> = {
+  field: (name: keyof T & string) => FieldRef<T>;
+  eq: (field: FieldInput<T>, value: unknown) => FilterExpression<T>;
+  lt: (field: FieldInput<T>, value: unknown) => FilterExpression<T>;
+  lte: (field: FieldInput<T>, value: unknown) => FilterExpression<T>;
+  gt: (field: FieldInput<T>, value: unknown) => FilterExpression<T>;
+  gte: (field: FieldInput<T>, value: unknown) => FilterExpression<T>;
+  and: (...expressions: FilterExpression<T>[]) => FilterExpression<T>;
+  or: (...expressions: FilterExpression<T>[]) => FilterExpression<T>;
+  not: (expression: FilterExpression<T>) => FilterExpression<T>;
 };
 
 type QueryBuilder<T> = {
@@ -135,20 +161,91 @@ export class MockDb {
 
     const builder: QueryBuilder<T> = {
       filter: (predicate) => {
-        records = records.filter((doc) => predicate(doc as T));
+        const filterBuilder = createFilterBuilder<T>();
+        let expression: FilterExpression<T> | undefined;
+
+        try {
+          const result = predicate(filterBuilder as any);
+          if (isFilterExpression(result)) {
+            expression = result;
+          }
+        } catch {
+          // Swallow errors here; we'll fall back to legacy predicate evaluation below.
+        }
+
+        if (expression) {
+          records = records.filter((doc) => expression!.evaluate(doc as T));
+        } else {
+          records = records.filter((doc) => (predicate as any)(doc as T));
+        }
+
         return builder;
       },
       withIndex: (_indexName, handler) => {
         if (handler) {
-          // Create a chainable query object that supports multiple .eq() calls
-          const createChainableQuery = (): ChainableQuery<T> => ({
-            eq: (field: keyof T & string, value: unknown) => {
-              records = records.filter((doc) => (doc as Record<string, unknown>)[field] === value);
-              return createChainableQuery();
-            },
-          });
+          const constraints: FilterExpression<T>[] = [];
+          const ordering: Array<{ field: keyof T & string; direction: "asc" | "desc" }> = [];
 
-          handler(createChainableQuery());
+          const chainable: ChainableQuery<T> = {
+            field: (name) => ({ kind: "field", name }),
+            eq: (field, value) => {
+              constraints.push(createComparisonExpression(field, value, "eq"));
+              return chainable;
+            },
+            lt: (field, value) => {
+              constraints.push(createComparisonExpression(field, value, "lt"));
+              return chainable;
+            },
+            lte: (field, value) => {
+              constraints.push(createComparisonExpression(field, value, "lte"));
+              return chainable;
+            },
+            gt: (field, value) => {
+              constraints.push(createComparisonExpression(field, value, "gt"));
+              return chainable;
+            },
+            gte: (field, value) => {
+              constraints.push(createComparisonExpression(field, value, "gte"));
+              return chainable;
+            },
+            order: (field, direction = "asc") => {
+              ordering.push({ field: resolveField(field), direction });
+              return chainable;
+            },
+          };
+
+          handler(chainable);
+
+          if (constraints.length > 0) {
+            records = records.filter((doc) =>
+              constraints.every((expression) => expression.evaluate(doc as T)),
+            );
+          }
+
+          if (ordering.length > 0) {
+            records = [...records].sort((a, b) => {
+              for (const { field, direction } of ordering) {
+                const aValue = (a as any)[field];
+                const bValue = (b as any)[field];
+                if (aValue === bValue) {
+                  continue;
+                }
+                if (aValue === undefined || aValue === null) {
+                  return direction === "asc" ? 1 : -1;
+                }
+                if (bValue === undefined || bValue === null) {
+                  return direction === "asc" ? -1 : 1;
+                }
+                if (aValue < bValue) {
+                  return direction === "asc" ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                  return direction === "asc" ? 1 : -1;
+                }
+              }
+              return 0;
+            });
+          }
         }
         return builder;
       },
@@ -195,6 +292,68 @@ export class MockDb {
 
     return builder;
   }
+}
+
+function createFilterBuilder<T>(): FilterBuilder<T> {
+  return {
+    field: (name) => ({ kind: "field", name }),
+    eq: (field, value) => createComparisonExpression(field, value, "eq"),
+    lt: (field, value) => createComparisonExpression(field, value, "lt"),
+    lte: (field, value) => createComparisonExpression(field, value, "lte"),
+    gt: (field, value) => createComparisonExpression(field, value, "gt"),
+    gte: (field, value) => createComparisonExpression(field, value, "gte"),
+    and: (...expressions) => ({
+      evaluate: (doc) => expressions.every((expression) => expression.evaluate(doc)),
+    }),
+    or: (...expressions) => ({
+      evaluate: (doc) => expressions.some((expression) => expression.evaluate(doc)),
+    }),
+    not: (expression) => ({
+      evaluate: (doc) => !expression.evaluate(doc),
+    }),
+  };
+}
+
+function isFilterExpression<T>(value: unknown): value is FilterExpression<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "evaluate" in value &&
+    typeof (value as FilterExpression<T>).evaluate === "function"
+  );
+}
+
+type ComparisonKind = "eq" | "lt" | "lte" | "gt" | "gte";
+
+function createComparisonExpression<T>(
+  field: FieldInput<T>,
+  value: unknown,
+  kind: ComparisonKind,
+): FilterExpression<T> {
+  const fieldName = resolveField(field);
+  return {
+    evaluate: (doc: T) => {
+      const left = (doc as any)[fieldName];
+      switch (kind) {
+        case "eq":
+          return left === value;
+        case "lt":
+          return left < value;
+        case "lte":
+          return left <= value;
+        case "gt":
+          return left > value;
+        case "gte":
+          return left >= value;
+        default:
+          return false;
+      }
+    },
+  };
+}
+
+function resolveField<T>(field: FieldInput<T>): keyof T & string {
+  return typeof field === "string" ? field : field.name;
 }
 
 export interface ConvexTestContextOptions {

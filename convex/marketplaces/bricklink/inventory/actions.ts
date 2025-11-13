@@ -11,17 +11,17 @@ import {
   type BLInventoryResponse,
   type BLInventoryUpdatePayload,
 } from "./schema";
-import { makeBlRequest, type BLRequestResult } from "../client";
+import { makeBlRequest, type BLRequestResult } from "../transport";
 import { normalizeBlStoreError } from "../errors";
-import { generateCorrelationId } from "../shared/ids";
+import { generateCorrelationId } from "../ids";
 
 export async function getBLInventories(ctx: ActionCtx): Promise<BLInventoryResponse[]> {
-  const query = { status: "Y" };
-
   const response = await makeBlRequest<BLInventoryResponse[]>(ctx, {
     path: "/inventories",
     method: "GET",
-    query,
+    query: {
+      status: "-R",
+    },
   });
   const inventories = response.data.data ?? [];
   return inventories.map((inventory) => blInventoryResponseSchema.parse(inventory));
@@ -76,6 +76,7 @@ export async function createBLInventory(
       path: "/inventories",
       method: "POST",
       body: normalizedPayload,
+      businessAccountId,
       correlationId,
       headers: {
         "X-Correlation-Id": correlationId,
@@ -83,6 +84,13 @@ export async function createBLInventory(
     });
   } catch (error) {
     const normalizedError = normalizeBlStoreError(error);
+
+    console.error("[BrickLink] createBLInventory request error", {
+      correlationId,
+      businessAccountId,
+      normalizedPayload,
+      normalizedError,
+    });
 
     recordMetric("external.bricklink.inventory.create.failure", {
       correlationId,
@@ -205,6 +213,7 @@ export async function updateBLInventory(
     const previousResponse = await makeBlRequest<BLInventoryResponse>(ctx, {
       path: `/inventories/${inventoryId}`,
       method: "GET",
+      businessAccountId,
     });
 
     if (previousResponse.data.data) {
@@ -219,6 +228,7 @@ export async function updateBLInventory(
       path: `/inventories/${inventoryId}`,
       method: "PUT",
       body: normalizedPayload,
+      businessAccountId,
       correlationId,
     });
 
@@ -318,6 +328,7 @@ export async function deleteBLInventory(
     const existingResponse = await makeBlRequest<BLInventoryResponse>(ctx, {
       path: `/inventories/${inventoryId}`,
       method: "GET",
+      businessAccountId,
     });
 
     if (existingResponse.data.data) {
@@ -331,6 +342,7 @@ export async function deleteBLInventory(
     await makeBlRequest<null>(ctx, {
       path: `/inventories/${inventoryId}`,
       method: "DELETE",
+      businessAccountId,
       correlationId,
     });
 

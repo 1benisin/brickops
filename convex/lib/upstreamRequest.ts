@@ -1,5 +1,5 @@
 // convex/lib/upstreamRequest.ts
-import type { FunctionReference } from "convex/server";
+
 import { ConvexError, type Value } from "convex/values";
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
@@ -237,26 +237,6 @@ type ConsumeResult = {
   resetAt: number;
 };
 
-type ConsumeTokenMutationRef = FunctionReference<
-  "mutation",
-  "internal",
-  { provider: Provider; bucket: string },
-  { granted: boolean; resetAt: number; remaining: number },
-  string | undefined
->;
-
-type RateLimitModules = {
-  ratelimiter?: {
-    consumeToken?: ConsumeTokenMutationRef;
-  };
-  ratelimit?: {
-    consume?: {
-      consumeToken?: ConsumeTokenMutationRef;
-    };
-    consumeToken?: ConsumeTokenMutationRef;
-  };
-};
-
 async function consumeRateLimit(
   ctx: ActionCtx,
   options: RateLimitOptions,
@@ -265,11 +245,7 @@ async function consumeRateLimit(
   url: string,
   onAttempt?: (info: AttemptTelemetry) => void,
 ): Promise<ConsumeResult> {
-  const modules = internal as RateLimitModules;
-  const consumeTokenMutation =
-    modules.ratelimiter?.consumeToken ??
-    modules.ratelimit?.consume?.consumeToken ??
-    modules.ratelimit?.consumeToken;
+  const consumeTokenMutation = internal.ratelimiter?.consume?.consumeToken;
 
   if (!consumeTokenMutation) {
     throw new ConvexError({

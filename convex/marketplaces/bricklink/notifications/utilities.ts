@@ -1,7 +1,7 @@
 import type { ActionCtx } from "../../../_generated/server";
 import type { Id } from "../../../_generated/dataModel";
 import { internal } from "../../../_generated/api";
-import { withBlClient, type BLApiResponse } from "../client";
+import { withBlClient, type BLApiResponse } from "../transport";
 import { getOrder, getOrderItems } from "../orders/actions";
 import { blNotificationSchema, type BLNotification, type BLNotificationEventType } from "./schema";
 

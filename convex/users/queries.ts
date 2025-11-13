@@ -54,7 +54,7 @@ export const getAuthState = query({
     }
 
     const businessAccount = user.businessAccountId
-      ? await ctx.db.get(user.businessAccountId as Id<"businessAccounts">)
+      ? await ctx.db.get(user.businessAccountId)
       : null;
 
     return {

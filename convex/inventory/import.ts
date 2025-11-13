@@ -12,29 +12,23 @@
  *   the heavy import operations.
  */
 
-// Authentication helper used to ensure only business owners can import.
-import { getAuthUserId } from "@convex-dev/auth/server";
-// Core Convex primitives for defining actions/internal mutations and types.
 import { action, internalMutation, type ActionCtx } from "../_generated/server";
-// Generated API references for calling other Convex functions.
 import { api, internal } from "../_generated/api";
-// Database model types leveraged throughout the import flow.
 import type { Doc, Id } from "../_generated/dataModel";
-// Convex validation utilities and error helpers.
 import { ConvexError, v } from "convex/values";
-// Response types from third-party marketplace clients.
 import type { BLInventoryResponse } from "../marketplaces/bricklink/inventory/schema";
 import { getBLInventories } from "../marketplaces/bricklink/inventory/actions";
-import type { BOInventoryResponse, BOInventoryIdEntry } from "../marketplaces/brickowl/schema";
+import type {
+  BOInventoryIdEntry,
+  BOInventoryResponse,
+} from "../marketplaces/brickowl/inventory/schema";
 import { listInventories as listBrickOwlInventories } from "../marketplaces/brickowl/inventory/actions";
-// Mappers that convert marketplace payloads into our internal inventory shape.
 import { mapBlToConvexInventory } from "../marketplaces/bricklink/inventory/transformers";
 import {
   mapBrickOwlConditionToConvex,
   mapBrickOwlToConvexInventory,
   resolveBrickOwlQuantity,
-} from "../marketplaces/brickowl/storeMappers";
-// Validators and TypeScript types used for request/response validation.
+} from "../marketplaces/brickowl/inventory/transformers";
 import {
   importSummaryValidator,
   inventoryImportValidationResultValidator,
@@ -43,6 +37,7 @@ import {
   type InventoryImportCandidate,
   type InventoryImportValidationResult,
 } from "./validators";
+import { requireActiveUser } from "../users/authorization";
 
 interface OwnerContext {
   userId: Id<"users">;
@@ -227,22 +222,15 @@ function summarizeValidationResult(
  * All import and preview flows rely on this guard to prevent unauthorized access.
  */
 async function requireOwner(ctx: ActionCtx): Promise<OwnerContext> {
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
-    throw new ConvexError("Authentication required");
-  }
+  const { userId, user, businessAccountId } = await requireActiveUser(ctx);
 
-  const currentUser = await ctx.runQuery(api.users.queries.getCurrentUser, {});
-  if (!currentUser?.user || !currentUser.businessAccount?._id) {
-    throw new ConvexError("User is not associated with a business account");
-  }
-  if (currentUser.user.role !== "owner") {
+  if (user.role !== "owner") {
     throw new ConvexError("Only business owners can import marketplace inventory");
   }
 
   return {
     userId,
-    businessAccountId: currentUser.businessAccount._id,
+    businessAccountId,
   };
 }
 

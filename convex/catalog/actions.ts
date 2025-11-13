@@ -2,6 +2,7 @@ import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
 import { recordMetric } from "../lib/external/metrics";
+import { requireActiveUser } from "../users/authorization";
 // (catalogClient not needed for direct image URLs)
 
 // ============================================================================
@@ -17,11 +18,7 @@ export const enqueueRefreshPart = action({
     partNumber: v.string(),
   },
   handler: async (ctx, args) => {
-    // Verify user is authenticated
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
+    await requireActiveUser(ctx);
 
     // Check if already in outbox (pending or inflight)
     const existing = await ctx.runQuery(internal.catalog.queries.getOutboxMessage, {
@@ -58,10 +55,7 @@ export const enqueueRefreshPartColors = action({
     partNumber: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
+    await requireActiveUser(ctx);
 
     const existing = await ctx.runQuery(internal.catalog.queries.getOutboxMessage, {
       tableName: "partColors",
@@ -108,10 +102,7 @@ export const enqueueRefreshPriceGuide = action({
     colorId: v.number(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
+    await requireActiveUser(ctx);
 
     const existing = await ctx.runQuery(internal.catalog.queries.getOutboxMessage, {
       tableName: "partPrices",
@@ -175,11 +166,7 @@ export const getBrickowlPartId = action({
       return null;
     }
 
-    // Verify user is authenticated
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
+    await requireActiveUser(ctx);
 
     const { RebrickableClient } = await import("../api/rebrickable");
     const client = new RebrickableClient();
@@ -227,11 +214,7 @@ export const getBrickowlPartIds = action({
       return {};
     }
 
-    // Verify user is authenticated
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
+    await requireActiveUser(ctx);
 
     if (args.bricklinkPartIds.length === 0) {
       return {};

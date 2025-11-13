@@ -1,17 +1,13 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError } from "convex/values";
-import type { MutationCtx, QueryCtx } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import {
+  requireActiveUser as requireActiveUserInternal,
+  type RequireUserReturn,
+} from "../users/authorization";
 
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
 
-export type RequireUserReturn = {
-  userId: Id<"users">;
-  user: Doc<"users">;
-  businessAccountId: Id<"businessAccounts">;
-};
+export type { RequireUserReturn };
 
 // ============================================================================
 // AUTHENTICATION HELPERS
@@ -21,30 +17,8 @@ export type RequireUserReturn = {
  * Ensures user is authenticated, active, and linked to a business account
  * Helper function - not a Convex function
  */
-export async function requireActiveUser(ctx: QueryCtx | MutationCtx): Promise<RequireUserReturn> {
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
-    throw new ConvexError("Authentication required");
-  }
-
-  const user = await ctx.db.get(userId);
-  if (!user) {
-    throw new ConvexError("Authenticated user not found");
-  }
-
-  if (user.status !== "active") {
-    throw new ConvexError("User account is not active");
-  }
-
-  if (!user.businessAccountId) {
-    throw new ConvexError("User is not linked to a business account");
-  }
-
-  return {
-    userId,
-    user,
-    businessAccountId: user.businessAccountId as Id<"businessAccounts">,
-  };
+export async function requireActiveUser(...args: Parameters<typeof requireActiveUserInternal>) {
+  return requireActiveUserInternal(...args);
 }
 
 // ============================================================================

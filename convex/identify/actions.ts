@@ -2,8 +2,6 @@
 
 import { ConvexError, v } from "convex/values";
 import { action } from "../_generated/server";
-import type { Doc } from "../_generated/dataModel";
-import { api } from "../_generated/api";
 import { BrickognizeClient } from "../lib/external/brickognize";
 import { normalizeApiError } from "../lib/external/types";
 import {
@@ -12,13 +10,9 @@ import {
   type IdentificationResult,
   type IdentificationResultItem,
 } from "./helpers";
+import { requireActiveUser } from "../users/authorization";
 
 const now = () => Date.now();
-
-type CurrentUserResponse = {
-  user: Doc<"users">;
-  businessAccount: Doc<"businessAccounts">;
-};
 
 /**
  * Identify a LEGO part from an uploaded image using Brickognize API
@@ -27,31 +21,16 @@ type CurrentUserResponse = {
 export const identifyPartFromImage = action({
   args: {
     storageId: v.id("_storage"),
+    businessAccountId: v.optional(v.id("businessAccounts")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
+    const { businessAccountId } = await requireActiveUser(ctx);
+
+    if (args.businessAccountId && args.businessAccountId !== businessAccountId) {
+      throw new ConvexError("Cannot access another business account");
     }
 
-    const currentUser = (await ctx.runQuery(
-      api.users.queries.getCurrentUser,
-      {},
-    )) as CurrentUserResponse | null;
-
-    if (!currentUser) {
-      throw new ConvexError("User context unavailable");
-    }
-
-    const businessAccountId = currentUser.businessAccount._id;
-    if (!businessAccountId) {
-      throw new ConvexError("User does not have an associated business account");
-    }
-
-    // TODO: Implement rate limiting for identification requests
-    // await ctx.runMutation(api.identify.consumeIdentificationRate, {
-    //   userId: currentUser.user._id,
-    // });
+    // TODO: Implement rate limiting for identification requests via consumeIdentificationRate mutation.
 
     const arrayBuffer = await ctx.storage.get(args.storageId);
     if (!arrayBuffer) {

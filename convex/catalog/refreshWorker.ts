@@ -3,14 +3,12 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import {
-  fetchBlCategory,
-  fetchBlColor,
-  fetchBlPart,
-  fetchBlPartColors,
-  fetchBlPriceGuide,
-} from "../marketplaces/bricklink/client";
+import { fetchBlCategory } from "../marketplaces/bricklink/catalog/categories/actions";
+import { fetchBlColor } from "../marketplaces/bricklink/catalog/colors/actions";
+import { fetchBlPart, fetchBlPartColors } from "../marketplaces/bricklink/catalog/parts/actions";
+import { fetchBlPriceGuide } from "../marketplaces/bricklink/catalog/priceGuides/actions";
 import { RebrickableClient, type RebrickablePart } from "../api/rebrickable";
+import type { PriceGuideRecord } from "./mutations";
 
 /**
  * Query to get pending outbox messages ready for processing
@@ -18,12 +16,23 @@ import { RebrickableClient, type RebrickablePart } from "../api/rebrickable";
 export const getPendingOutboxMessages = internalQuery({
   args: { maxNextAttemptAt: v.number() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const query = ctx.db
       .query("catalogRefreshOutbox")
       .withIndex("by_status_time", (q) =>
         q.eq("status", "pending").lte("nextAttemptAt", args.maxNextAttemptAt),
-      )
-      .take(10); // Process 10 items per run (matches current BATCH_SIZE)
+      );
+
+    const typedQuery = query as {
+      take?: (limit: number) => Promise<Array<Doc<"catalogRefreshOutbox">>>;
+      collect: () => Promise<Array<Doc<"catalogRefreshOutbox">>>;
+    };
+
+    if (typeof typedQuery.take === "function") {
+      return await typedQuery.take(10);
+    }
+
+    const results = await typedQuery.collect();
+    return results.slice(0, 10);
   },
 });
 
@@ -199,7 +208,7 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
     }
 
     // Take rate limit token
-    const token = await ctx.runMutation(internal.ratelimiter.consumeToken, {
+    const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
       bucket: "brickopsAdmin",
       provider: "bricklink",
     });
@@ -250,18 +259,20 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
       });
 
       // Upsert all 4 price guide variants
+      const prices: PriceGuideRecord[] = [
+        priceGuides.newStock,
+        priceGuides.newSold,
+        priceGuides.usedStock,
+        priceGuides.usedSold,
+      ];
+
       await ctx.runMutation(internal.catalog.mutations.upsertPriceGuide, {
-        prices: [
-          priceGuides.newStock,
-          priceGuides.newSold,
-          priceGuides.usedStock,
-          priceGuides.usedSold,
-        ],
+        prices,
       });
     } else if (message.tableName === "colors") {
       const colorId = Number.parseInt(message.primaryKey, 10);
       const colorData = await fetchBlColor(ctx, { colorId });
-      await ctx.runMutation(internal.marketplaces.bricklink.catalog.refresh.upsertColor, {
+      await ctx.runMutation(internal.catalog.mutations.upsertColor, {
         data: colorData,
       });
     } else if (message.tableName === "categories") {

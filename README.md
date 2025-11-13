@@ -37,51 +37,19 @@ Next.js + Convex monorepo scaffold with comprehensive developer tooling for the 
 
 ```
 brickops/
-├── convex/                   # Convex backend functions and schema
-│   ├── functions/            # Business logic mutations and queries
-│   ├── crons.ts              # Scheduled jobs
-│   ├── http.ts               # HTTP routes (health checks, webhooks)
-│   └── schema.ts             # Convex data schema
-├── src/                      # Next.js frontend application (App Router)
-│   ├── app/                  # Route definitions and global layout
-│   ├── components/           # Shared UI components
-│   ├── hooks/                # React hooks
-│   ├── lib/                  # Utilities, Convex clients, shared types
-│   └── middleware.ts         # Request middleware / guards
-├── __tests__/                # Jest, Vitest, and Playwright tests
-├── public/                   # Static assets
-├── scripts/                  # Automation scripts (git hooks, etc.)
-├── docs/                     # Product and engineering documentation
+├── AGENTS.md                  # Quick guide for AI agents and contributors
+├── convex/                    # Convex backend organized by domain (catalog, inventory, marketplaces, etc.)
+├── src/                       # Next.js App Router code (app routes, components, hooks, lib, middleware)
+├── __tests__/                 # Vitest, Jest, and Playwright suites
+├── docs/                      # Architecture guides, flows, external docs, and initiative plans
+├── scripts/                   # Automation and data seeding scripts
+├── public/                    # Static assets
 ├── package.json
-├── pnpm-lock.yaml            # Generated lockfile (commit after install)
 ├── pnpm-workspace.yaml
 └── README.md
 ```
 
-## Environment Variables
+### Learn More
 
-| Variable                 | Description                              |
-| ------------------------ | ---------------------------------------- |
-| `NEXT_PUBLIC_CONVEX_URL` | Convex deployment URL for browser client |
-| `CONVEX_DEPLOYMENT`      | Optional – target deployment for CLI     |
-
-## Quality Tooling
-
-- ESLint with TypeScript, React, accessibility, and import-ordering rules.
-- Prettier formatting with pre-commit enforcement through `simple-git-hooks`.
-- Jest + React Testing Library for frontend units.
-- Vitest for backend logic.
-- Playwright for cross-browser E2E scenarios.
-
-## Convex Setup
-
-1. If you have the Convex CLI, authenticate and initialize the project:
-   ```bash
-   npx convex dev
-   ```
-2. Update `convex.json` with the generated `projectConfig`.
-3. Deploy functions with `npx convex deploy` when ready.
-
----
-
-This scaffold follows the architecture and coding standards defined in `docs/architecture` for quick onboarding.
+- Product context: `docs/architecture/overview/project-overview.md`
+- Initiative roadmaps: `docs/plans/`

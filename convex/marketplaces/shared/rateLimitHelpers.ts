@@ -1,3 +1,4 @@
+// Small helper functions used by the marketplace rate limit tracking mutations.
 import type { Doc, Id } from "../../_generated/dataModel";
 import { getRateLimitConfig } from "../../ratelimiter/rateLimitConfig";
 
@@ -10,6 +11,7 @@ export function buildInitialRateLimitRecord(
   provider: Provider,
   now: number,
 ) {
+  // Load the default rate limit numbers for this provider and create a fresh record.
   const config = getRateLimitConfig(provider);
 
   return {
@@ -31,6 +33,7 @@ export function buildInitialRateLimitRecord(
 }
 
 export function shouldResetWindow(rateLimit: Doc<"marketplaceRateLimits">, now: number): boolean {
+  // If the configured time window has passed, start a new window at the current time.
   return now - rateLimit.windowStart >= rateLimit.windowDurationMs;
 }
 
@@ -40,6 +43,7 @@ export function shouldEmitAlert(
   alertThreshold: number,
   alreadyEmitted: boolean,
 ): boolean {
+  // Only emit once per window, and only when the usage crosses the configured percentage.
   if (alreadyEmitted) {
     return false;
   }
@@ -52,6 +56,7 @@ export function determineCircuitBreakerOpenUntil(
   consecutiveFailures: number,
   now: number,
 ): number | undefined {
+  // After too many consecutive failures, pause requests for a few minutes.
   if (consecutiveFailures >= CIRCUIT_BREAKER_FAILURE_THRESHOLD) {
     return now + 5 * 60 * 1000; // 5 minutes
   }

@@ -123,8 +123,9 @@ describe("identify functions", () => {
         getUserIdentity: vi.fn().mockResolvedValue({ tokenIdentifier: `${userId}|session-1` }),
       },
       runQuery: vi.fn().mockResolvedValue({
-        user: { _id: userId },
-        businessAccount: { _id: businessAccountId },
+        userId,
+        user: { _id: userId, businessAccountId, status: "active" },
+        businessAccountId,
       }),
       runMutation: vi.fn().mockResolvedValue({ remaining: 99 }),
       storage: {
@@ -138,7 +139,10 @@ describe("identify functions", () => {
       businessAccountId,
     });
 
-    expect(ctx.runQuery).toHaveBeenCalledWith(api.users.getCurrentUser, {});
+    expect(ctx.runQuery).toHaveBeenCalledWith(
+      api.internal.users.queries.getActiveUserContext,
+      {},
+    );
     // TODO: Re-enable when rate limiting is implemented
     // expect(ctx.runMutation).toHaveBeenCalledWith(api.internal.identify.consumeIdentificationRate, {
     //   userId,

@@ -1,3 +1,4 @@
+// Convex schema definitions for marketplace credentials, rate limits, and webhook records.
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -14,7 +15,7 @@ export const marketplaceTables = {
     // Encrypted API key for BrickOwl
     brickowlApiKey: v.optional(v.string()), // encrypted
     // Metadata
-    isActive: v.boolean(),
+    isActive: v.boolean(), // Whether the credentials are active and can be used
     syncEnabled: v.optional(v.boolean()), // Default: true for backward compatibility
     ordersSyncEnabled: v.optional(v.boolean()), // Per-provider order ingestion toggle
     inventorySyncEnabled: v.optional(v.boolean()), // Per-provider inventory sync toggle

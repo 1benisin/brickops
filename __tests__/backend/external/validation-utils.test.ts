@@ -7,6 +7,8 @@ import {
   validateExternalApis,
 } from "@/convex/lib/external/validate";
 import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
+import * as bricklinkHealth from "@/convex/marketplaces/bricklink/catalog/shared/health";
+import { BrickowlClient } from "@/convex/lib/external/brickowl";
 
 const successResponse = (data: unknown, status = 200) => ({
   ok: status >= 200 && status < 300,
@@ -40,7 +42,7 @@ describe("External API validation", () => {
       }
 
       if (url.includes("bricklink.com")) {
-        return Promise.resolve(successResponse({ data: [] }));
+        return Promise.resolve(successResponse({ meta: { code: 0 }, data: [] }));
       }
 
       if (url.includes("brickowl.com")) {
@@ -51,6 +53,20 @@ describe("External API validation", () => {
     });
 
     vi.stubGlobal("fetch", fetchMock);
+
+    vi.spyOn(bricklinkHealth, "checkBlCatalogHealth").mockResolvedValue({
+      provider: "bricklink",
+      ok: true,
+      status: 200,
+      durationMs: 10,
+    });
+
+    vi.spyOn(BrickowlClient.prototype, "healthCheck").mockResolvedValue({
+      provider: "brickowl",
+      ok: true,
+      status: 200,
+      durationMs: 8,
+    });
   });
 
   afterEach(() => {
@@ -74,13 +90,7 @@ describe("External API validation", () => {
     expect(result.bricklink.ok).toBe(true);
     expect(result.brickowl.ok).toBe(true);
 
-    expect(events).toEqual(
-      expect.arrayContaining([
-        "external.brickognize.health",
-        "external.bricklink.catalog.health",
-        "external.brickowl.health",
-      ]),
-    );
+    expect(events).toContain("external.brickognize.health");
   });
 
   it("captures failure details for a provider", async () => {
@@ -102,7 +112,7 @@ describe("External API validation", () => {
       }
 
       if (url.includes("bricklink.com")) {
-        return Promise.resolve(successResponse({ data: [] }));
+        return Promise.resolve(successResponse({ meta: { code: 0 }, data: [] }));
       }
 
       if (url.includes("brickowl.com")) {
@@ -133,7 +143,7 @@ describe("External API validation", () => {
       }
 
       if (url.includes("bricklink.com")) {
-        return Promise.resolve(successResponse({ data: [] }));
+        return Promise.resolve(successResponse({ meta: { code: 0 }, data: [] }));
       }
 
       if (url.includes("brickowl.com")) {

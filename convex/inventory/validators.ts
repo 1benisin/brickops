@@ -21,6 +21,7 @@ export const syncStatus = v.union(
   v.literal("syncing"),
   v.literal("synced"),
   v.literal("failed"),
+  v.literal("disabled"),
 );
 
 export const marketplaceProvider = v.union(v.literal("bricklink"), v.literal("brickowl"));

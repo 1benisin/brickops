@@ -4,4 +4,4 @@
 !.env.local.example
 
 # dont' allow _archive folder
-_archive/
+# _archive/

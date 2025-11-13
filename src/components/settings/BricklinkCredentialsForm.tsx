@@ -18,7 +18,7 @@ export function BrickLinkCredentialsForm() {
   const saveCredentials = useMutation(api.marketplaces.shared.credentials.saveCredentials);
   const revokeCredentials = useMutation(api.marketplaces.shared.credentials.revokeCredentials);
   const updateSyncSettings = useMutation(api.marketplaces.shared.credentials.updateSyncSettings);
-  const testConnection = useAction(api.marketplaces.shared.actions.testConnection);
+  const testConnection = useAction(api.marketplaces.shared.credentials.testConnection);
   const registerWebhookAction = useAction(
     api.marketplaces.bricklink.notifications.actions.registerWebhook,
   );

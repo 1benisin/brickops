@@ -1,5 +1,40 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import type { Infer } from "convex/values";
+
+export const ORDER_STATUS_VALUES = [
+  "PENDING",
+  "UPDATED",
+  "PROCESSING",
+  "READY",
+  "PAID",
+  "PACKED",
+  "SHIPPED",
+  "RECEIVED",
+  "COMPLETED",
+  "CANCELLED",
+  "HOLD",
+  "ARCHIVED",
+] as const;
+
+export const orderStatusValidator = v.union(
+  ...ORDER_STATUS_VALUES.map((status) => v.literal(status)),
+);
+
+export type OrderStatus = Infer<typeof orderStatusValidator>;
+
+export const ORDER_ITEM_STATUS_VALUES = [
+  "picked",
+  "unpicked",
+  "skipped",
+  "issue",
+] as const;
+
+export const orderItemStatusValidator = v.union(
+  ...ORDER_ITEM_STATUS_VALUES.map((status) => v.literal(status)),
+);
+
+export type OrderItemStatus = Infer<typeof orderItemStatusValidator>;
 
 export const ordersTables = {
   orders: defineTable({
@@ -9,20 +44,7 @@ export const ordersTables = {
     externalOrderKey: v.optional(v.string()), // Provider-specific identifier when different from orderId
     dateOrdered: v.number(),
     dateStatusChanged: v.optional(v.number()),
-    status: v.union(
-      v.literal("PENDING"),
-      v.literal("UPDATED"),
-      v.literal("PROCESSING"),
-      v.literal("READY"),
-      v.literal("PAID"),
-      v.literal("PACKED"),
-      v.literal("SHIPPED"),
-      v.literal("RECEIVED"),
-      v.literal("COMPLETED"),
-      v.literal("CANCELLED"),
-      v.literal("HOLD"),
-      v.literal("ARCHIVED"),
-    ),
+    status: orderStatusValidator,
     providerStatus: v.optional(v.string()),
     buyerName: v.optional(v.string()),
     buyerEmail: v.optional(v.string()),
@@ -108,12 +130,7 @@ export const ordersTables = {
     description: v.optional(v.string()),
     weight: v.optional(v.number()),
     location: v.optional(v.string()),
-    status: v.union(
-      v.literal("picked"),
-      v.literal("unpicked"),
-      v.literal("skipped"),
-      v.literal("issue"),
-    ),
+    status: orderItemStatusValidator,
     providerData: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),

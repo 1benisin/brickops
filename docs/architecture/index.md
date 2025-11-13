@@ -26,7 +26,14 @@ High-level documentation for onboarding and understanding the system:
 - [Introduction](./overview/introduction.md) - Project context and history
 - [High Level Architecture](./overview/high-level-architecture.md) - System design and patterns
 - [Tech Stack](./overview/tech-stack.md) - Technology choices with versions
-- [Project Structure](./overview/project-structure.md) - Source code organization
+- [Project Overview](./overview/project-overview.md) - Product vision, personas, and system scope
+
+### Planning & Requirements
+
+Initiative plans and background context:
+
+- [Plans](../plans/) - Current initiative plans, refactor scopes, and rollout notes
+- [User Flows](../flows/README.md) - End-to-end flow documentation for key scenarios
 
 ### Backend
 
@@ -82,6 +89,6 @@ Data models and structures:
 
 ## External Documentation
 
-- [External APIs](../external/apis/) - Brickognize, Bricklink, Brickowl API documentation
+- [External APIs](../external-documentation/) - Brickognize, Bricklink, Brickowl API documentation
 - [Convex Auth Setup](../external-documentation/convex-auth/setup.md) - Authentication configuration
 - [Convex Auth Authorization](../external-documentation/convex-auth/authorization.md) - Authorization patterns

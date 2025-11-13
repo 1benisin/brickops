@@ -10,13 +10,7 @@ export type RequireUserReturn = {
   businessAccountId: Id<"businessAccounts">;
 };
 
-/**
- * Helper function to ensure user is authenticated, active, and linked to a business account
- * Not a Convex function - used internally by queries and mutations
- */
-export async function requireActiveUser(
-  ctx: QueryCtx | MutationCtx | ActionCtx,
-): Promise<RequireUserReturn> {
+async function requireActiveUserFromDb(ctx: QueryCtx | MutationCtx): Promise<RequireUserReturn> {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new ConvexError("Authentication required");
@@ -38,8 +32,22 @@ export async function requireActiveUser(
   return {
     userId,
     user,
-    businessAccountId: user.businessAccountId as Id<"businessAccounts">,
+    businessAccountId: user.businessAccountId,
   };
+}
+
+/**
+ * Helper function to ensure user is authenticated, active, and linked to a business account.
+ * Works across queries, mutations, and actions.
+ */
+export async function requireActiveUser(
+  ctx: QueryCtx | MutationCtx | ActionCtx,
+): Promise<RequireUserReturn> {
+  if ("db" in ctx) {
+    return requireActiveUserFromDb(ctx);
+  }
+
+  return ctx.runQuery(internal.users.queries.getActiveUserContext, {});
 }
 
 /**
@@ -52,10 +60,7 @@ export async function requireUserRole(
   ctx: RoleCtx,
   requiredRole: Doc<"users">["role"],
 ): Promise<RequireUserReturn> {
-  const context =
-    "db" in ctx
-      ? await requireActiveUser(ctx)
-      : await ctx.runQuery(internal.users.queries.getActiveUserContext, {});
+  const context = await requireActiveUser(ctx);
 
   if (context.user.role !== requiredRole) {
     throw new ConvexError(`Only users with the ${requiredRole} role can perform this action`);

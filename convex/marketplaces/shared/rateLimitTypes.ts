@@ -1,3 +1,4 @@
+// Plain TypeScript interface describing the shape of rate limit state returned from queries.
 export interface RateLimitState {
   windowStart: number;
   requestCount: number;

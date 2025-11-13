@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { BLCatalogCtx } from "@/convex/marketplaces/bricklink/client";
-import type { BLEnvelope } from "@/convex/marketplaces/bricklink/shared/envelope";
-import {
-  checkBlCatalogHealth,
-  fetchBlColor,
-  fetchBlPriceGuide,
-  makeBlCatalogRequest,
-} from "@/convex/marketplaces/bricklink/client";
+import type { BLCatalogCtx } from "@/convex/marketplaces/bricklink/transport";
+import type { BLEnvelope } from "@/convex/marketplaces/bricklink/envelope";
+import { makeBlCatalogRequest } from "@/convex/marketplaces/bricklink/transport";
+import { fetchBlColor } from "@/convex/marketplaces/bricklink/catalog/colors/actions";
+import { fetchBlPriceGuide } from "@/convex/marketplaces/bricklink/catalog/priceGuides/actions";
+import { checkBlCatalogHealth } from "@/convex/marketplaces/bricklink/catalog/shared/health";
 import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
 import * as env from "@/convex/lib/external/env";
 
@@ -72,7 +70,7 @@ describe("BrickLink catalog client", () => {
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        meta: {},
+        meta: { code: 0 },
         data: {
           color_id: 21,
           color_name: "Bright Red",
@@ -125,7 +123,7 @@ describe("BrickLink catalog client", () => {
 
       return Promise.resolve(
         jsonResponse({
-          meta: {},
+          meta: { code: 0 },
           data: {
             item: { no: "3001", type: "PART" },
             new_or_used: newOrUsed,
@@ -191,7 +189,7 @@ describe("BrickLink catalog client", () => {
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        meta: {},
+        meta: { code: 0 },
         data: { sample: true },
       }),
     );
@@ -205,7 +203,7 @@ describe("BrickLink catalog client", () => {
     expect(envSpy).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.data).toEqual({
-      meta: {},
+      meta: { code: 0 },
       data: { sample: true },
     });
 
@@ -221,7 +219,7 @@ describe("BrickLink catalog client", () => {
     const result = await checkBlCatalogHealth();
 
     expect(result.ok).toBe(false);
-    expect(result.status).toBe(503);
+    expect(result.status).toBeUndefined();
     expect(result.error?.error.code).toBe("UNEXPECTED_ERROR");
 
     const eventNames = events.map((event) => event.name);

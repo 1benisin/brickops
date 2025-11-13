@@ -1,0 +1,73 @@
+{
+  "order_id": "1234567",
+  "resource_id": 9876543,
+  "date_ordered": "2024-10-12T14:32:10.000Z",
+  "date_status_changed": "2024-10-13T09:00:00.000Z",
+  "seller_name": "Example Seller",
+  "store_name": "Example Seller",
+  "buyer_name": "Ada Lovelace",
+  "buyer_email": "ada.lovelace@example.com",
+  "buyer_order_count": 5,
+  "require_insurance": false,
+  "status": "PAID",
+  "is_invoiced": true,
+  "is_filed": false,
+  "drive_thru_sent": true,
+  "salesTax_collected_by_bl": false,
+  "remarks": "Please ship ASAP",
+  "total_count": 6,
+  "unique_count": 3,
+  "total_weight": "1.2",
+  "payment": {
+    "method": "PayPal",
+    "currency_code": "USD",
+    "date_paid": "2024-10-13T08:30:00.000Z",
+    "status": "Completed"
+  },
+  "shipping": {
+    "method": "USPS Priority",
+    "method_id": 12,
+    "tracking_no": "TRACK123456789",
+    "tracking_link": "https://tools.usps.com/go/TrackConfirmAction?q=TRACK123456789",
+    "date_shipped": "2024-10-14T16:45:00.000Z",
+    "address": {
+      "name": {
+        "full": "Ada Lovelace",
+        "first": "Ada",
+        "last": "Lovelace"
+      },
+      "full": "Ada Lovelace\n123 Example St\nCityville, ST 12345",
+      "address1": "123 Example St",
+      "address2": "Suite 100",
+      "country_code": "US",
+      "city": "Cityville",
+      "state": "ST",
+      "postal_code": "12345",
+      "phone_number": "+1-555-0100"
+    }
+  },
+  "cost": {
+    "currency_code": "USD",
+    "subtotal": "18.00",
+    "grand_total": "25.50",
+    "salesTax_collected_by_BL": "0.00",
+    "final_total": "25.50",
+    "etc1": "0.00",
+    "etc2": "0.00",
+    "insurance": "0.00",
+    "shipping": "7.50",
+    "credit": "0.00",
+    "coupon": "0.00",
+    "vat_rate": "0",
+    "vat_amount": "0"
+  },
+  "disp_cost": {
+    "currency_code": "USD",
+    "subtotal": "18.00",
+    "grand_total": "25.50",
+    "insurance": "0.00",
+    "shipping": "7.50",
+    "credit": "0.00",
+    "coupon": "0.00"
+  }
+}

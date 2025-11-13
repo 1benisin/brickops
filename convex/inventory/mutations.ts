@@ -29,7 +29,7 @@ async function updateMarketplaceSyncStatus(
   ctx: { db: DatabaseReader },
   itemId: Id<"inventoryItems">,
   businessAccountId: Id<"businessAccounts">,
-  status: "pending" | "syncing" | "synced" | "failed" = "pending",
+  status: "pending" | "syncing" | "synced" | "failed" | "disabled" = "pending",
 ): Promise<Partial<Doc<"inventoryItems">>> {
   // Get current item to preserve existing marketplace sync data
   const currentItem = await ctx.db.get(itemId);
@@ -175,11 +175,11 @@ export const addInventoryItem = mutation({
     // Only set to "syncing" if we have credentials configured
     const hasAnyOutbox = outboxResults.some((r) => r.created);
     if (!hasAnyOutbox) {
-      // No credentials configured, set to "synced" (no sync needed)
+      // No credentials configured or sync disabled, set to "disabled"
       await ctx.db.patch(id, {
         marketplaceSync: {
-          bricklink: { status: "synced", lastSyncAttempt: timestamp },
-          brickowl: { status: "synced", lastSyncAttempt: timestamp },
+          bricklink: { status: "disabled", lastSyncAttempt: timestamp },
+          brickowl: { status: "disabled", lastSyncAttempt: timestamp },
         },
       });
     }
@@ -296,17 +296,17 @@ export const updateInventoryItem = mutation({
         (r: { provider: string; created: boolean }) => r.created,
       );
       if (!hasAnyOutbox) {
-        // Gate: Mark as synced if no credentials configured
+        // Gate: Mark as disabled if no credentials configured or sync disabled
         await ctx.db.patch(args.itemId, {
           marketplaceSync: {
             ...item.marketplaceSync,
             bricklink: {
-              status: "synced",
+              status: "disabled",
               lastSyncAttempt: timestamp,
               ...item.marketplaceSync?.bricklink,
             },
             brickowl: {
-              status: "synced",
+              status: "disabled",
               lastSyncAttempt: timestamp,
               ...item.marketplaceSync?.brickowl,
             },
@@ -416,17 +416,17 @@ export const deleteInventoryItem = mutation({
     // Update sync status based on whether outbox messages were created
     const hasAnyOutbox = outboxResults.some((r) => r.created);
     if (!hasAnyOutbox) {
-      // Gate: Mark as synced if no credentials configured
+      // Gate: Mark as disabled if no credentials configured or sync disabled
       await ctx.db.patch(args.itemId, {
         marketplaceSync: {
           ...item.marketplaceSync,
           bricklink: {
-            status: "synced",
+            status: "disabled",
             lastSyncAttempt: timestamp,
             ...item.marketplaceSync?.bricklink,
           },
           brickowl: {
-            status: "synced",
+            status: "disabled",
             lastSyncAttempt: timestamp,
             ...item.marketplaceSync?.brickowl,
           },

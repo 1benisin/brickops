@@ -15,24 +15,21 @@ This file is designed to help AI agents understand the BrickOps project structur
 
 All project documentation is located in the `docs/` directory. Start here for any questions about the project.
 
-### 📋 Product Requirements (PRD)
+### 🧭 Product Context & Planning
 
-**Location**: `docs/prd/`
+**Location**: `docs/plans/`
 
-Start here to understand:
+The legacy PRD folder was removed. Use the planning docs to understand:
 
-- Project goals and background context
-- Functional and non-functional requirements
-- User interface design goals
-- Technical assumptions
-- Epic breakdown and feature requirements
+- Current initiative plans and refactor scopes
+- Architectural decision records for upcoming work
+- Testing and rollout considerations captured per plan
 
 **Key Files**:
 
-- `docs/prd/index.md` - Complete PRD table of contents
-- `docs/prd/goals-and-background-context.md` - Project vision and goals
-- `docs/prd/requirements.md` - Functional requirements
-- `docs/prd/epic-list.md` - Feature epics and stories
+- `docs/plans/bricklink-catalog-refactor-plan.md`
+- `docs/plans/brickowl-service-testing-plan.md`
+- Additional plans will be added here as initiatives spin up
 
 ### 🏗️ Architecture Documentation
 
@@ -116,7 +113,7 @@ Organized by domain:
 1. **Read the relevant documentation**:
 
    - For architecture questions: `docs/architecture/`
-   - For feature requirements: `docs/prd/`
+   - For initiative requirements: `docs/plans/`
    - For user flows: `docs/flows/`
 
 2. **Understand coding standards**: Read `docs/architecture/development/coding-standards.md`
@@ -199,7 +196,7 @@ pnpm lint
 
 ### "How do I...?"
 
-- **Understand the project goals**: `docs/prd/goals-and-background-context.md`
+- **Understand the project goals**: `docs/architecture/overview/introduction.md`
 - **Learn the architecture**: `docs/architecture/overview/high-level-architecture.md`
 - **See the tech stack**: `docs/architecture/overview/tech-stack.md`
 - **Understand project structure**: `docs/architecture/overview/project-structure.md`
@@ -219,7 +216,7 @@ pnpm lint
 
 When implementing a feature:
 
-1. Check the PRD: `docs/prd/` for requirements and acceptance criteria
+1. Review the relevant plan: `docs/plans/` for requirements and acceptance criteria
 2. Review related flows: `docs/flows/` for user workflow documentation
 3. Check architecture: `docs/architecture/` for implementation patterns
 4. Review external APIs: `docs/external-documentation/` if integrating with external services
@@ -228,7 +225,7 @@ When implementing a feature:
 
 | Need to know...                  | Go to...                                                |
 | -------------------------------- | ------------------------------------------------------- |
-| Project goals and requirements   | `docs/prd/`                                             |
+| Project goals and requirements   | `docs/plans/`                                           |
 | Architecture and design patterns | `docs/architecture/`                                    |
 | User workflows                   | `docs/flows/`                                           |
 | External API integration         | `docs/external-documentation/`                          |
@@ -324,7 +321,7 @@ If you need information that's not in this guide:
 1. **For database/backend questions**: Use the Convex MCP server to inspect tables, functions, and data
 2. **For UI component questions**: Use the ShadCN MCP server to find and understand components
 3. Check the `docs/` directory structure above
-4. Read the relevant index files (e.g., `docs/architecture/index.md`, `docs/prd/index.md`)
+4. Read the relevant index files (e.g., `docs/architecture/index.md`, `docs/plans/bricklink-catalog-refactor-plan.md`)
 5. Search the codebase for similar implementations
 6. Review the external documentation for API-specific questions
 
