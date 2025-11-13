@@ -146,11 +146,11 @@ async function createInventoryItemWithLedger(
   // Phase 3: Update sync status based on whether outbox messages were created
   const hasAnyOutbox = outboxResults.some((r) => r.created);
   if (!hasAnyOutbox) {
-    // No credentials configured, set to "synced" (no sync needed)
+    // No credentials configured or sync disabled, set to "disabled"
     await ctx.db.patch(id, {
       marketplaceSync: {
-        bricklink: { status: "synced", lastSyncAttempt: timestamp },
-        brickowl: { status: "synced", lastSyncAttempt: timestamp },
+        bricklink: { status: "disabled", lastSyncAttempt: timestamp },
+        brickowl: { status: "disabled", lastSyncAttempt: timestamp },
       },
     });
   }
@@ -332,6 +332,16 @@ export const deleteAllInventoryItems = mutation({
       .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
       .collect();
 
+    // Clear any marketplace outbox messages for this business account before deleting items
+    const marketplaceOutboxMessages = await ctx.db
+      .query("marketplaceOutbox")
+      .filter((q) => q.eq(q.field("businessAccountId"), businessAccountId))
+      .collect();
+
+    await Promise.all(
+      marketplaceOutboxMessages.map((message) => ctx.db.delete(message._id)),
+    );
+
     // Delete all items
     await Promise.all(allItems.map((item) => ctx.db.delete(item._id)));
 
@@ -350,6 +360,7 @@ export const deleteAllInventoryItems = mutation({
     await Promise.all(allLocationLedgerEntries.map((entry) => ctx.db.delete(entry._id)));
 
     return {
+      deletedMarketplaceOutboxMessages: marketplaceOutboxMessages.length,
       deletedItems: allItems.length,
       deletedQuantityLedgerEntries: allQuantityLedgerEntries.length,
       deletedLocationLedgerEntries: allLocationLedgerEntries.length,

@@ -9,16 +9,22 @@ import {
   createTestIdentity,
 } from "@/test-utils/convex-test-context";
 
-const mockGetAuthUserId = vi.fn<() => Promise<string | null>>();
+const mockGetAuthUserId = vi.hoisted(
+  () => vi.fn<() => Promise<string | null>>(),
+) as ReturnType<typeof vi.fn<() => Promise<string | null>>>;
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockGetAuthUserId,
 }));
 
-const mockListInventories = vi.fn<(...args: unknown[]) => Promise<any>>();
-const mockListBrickOwlInventories = vi.fn<(...args: unknown[]) => Promise<any>>();
+const mockListInventories = vi.hoisted(
+  () => vi.fn<(...args: unknown[]) => Promise<any>>(),
+) as ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<any>>>;
+const mockListBrickOwlInventories = vi.hoisted(
+  () => vi.fn<(...args: unknown[]) => Promise<any>>(),
+) as ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<any>>>;
 
-vi.mock("@/convex/marketplaces/bricklink/inventories", () => ({
+vi.mock("@/convex/marketplaces/bricklink/inventory/actions", () => ({
   getBLInventories: mockListInventories,
 }));
 
@@ -58,6 +64,7 @@ describe("inventory import dedupe by lot ID", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetAuthUserId.mockReset();
     mockGetAuthUserId.mockResolvedValue(ownerUserId);
   });
 
@@ -83,14 +90,9 @@ describe("inventory import dedupe by lot ID", () => {
       throw new Error(`Unexpected mutation: ${String(mutation)}`);
     });
 
-    const runQuery = vi.fn(async (query: unknown) => {
-      if (query === api.users.queries.getCurrentUser) {
-        return {
-          user: { _id: ownerUserId, role: "owner" },
-          businessAccount: { _id: businessAccountId },
-        };
-      }
-      if (query === api.inventory.queries.listInventoryItems) {
+    const runQuery = vi.fn(async (...args: any[]) => {
+      const [, params] = args;
+      if (!params || Object.keys(params).length === 0) {
         return [];
       }
       throw new Error("Unexpected query");
@@ -105,17 +107,23 @@ describe("inventory import dedupe by lot ID", () => {
     mockListInventories.mockResolvedValue([
       {
         inventory_id: 101,
-        item: { no: "2440", name: "Hinge 6 x 3" },
+        item: { no: "2440", name: "Hinge 6 x 3", type: "PART" },
         color_id: 0,
         quantity: 5,
         new_or_used: "U",
+        color_name: "Black",
+        unit_price: "0.25",
+        remarks: "",
       },
       {
         inventory_id: 202,
-        item: { no: "2440", name: "Hinge 6 x 3" },
+        item: { no: "2440", name: "Hinge 6 x 3", type: "PART" },
         color_id: 0,
         quantity: 3,
         new_or_used: "U",
+        color_name: "Black",
+        unit_price: "0.30",
+        remarks: "Shelf A",
       },
     ]);
 
@@ -123,6 +131,7 @@ describe("inventory import dedupe by lot ID", () => {
       candidateIds: ["bricklink:101", "bricklink:202"],
     });
 
+    console.log("bricklink result", result);
     expect(result).toMatchObject({
       provider: "bricklink",
       imported: 2,
@@ -168,27 +177,26 @@ describe("inventory import dedupe by lot ID", () => {
       throw new Error(`Unexpected mutation: ${String(mutation)}`);
     });
 
-    const runQuery = vi.fn(async (query: unknown, args: any) => {
-      if (query === api.users.queries.getCurrentUser) {
-        return {
-          user: { _id: ownerUserId, role: "owner" },
-          businessAccount: { _id: businessAccountId },
-        };
-      }
-      if (query === api.inventory.queries.listInventoryItems) {
+    const runQuery = vi.fn(async (...args: any[]) => {
+      const [, params] = args;
+      if (!params || Object.keys(params).length === 0) {
         return [];
       }
-      if (query === internal.catalog.queries.getPartByBrickowlId) {
+      if ("brickowlId" in params) {
         return {
           no: "2440",
           name: "Hinge 6 x 3",
-          brickowlId: args.brickowlId,
+          brickowlId: params.brickowlId,
         };
       }
-      if (query === internal.catalog.queries.getPartInternal) {
-        return null;
+      if ("partNumber" in params) {
+        return {
+          no: params.partNumber,
+          name: "Hinge 6 x 3",
+          brickowlId: "2440-0000",
+        };
       }
-      if (query === internal.catalog.queries.getColorByBrickowlColorId) {
+      if ("brickowlColorId" in params) {
         return { colorId: 0 };
       }
       throw new Error("Unexpected query");
@@ -196,7 +204,7 @@ describe("inventory import dedupe by lot ID", () => {
 
     const runAction = vi.fn(async (action: unknown) => {
       if (action === internal.catalog.actions.getBricklinkPartIdsFromBrickowl) {
-        return [];
+        return ["2440"];
       }
       throw new Error(`Unexpected action: ${String(action)}`);
     });
@@ -216,6 +224,8 @@ describe("inventory import dedupe by lot ID", () => {
         quantity: 4,
         for_sale: "1",
         personal_note: "",
+        condition: "new",
+        price: "0.20",
       },
       {
         lot_id: "lot-b",
@@ -224,6 +234,8 @@ describe("inventory import dedupe by lot ID", () => {
         quantity: 6,
         for_sale: "1",
         personal_note: " ",
+        condition: "used",
+        price: "0.18",
       },
     ]);
 
@@ -231,6 +243,7 @@ describe("inventory import dedupe by lot ID", () => {
       candidateIds: ["brickowl:lot-a", "brickowl:lot-b"],
     });
 
+    console.log("brickowl result", result);
     expect(result).toMatchObject({
       provider: "brickowl",
       imported: 2,

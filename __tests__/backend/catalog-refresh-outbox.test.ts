@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { ConvexError } from "convex/values";
 
 import { enqueueCatalogRefresh } from "@/convex/catalog/mutations";
@@ -9,7 +9,7 @@ import {
   markOutboxSucceeded,
   markOutboxFailed,
 } from "@/convex/catalog/refreshWorker";
-import { getOutboxMessage } from "@/convex/catalog/queries";
+import { getOutboxMessage, getPartInternal } from "@/convex/catalog/queries";
 import {
   enqueueRefreshPart,
   enqueueRefreshPartColors,
@@ -20,6 +20,8 @@ import {
   createConvexTestContext,
   createTestIdentity,
 } from "@/test-utils/convex-test-context";
+import * as userAuthorization from "@/convex/users/authorization";
+import { api } from "@/convex/_generated/api";
 
 describe("catalog refresh outbox", () => {
   const businessAccountId = "businessAccounts:1";
@@ -83,6 +85,18 @@ describe("catalog refresh outbox", () => {
       },
     ],
   });
+
+  const matchesReference = (candidate: any, reference: any) => {
+    if (candidate === reference) {
+      return true;
+    }
+
+    if (Array.isArray(candidate?._path) && Array.isArray(reference?._path)) {
+      return candidate._path.join("/") === reference._path.join("/");
+    }
+
+    return false;
+  };
 
   describe("enqueueCatalogRefresh mutation", () => {
     it("creates a new outbox message for parts", async () => {
@@ -343,35 +357,38 @@ describe("catalog refresh outbox", () => {
   });
 
   describe("enqueue actions", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it("enqueueRefreshPart creates outbox message for authenticated user", async () => {
       const ctx = createConvexTestContext({
         seed: baseSeed,
         identity: createTestIdentity({ subject: `${userId}|session-001` }),
       });
 
-      // Mock runQuery and runMutation for action context
-      const runQuery = vi.fn(async (query: any, args: any) => {
-        if (query === (getOutboxMessage as any)) {
-          return null; // No existing message
+      const seenQueryPaths: string[] = [];
+      const runQuery = vi.fn(async (_query: any, args: any) => {
+        if ("tableName" in args && "primaryKey" in args) {
+          seenQueryPaths.push("getOutboxMessage");
+          return await (getOutboxMessage as any)._handler(ctx, args);
         }
-        // Import helper for getPartInternal
-        const { getPartInternal } = await import("@/convex/catalog/queries");
-        if (query === (getPartInternal as any)) {
-          return baseSeed.parts[0];
+        if ("partNumber" in args) {
+          seenQueryPaths.push("getPartInternal");
+          return await (getPartInternal as any)._handler(ctx, args);
         }
         return null;
       });
 
-      const runMutation = vi.fn(async (mutation: any, args: any) => {
-        // Execute mutation directly
-        if (mutation === (enqueueCatalogRefresh as any)) {
-          return await (enqueueCatalogRefresh as any)._handler(
-            createConvexTestContext({ seed: baseSeed }),
-            args,
-          );
-        }
-        return null;
+      const runMutation = vi.fn(async (_mutation: any, args: any) => {
+        return await (enqueueCatalogRefresh as any)._handler(ctx, args);
       });
+
+      vi.spyOn(userAuthorization, "requireActiveUser").mockResolvedValue({
+        userId: baseSeed.users[0]._id,
+        user: baseSeed.users[0],
+        businessAccountId,
+      } as any);
 
       const actionCtx = {
         ...ctx,
@@ -386,14 +403,12 @@ describe("catalog refresh outbox", () => {
         partNumber: "3001",
       });
 
-      // Verify mutation was called
-      expect(runMutation).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.objectContaining({
-          tableName: "parts",
-          primaryKey: "3001",
-        }),
-      );
+      expect(runMutation.mock.calls.length).toBeGreaterThan(0);
+      const [, mutationArgs] = runMutation.mock.calls[0] as [unknown, any];
+      expect(mutationArgs).toMatchObject({
+        tableName: "parts",
+        primaryKey: "3001",
+      });
     });
 
     it("enqueueRefreshPart requires authentication", async () => {
@@ -419,7 +434,7 @@ describe("catalog refresh outbox", () => {
         }),
       ).rejects.toThrow(ConvexError);
 
-      expect(runMutation).not.toHaveBeenCalled();
+      expect(runMutation.mock.calls.length).toBe(0);
     });
 
     it("enqueueRefreshPart skips if already queued", async () => {
@@ -428,7 +443,6 @@ describe("catalog refresh outbox", () => {
         identity: createTestIdentity({ subject: `${userId}|session-001` }),
       });
 
-      // Create existing message
       await ctx.db.insert("catalogRefreshOutbox", {
         tableName: "parts",
         primaryKey: "3001",
@@ -441,14 +455,29 @@ describe("catalog refresh outbox", () => {
         createdAt: Date.now(),
       });
 
-      const runQuery = vi.fn(async (query: any, args: any) => {
-        if (query === (getOutboxMessage as any)) {
+      const seenQueryPaths: string[] = [];
+      const runQuery = vi.fn(async (_query: any, args: any) => {
+        if ("tableName" in args && "primaryKey" in args) {
+          seenQueryPaths.push("getOutboxMessage");
           return await (getOutboxMessage as any)._handler(ctx, args);
         }
-        return baseSeed.parts[0];
+        if ("partNumber" in args) {
+          seenQueryPaths.push("getPartInternal");
+          return await (getPartInternal as any)._handler(ctx, args);
+        }
+        return null;
       });
 
-      const runMutation = vi.fn();
+      const runMutation = vi.fn(async (_mutation: any, args: any) => {
+        return await (enqueueCatalogRefresh as any)._handler(ctx, args);
+      });
+
+      vi.spyOn(userAuthorization, "requireActiveUser").mockResolvedValue({
+        userId: baseSeed.users[0]._id,
+        user: baseSeed.users[0],
+        businessAccountId,
+      } as any);
+
       const actionCtx = {
         ...ctx,
         runQuery,
@@ -462,8 +491,14 @@ describe("catalog refresh outbox", () => {
         partNumber: "3001",
       });
 
-      // Should not create duplicate
-      expect(runMutation).not.toHaveBeenCalled();
+      const outboxCallIndex = runQuery.mock.calls.findIndex(([, args]) => {
+        return "tableName" in (args ?? {}) && "primaryKey" in (args ?? {});
+      });
+      expect(outboxCallIndex).toBeGreaterThanOrEqual(0);
+      const outboxResult = await runQuery.mock.results[outboxCallIndex]?.value;
+      expect(outboxResult?.status).toBe("pending");
+      expect(runMutation.mock.calls.length).toBe(0);
+      expect(seenQueryPaths).toContain("getOutboxMessage");
     });
   });
 });

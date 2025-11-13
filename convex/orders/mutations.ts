@@ -90,8 +90,7 @@ export const updateOrderStatusIfFullyPicked = mutation({
     orderId: v.string(),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    const { user, businessAccountId } = await requireUser(ctx);
 
     // Get order
     const order = await ctx.db
@@ -140,8 +139,7 @@ export const markOrdersAsPicked = mutation({
     forceUpdate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    const { user, businessAccountId } = await requireUser(ctx);
 
     const updatedOrderIds: string[] = [];
     const skippedOrderIds: string[] = [];
@@ -332,7 +330,7 @@ export const markOrderItemAsUnpicked = mutation({
     inventoryItemId: v.optional(v.id("inventoryItems")),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
+    const { user, businessAccountId } = await requireUser(ctx);
 
     // Get order item
     const orderItem = await ctx.db.get(args.orderItemId);
@@ -391,7 +389,6 @@ export const markOrderItemAsUnpicked = mutation({
 
     // Check if order status needs to be reverted from "PACKED" to "PAID"
     // if we unpicked an item from a fully picked order
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
     const order = await ctx.db
       .query("orders")
       .withIndex("by_business_order", (q) =>

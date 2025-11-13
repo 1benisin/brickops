@@ -1,5 +1,13 @@
 # Coding Standards
 
+## TL;DR
+
+- Split Convex code by function type: queries stay pure, mutations own writes/scheduling, actions orchestrate external calls, and always `await` scheduled work.
+- Derive all shared types from Convex validators (`Infer`, `FunctionReturnType`); never duplicate data shapes in the frontend.
+- Build UI from shadcn/ui primitives installed via the CLI and compose domain wrappers under `src/components/`.
+- Emit structured errors (`ConvexError` with `code`, `message`, `httpStatus`, `correlationId`) and mirror them in the frontend via shadcn `Alert` components.
+- Add or update tests whenever behaviour changes (React components, Convex domains, Playwright flows where applicable).
+
 ## Critical Rules
 
 - **Convex Function Patterns**: Follow the [Convex Function Patterns](../backend/architecture.md#convex-function-patterns-and-best-practices) section strictly:

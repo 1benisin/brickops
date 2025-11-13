@@ -2,7 +2,7 @@ import { ConvexError } from "convex/values";
 import { normalizeApiError } from "../../lib/external/types";
 import type { StoreErrorCode, StoreOperationError } from "../shared/storeTypes";
 
-export function normalizeBrickOwlError(error: unknown): StoreOperationError {
+export function normalizeBoStoreError(error: unknown): StoreOperationError {
   if (error instanceof ConvexError) {
     const data = toRecord(error.data);
     const httpStatus = pickNumber(data?.httpStatus);
@@ -56,6 +56,8 @@ export function normalizeBrickOwlError(error: unknown): StoreOperationError {
     rateLimitResetAt: retryAfterMs !== undefined ? toFutureIsoTimestamp(retryAfterMs) : undefined,
   };
 }
+
+export const normalizeBrickOwlError = normalizeBoStoreError;
 
 type ErrorMappingInput = {
   httpStatus?: number;
@@ -127,7 +129,7 @@ function isRetryable(code: StoreErrorCode, httpStatus?: number): boolean {
   }
 
   if (code === "UNEXPECTED_ERROR") {
-    return typeof httpStatus !== "number" || httpStatus >= 500;
+    return typeof httpStatus === "number" && httpStatus >= 500;
   }
 
   return false;

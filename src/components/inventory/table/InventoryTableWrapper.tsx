@@ -166,7 +166,7 @@ export function InventoryTableWrapper({
           aVal = aPrice * aQty;
           bVal = bPrice * bQty;
         } else if (sort.id === "marketplaceSync.bricklink") {
-          // Sort by sync status: pending < syncing < synced < failed
+          // Sort by sync status: pending < syncing < synced < failed < disabled
           // Items without sync data go last
           const aSync = a.marketplaceSync?.bricklink;
           const bSync = b.marketplaceSync?.bricklink;
@@ -175,6 +175,7 @@ export function InventoryTableWrapper({
             syncing: 1,
             synced: 2,
             failed: 3,
+            disabled: 4,
           };
           const aStatus = aSync?.status;
           const bStatus = bSync?.status;
@@ -182,7 +183,7 @@ export function InventoryTableWrapper({
           aVal = aStatus ? statusOrder[aStatus] ?? 999 : 999;
           bVal = bStatus ? statusOrder[bStatus] ?? 999 : 999;
         } else if (sort.id === "marketplaceSync.brickowl") {
-          // Sort by sync status: pending < syncing < synced < failed
+          // Sort by sync status: pending < syncing < synced < failed < disabled
           // Items without sync data go last
           const aSync = a.marketplaceSync?.brickowl;
           const bSync = b.marketplaceSync?.brickowl;
@@ -191,6 +192,7 @@ export function InventoryTableWrapper({
             syncing: 1,
             synced: 2,
             failed: 3,
+            disabled: 4,
           };
           const aStatus = aSync?.status;
           const bStatus = bSync?.status;

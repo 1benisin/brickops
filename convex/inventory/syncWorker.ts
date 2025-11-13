@@ -15,7 +15,7 @@ import {
 import {
   mapConvexToBrickOwlCreate,
   mapConvexToBrickOwlUpdate,
-} from "../marketplaces/brickowl/storeMappers";
+} from "../marketplaces/brickowl/inventory/transformers";
 import {
   createInventory as createBrickOwlInventory,
   updateInventory as updateBrickOwlInventory,
@@ -23,7 +23,7 @@ import {
 } from "../marketplaces/brickowl/inventory/actions";
 import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
 
-type InventoryItemDoc = Doc;
+type InventoryItemDoc = Doc<"inventoryItems">;
 
 /**
  * Phase 3: Worker that drains the marketplace outbox
@@ -234,6 +234,22 @@ async function processOutboxMessage(
     }
 
     // Call actual marketplace API
+    const marketplaceSyncState =
+      message.provider === "bricklink"
+        ? item.marketplaceSync?.bricklink
+        : item.marketplaceSync?.brickowl;
+
+    console.log("[MarketplaceSync] Processing message", {
+      messageId: message._id,
+      provider: message.provider,
+      kind: message.kind,
+      itemId: message.itemId,
+      fromSeqExclusive: message.fromSeqExclusive,
+      toSeqInclusive: message.toSeqInclusive,
+      attempt: message.attempt,
+      delta,
+      existingMarketplaceState: marketplaceSyncState,
+    });
     const result = await callMarketplaceAPI(ctx, {
       message,
       item,
@@ -375,12 +391,26 @@ async function callMarketplaceAPI(
       case "create": {
         if (args.message.provider === "bricklink") {
           const payload = mapConvexToBlCreate(args.item);
+          console.log("[BrickLink] Creating inventory item", {
+            inventoryItemId: args.item._id,
+            businessAccountId: args.item.businessAccountId,
+            payload,
+          });
           const result = await createBricklinkInventory(ctx, {
             businessAccountId: args.item.businessAccountId,
             payload,
           });
 
           const formattedError = result.success ? undefined : formatApiError(result.error);
+          if (!result.success) {
+            console.error("[BrickLink] Inventory create failed", {
+              inventoryItemId: args.item._id,
+              businessAccountId: args.item.businessAccountId,
+              correlationId: result.correlationId,
+              error: result.error,
+              formattedError,
+            });
+          }
           return {
             success: result.success,
             marketplaceId: result.marketplaceId,

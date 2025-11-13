@@ -1,0 +1,66 @@
+[
+  [
+    {
+      "inventory_id": 101,
+      "item": {
+        "no": "3001",
+        "name": "Brick 2 x 4",
+        "type": "PART",
+        "category_id": 11
+      },
+      "color_id": 0,
+      "color_name": "Black",
+      "quantity": 4,
+      "new_or_used": "N",
+      "completeness": "C",
+      "unit_price": "0.35",
+      "unit_price_final": "0.30",
+      "currency_code": "USD",
+      "remarks": "BIN-A1",
+      "description": "Black Brick 2 x 4",
+      "weight": "12.5"
+    },
+    {
+      "inventory_id": 102,
+      "item": {
+        "no": "3004",
+        "name": "Brick 1 x 2",
+        "type": "PART",
+        "category_id": 11
+      },
+      "color_id": 1,
+      "color_name": "Blue",
+      "quantity": 2,
+      "new_or_used": "U",
+      "completeness": "B",
+      "unit_price": "0.25",
+      "unit_price_final": "0.20",
+      "currency_code": "USD",
+      "remarks": "BIN-B2",
+      "description": "Blue Brick 1 x 2",
+      "weight": "5.0"
+    }
+  ],
+  [
+    {
+      "inventory_id": 103,
+      "item": {
+        "no": "3020",
+        "name": "Plate 2 x 4",
+        "type": "PART",
+        "category_id": 12
+      },
+      "color_id": 4,
+      "color_name": "Red",
+      "quantity": 3,
+      "new_or_used": "N",
+      "completeness": "S",
+      "unit_price": "0.40",
+      "unit_price_final": "0.38",
+      "currency_code": "USD",
+      "remarks": "BIN-C3",
+      "description": "Red Plate 2 x 4",
+      "weight": "7.5"
+    }
+  ]
+]

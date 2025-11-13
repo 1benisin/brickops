@@ -14,6 +14,8 @@ const getStatusVariant = (
       return "outline"; // Blue-like outline variant
     case "failed":
       return "destructive"; // Red destructive variant
+    case "disabled":
+      return "outline"; // Gray-like outline for disabled
     default:
       return "outline"; // Gray-like outline for unknown
   }
@@ -29,6 +31,8 @@ const getStatusIcon = (status: SyncStatus) => {
       return "⟳";
     case "failed":
       return "✗";
+    case "disabled":
+      return "⊘";
     default:
       return "○";
   }
@@ -44,6 +48,8 @@ const getStatusText = (status: SyncStatus) => {
       return "Syncing";
     case "failed":
       return "Failed";
+    case "disabled":
+      return "Disabled";
     default:
       return "Unknown";
   }

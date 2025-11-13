@@ -92,13 +92,13 @@ Sync behavior is now controlled through marketplace credential settings rather t
 ### Documentation Cross-References
 
 - Credential acquisition details live in the provider-specific architecture docs:
-  - Brickognize: `docs/external/apis/brickognize.md`
-  - Bricklink: `docs/external/apis/bricklink.md`
-  - Brickowl: `docs/external/apis/brickowl.md`
+  - Brickognize: `docs/external-documentation/api-brickognize.md`
+  - Bricklink: `docs/external-documentation/api-bricklink/README.md`
+  - Brickowl: `docs/external-documentation/api-brickowl/README.md`
 - Security and secret handling standards: `docs/architecture/security-and-performance.md#security-requirements`.
 
 ## External API Documents
 
-- Bricklink API: `docs/external/apis/bricklink.md`
-- Brickowl API: `docs/external/apis/brickowl.md`
-- Brickognize API: `docs/external/apis/brickognize.md`
+- Bricklink API: `docs/external-documentation/api-bricklink/README.md`
+- Brickowl API: `docs/external-documentation/api-brickowl/README.md`
+- Brickognize API: `docs/external-documentation/api-brickognize.md`

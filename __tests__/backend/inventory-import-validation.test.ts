@@ -9,7 +9,9 @@ import {
   createTestIdentity,
 } from "@/test-utils/convex-test-context";
 
-const mockGetAuthUserId = vi.fn<() => Promise<string | null>>();
+const mockGetAuthUserId = vi.hoisted(
+  () => vi.fn<() => Promise<string | null>>(),
+) as ReturnType<typeof vi.fn<() => Promise<string | null>>>;
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockGetAuthUserId,
@@ -58,6 +60,7 @@ describe("inventory import validation", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetAuthUserId.mockReset();
     mockGetAuthUserId.mockResolvedValue(ownerUserId);
   });
 

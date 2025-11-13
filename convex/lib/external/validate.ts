@@ -1,4 +1,4 @@
-import { checkBlCatalogHealth } from "../../marketplaces/bricklink/client";
+import { checkBlCatalogHealth } from "../../marketplaces/bricklink/catalog/shared/health";
 import { BrickognizeClient } from "./brickognize";
 import { BrickowlClient } from "./brickowl";
 import { HealthCheckResult } from "./types";

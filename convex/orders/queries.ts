@@ -1,8 +1,8 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import type { Infer } from "convex/values";
+import { requireActiveUser } from "../users/authorization";
 
 /**
  * Orders QuerySpec Validator
@@ -135,17 +135,7 @@ export type OrdersQuerySpec = Infer<typeof ordersQuerySpecValidator>;
 export const listOrders = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new ConvexError("Authentication required");
-    }
-
-    const user = await ctx.db.get(userId);
-    if (!user || !user.businessAccountId) {
-      throw new ConvexError("User not found or not linked to business account");
-    }
-
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    const { businessAccountId } = await requireActiveUser(ctx);
 
     const orders = await ctx.db
       .query("orders")
@@ -171,17 +161,7 @@ export const listOrdersFiltered = query({
     isDone: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new ConvexError("Authentication required");
-    }
-
-    const user = await ctx.db.get(userId);
-    if (!user || !user.businessAccountId) {
-      throw new ConvexError("User not found or not linked to business account");
-    }
-
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    const { businessAccountId } = await requireActiveUser(ctx);
     const { sort, pagination } = args.querySpec;
     const rawFilters = args.querySpec.filters;
 
@@ -636,17 +616,7 @@ export const getOrdersByIds = query({
     orderIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new ConvexError("Authentication required");
-    }
-
-    const user = await ctx.db.get(userId);
-    if (!user || !user.businessAccountId) {
-      throw new ConvexError("User not found or not linked to business account");
-    }
-
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    const { businessAccountId } = await requireActiveUser(ctx);
 
     if (args.orderIds.length === 0) {
       return [];
@@ -682,17 +652,7 @@ export const getOrderItemsForOrders = query({
     orderIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new ConvexError("Authentication required");
-    }
-
-    const user = await ctx.db.get(userId);
-    if (!user || !user.businessAccountId) {
-      throw new ConvexError("User not found or not linked to business account");
-    }
-
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    const { businessAccountId } = await requireActiveUser(ctx);
 
     if (args.orderIds.length === 0) {
       return {};
@@ -728,17 +688,7 @@ export const getPickableItemsForOrders = query({
     orderIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new ConvexError("Authentication required");
-    }
-
-    const user = await ctx.db.get(userId);
-    if (!user || !user.businessAccountId) {
-      throw new ConvexError("User not found or not linked to business account");
-    }
-
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    const { businessAccountId } = await requireActiveUser(ctx);
 
     if (args.orderIds.length === 0) {
       return [];
@@ -767,7 +717,7 @@ export const getPickableItemsForOrders = query({
         const colorIdFilter =
           orderItem.colorId !== undefined ? String(orderItem.colorId) : undefined;
 
-        let inventoryQuery = ctx.db
+        const inventoryQuery = ctx.db
           .query("inventoryItems")
           .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
           .filter((q) => {
@@ -818,4 +768,3 @@ export const getPickableItemsForOrders = query({
     return items;
   },
 });
-

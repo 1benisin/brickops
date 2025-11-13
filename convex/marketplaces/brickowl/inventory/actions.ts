@@ -3,12 +3,8 @@ import type { Id } from "../../../_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { recordMetric } from "../../../lib/external/metrics";
 import type { StoreOperationResult } from "../../shared/storeTypes";
-import {
-  withBrickOwlClient,
-  createBrickOwlRequestState,
-  type BrickOwlClient,
-  generateCorrelationId,
-} from "../shared/client";
+import { withBoClient, createBoRequestState, type BOClient } from "../client";
+import { generateCorrelationId } from "../ids";
 import {
   boInventoryListParamsSchema,
   boInventoryCreatePayloadSchema,
@@ -19,9 +15,29 @@ import {
   type BOInventoryCreatePayload,
   type BOInventoryUpdatePayload,
   type BOInventoryResponse,
-} from "../schema";
-import { normalizeBrickOwlError } from "../errors";
-import { executeBulkRequests, type BrickOwlBulkOptions } from "../bulk";
+} from "./schema";
+import { normalizeBoStoreError } from "../errors";
+import { executeBulkRequests, type BrickOwlBulkOptions } from "./bulk";
+
+type InventoryMetricStatus = "success" | "failure" | "validation";
+
+function recordInventoryMetric(params: {
+  businessAccountId: Id<"businessAccounts">;
+  correlationId: string;
+  endpoint: string;
+  method: "GET" | "POST";
+  status: InventoryMetricStatus;
+  errorCode?: string;
+}) {
+  recordMetric("external.brickowl.inventory", {
+    businessAccountId: params.businessAccountId,
+    correlationId: params.correlationId,
+    endpoint: params.endpoint,
+    method: params.method,
+    status: params.status,
+    ...(params.errorCode ? { errorCode: params.errorCode } : {}),
+  });
+}
 
 export interface ListInventoriesParams {
   businessAccountId: Id<"businessAccounts">;
@@ -43,15 +59,15 @@ export async function listInventories(
 ): Promise<BOInventoryResponse[]> {
   const filters = params.filters ? boInventoryListParamsSchema.parse(params.filters) : undefined;
 
-  return await withBrickOwlClient(ctx, {
+  return await withBoClient(ctx, {
     businessAccountId: params.businessAccountId,
     fn: async (client) => {
-      const queryParams = buildInventoryQuery(filters);
+      const query = buildInventoryQuery(filters);
 
       const response = await client.requestWithRetry<BOInventoryResponse[]>({
         path: "/inventory/list",
         method: "GET",
-        queryParams,
+        query,
         isIdempotent: true,
       });
 
@@ -69,13 +85,13 @@ export async function getInventory(
 ): Promise<BOInventoryResponse> {
   const normalized = normalizeInventoryIdentifier(params.identifier);
 
-  return await withBrickOwlClient(ctx, {
+  return await withBoClient(ctx, {
     businessAccountId: params.businessAccountId,
     fn: async (client) => {
       const response = await client.requestWithRetry<BOInventoryResponse[]>({
         path: "/inventory/list",
         method: "GET",
-        queryParams: {
+        query: {
           active_only: "1",
           [normalized.queryField]: normalized.value,
         },
@@ -120,10 +136,10 @@ export async function createInventory(
     };
   }
 
-  return await withBrickOwlClient(ctx, {
+  return await withBoClient(ctx, {
     businessAccountId,
     fn: async (client) => {
-      const requestState = options.idempotencyKey ? createBrickOwlRequestState() : undefined;
+      const requestState = options.idempotencyKey ? createBoRequestState() : undefined;
 
       try {
         const response = await client.requestWithRetry<BOInventoryResponse>(
@@ -140,9 +156,12 @@ export async function createInventory(
 
         const inventory = boInventoryResponseSchema.parse(response);
 
-        recordMetric("external.brickowl.inventory.create.success", {
+        recordInventoryMetric({
           businessAccountId,
           correlationId,
+          endpoint: "/inventory/create",
+          method: "POST",
+          status: "success",
         });
 
         return {
@@ -154,11 +173,14 @@ export async function createInventory(
           },
         };
       } catch (error) {
-        const normalized = normalizeBrickOwlError(error);
+        const normalized = normalizeBoStoreError(error);
 
-        recordMetric("external.brickowl.inventory.create.failure", {
+        recordInventoryMetric({
           businessAccountId,
           correlationId,
+          endpoint: "/inventory/create",
+          method: "POST",
+          status: "failure",
           errorCode: normalized.code,
         });
 
@@ -190,7 +212,7 @@ export async function updateInventory(
   const normalized = normalizeInventoryIdentifier(identifier);
   const correlationId = generateCorrelationId();
 
-  return await withBrickOwlClient(ctx, {
+  return await withBoClient(ctx, {
     businessAccountId,
     fn: async (client) => {
       if (options.dryRun) {
@@ -202,7 +224,7 @@ export async function updateInventory(
       }
 
       const current = await fetchInventoryWithClient(client, normalized);
-      const requestState = options.idempotencyKey ? createBrickOwlRequestState() : undefined;
+      const requestState = options.idempotencyKey ? createBoRequestState() : undefined;
 
       try {
         const body = buildInventoryMutationBody(normalized, payload);
@@ -220,6 +242,14 @@ export async function updateInventory(
 
         const inventory = boInventoryResponseSchema.parse(response);
 
+        recordInventoryMetric({
+          businessAccountId,
+          correlationId,
+          endpoint: "/inventory/update",
+          method: "POST",
+          status: "success",
+        });
+
         return {
           success: true,
           marketplaceId: inventory.lot_id,
@@ -231,10 +261,21 @@ export async function updateInventory(
           },
         };
       } catch (error) {
+        const normalizedError = normalizeBoStoreError(error);
+
+        recordInventoryMetric({
+          businessAccountId,
+          correlationId,
+          endpoint: "/inventory/update",
+          method: "POST",
+          status: "failure",
+          errorCode: normalizedError.code,
+        });
+
         return {
           success: false,
           correlationId,
-          error: normalizeBrickOwlError(error),
+          error: normalizedError,
         };
       }
     },
@@ -255,7 +296,7 @@ export async function deleteInventory(
   const normalized = normalizeInventoryIdentifier(identifier);
   const correlationId = generateCorrelationId();
 
-  return await withBrickOwlClient(ctx, {
+  return await withBoClient(ctx, {
     businessAccountId,
     fn: async (client) => {
       if (options.dryRun) {
@@ -270,7 +311,7 @@ export async function deleteInventory(
       boInventoryDeletePayloadSchema.parse(requestPayload);
 
       const current = await fetchInventoryWithClient(client, normalized);
-      const requestState = options.idempotencyKey ? createBrickOwlRequestState() : undefined;
+      const requestState = options.idempotencyKey ? createBoRequestState() : undefined;
 
       try {
         await client.requestWithRetry(
@@ -285,6 +326,14 @@ export async function deleteInventory(
           requestState,
         );
 
+        recordInventoryMetric({
+          businessAccountId,
+          correlationId,
+          endpoint: "/inventory/delete",
+          method: "POST",
+          status: "success",
+        });
+
         return {
           success: true,
           marketplaceId: normalized.value,
@@ -294,10 +343,21 @@ export async function deleteInventory(
           },
         };
       } catch (error) {
+        const normalized = normalizeBoStoreError(error);
+
+        recordInventoryMetric({
+          businessAccountId,
+          correlationId,
+          endpoint: "/inventory/delete",
+          method: "POST",
+          status: "failure",
+          errorCode: normalized.code,
+        });
+
         return {
           success: false,
           correlationId,
-          error: normalizeBrickOwlError(error),
+          error: normalized,
         };
       }
     },
@@ -339,7 +399,16 @@ export async function bulkCreateInventories(
       const error = entry.error ?? {
         code: "UNKNOWN",
         message: "Unknown error during BrickOwl bulk create",
+        retryable: false,
       };
+      recordInventoryMetric({
+        businessAccountId,
+        correlationId,
+        endpoint: "/bulk/batch",
+        method: "POST",
+        status: "failure",
+        errorCode: error.code,
+      });
       return {
         success: false,
         correlationId,
@@ -349,6 +418,13 @@ export async function bulkCreateInventories(
 
     try {
       const inventory = boInventoryResponseSchema.parse(entry.data);
+      recordInventoryMetric({
+        businessAccountId,
+        correlationId,
+        endpoint: "/bulk/batch",
+        method: "POST",
+        status: "success",
+      });
       return {
         success: true,
         marketplaceId: inventory.lot_id,
@@ -358,6 +434,14 @@ export async function bulkCreateInventories(
         },
       };
     } catch (error) {
+      recordInventoryMetric({
+        businessAccountId,
+        correlationId,
+        endpoint: "/bulk/batch",
+        method: "POST",
+        status: "failure",
+        errorCode: "INVALID_RESPONSE",
+      });
       return {
         success: false,
         correlationId,
@@ -415,7 +499,16 @@ export async function bulkUpdateInventories(
       const error = entry.error ?? {
         code: "UNKNOWN",
         message: "Unknown error during BrickOwl bulk update",
+        retryable: false,
       };
+      recordInventoryMetric({
+        businessAccountId,
+        correlationId,
+        endpoint: "/bulk/batch",
+        method: "POST",
+        status: "failure",
+        errorCode: error.code,
+      });
       return {
         success: false,
         correlationId,
@@ -425,12 +518,27 @@ export async function bulkUpdateInventories(
 
     try {
       const inventory = boInventoryResponseSchema.parse(entry.data);
+      recordInventoryMetric({
+        businessAccountId,
+        correlationId,
+        endpoint: "/bulk/batch",
+        method: "POST",
+        status: "success",
+      });
       return {
         success: true,
         marketplaceId: inventory.lot_id,
         correlationId,
       };
     } catch (error) {
+      recordInventoryMetric({
+        businessAccountId,
+        correlationId,
+        endpoint: "/bulk/batch",
+        method: "POST",
+        status: "failure",
+        errorCode: "INVALID_RESPONSE",
+      });
       return {
         success: false,
         correlationId,
@@ -483,7 +591,16 @@ export async function bulkDeleteInventories(
       const error = entry.error ?? {
         code: "UNKNOWN",
         message: "Unknown error during BrickOwl bulk delete",
+        retryable: false,
       };
+      recordInventoryMetric({
+        businessAccountId,
+        correlationId,
+        endpoint: "/bulk/batch",
+        method: "POST",
+        status: "failure",
+        errorCode: error.code,
+      });
       return {
         success: false,
         correlationId,
@@ -494,6 +611,13 @@ export async function bulkDeleteInventories(
     if (entry.data) {
       try {
         const inventory = boInventoryResponseSchema.parse(entry.data);
+        recordInventoryMetric({
+          businessAccountId,
+          correlationId,
+          endpoint: "/bulk/batch",
+          method: "POST",
+          status: "success",
+        });
         return {
           success: true,
           marketplaceId: inventory.lot_id,
@@ -504,6 +628,13 @@ export async function bulkDeleteInventories(
       }
     }
 
+    recordInventoryMetric({
+      businessAccountId,
+      correlationId,
+      endpoint: "/bulk/batch",
+      method: "POST",
+      status: "success",
+    });
     return {
       success: true,
       marketplaceId: normalized.value,
@@ -571,13 +702,13 @@ function normalizeInventoryIdentifier(
 }
 
 async function fetchInventoryWithClient(
-  client: BrickOwlClient,
+  client: BOClient,
   identifier: NormalizedInventoryIdentifier,
 ): Promise<BOInventoryResponse> {
   const response = await client.requestWithRetry<BOInventoryResponse[]>({
     path: "/inventory/list",
     method: "GET",
-    queryParams: {
+    query: {
       active_only: "1",
       [identifier.queryField]: identifier.value,
     },

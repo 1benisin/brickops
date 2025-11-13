@@ -132,11 +132,11 @@ BrickOps uses separate specialized clients for different marketplace operations:
 
 ```typescript
 // Catalog operations (shared BrickOps credentials)
-import { fetchBlPart } from "../marketplaces/bricklink/client";
+import { fetchBlPart } from "../marketplaces/bricklink/catalog/parts/actions";
 const partData = await fetchBlPart(ctx, { itemNo: "3001" });
 
 // User store operations (user BYOK credentials)
-import { getBLInventories } from "../marketplaces/bricklink/inventories";
+import { getBLInventories } from "../marketplaces/bricklink/inventory/actions";
 const inventory = await getBLInventories(ctx, {
   businessAccountId,
   filters: { page: 1, pageSize: 50 },

@@ -21,26 +21,59 @@ Frontend Unit (35%)  Backend Unit (35%)
 ### Frontend Tests
 
 ```text
-__tests__/
-├── components/           # Component unit tests
+__tests__/frontend/
+├── app/
+│   ├── dashboard-page.test.tsx
+│   ├── identify-page.test.tsx
+│   └── inventory-page.test.tsx
+├── auth/
+│   ├── login-page.test.tsx
+│   └── signup-page.test.tsx
+├── components/
 │   ├── inventory/
-│   ├── orders/
-│   └── picking/
-├── hooks/               # Custom hook tests
-├── services/            # API service tests
-└── utils/               # Utility function tests
+│   │   └── inventory-card.test.tsx
+│   ├── layout/
+│   │   ├── app-navigation.test.tsx
+│   │   └── authenticated-header.test.tsx
+│   └── ui/
+│       ├── button.test.tsx
+│       └── theme-toggle.test.tsx
+├── home-page.test.tsx
+└── lib/
+    └── env.test.ts
 ```
+
+Focus on the page-level suites (`app/`) when you touch routing or data wiring, and keep component tests scoped to narrow behaviours. Shared helpers (mocks, providers) live alongside the tests that consume them.
 
 ### Backend Tests
 
 ```text
-convex/
-├── functions/
-│   └── inventory.test.ts    # Function unit tests
-└── __tests__/
-    ├── integration/         # Cross-function integration tests
-    └── api/                 # External API integration tests
+__tests__/backend/
+├── auth-password-reset-email.test.ts
+├── catalog-refresh-outbox.test.ts
+├── identify-functions.test.ts
+├── inventory-import-validation.test.ts
+├── inventory-sync-status.test.ts
+├── marketplaces/
+│   ├── bricklink/
+│   │   └── catalog-client.test.ts, client.test.ts, credentials.test.ts, ...
+│   └── brickowl/
+│       └── client.test.ts, credentials.test.ts, inventory/actions.test.ts, ...
+├── orders/
+│   └── normalizers/
+│       ├── bricklink.test.ts
+│       ├── brickowl.test.ts
+│       └── utils.test.ts
+├── lib/
+│   ├── oauth.test.ts
+│   └── upstreamRequest.test.ts
+├── ratelimiter/
+│   └── consume.test.ts
+├── repo-structure.test.ts
+└── users-*.test.ts
 ```
+
+The marketplace suites validate transport behaviour, credential guards, and rate limiting; the inventory import tests protect our dedupe/validation pipeline and should be updated whenever import logic changes.
 
 ### E2E Tests
 

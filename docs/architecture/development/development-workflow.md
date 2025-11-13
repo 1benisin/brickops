@@ -33,9 +33,21 @@ Run Playwright locally or via workflow when changes affect:
 
 ## Catalog Data Seeding
 
-- Before working on catalog stories, run the Bricklink bootstrap script (to be added under `scripts/`) that parses XML exports in `docs/external-documentation/bricklink-data/` plus the `bin_lookup_v3.json` sort lookup and populates Convex tables for parts, colors, categories, element references, part-color availability, and sort locations.
-- Seed data should be committed to the local Convex deployment so developers can iterate without immediate Bricklink API access.
-- Refresh jobs can be triggered manually by invoking the corresponding Convex cron once schema changes land; document the exact command alongside the script when implemented.
+1. Export the latest Bricklink XML datasets (parts, categories, codes) and place them in `docs/external-documentation/api-bricklink/seed-data/` alongside `bin_lookup_v3.json`.
+2. Convert XML to JSONL with the helper scripts:
+   ```bash
+   pnpm ts-node scripts/catalog/build-catalog.ts --limit 0
+   pnpm ts-node scripts/seed/build-colors.ts
+   ```
+   The outputs (`parts.jsonl`, `categories.jsonl`, `bricklinkElementReference.jsonl`, `colors.jsonl`) are written back to the `seed-data/` directory.
+3. Import the generated files into your local Convex deployment:
+   ```bash
+   npx convex import --table parts docs/external-documentation/api-bricklink/seed-data/parts.jsonl
+   npx convex import --table categories docs/external-documentation/api-bricklink/seed-data/categories.jsonl
+   npx convex import --table bricklinkElementReference docs/external-documentation/api-bricklink/seed-data/bricklinkElementReference.jsonl
+   npx convex import --table colors docs/external-documentation/api-bricklink/seed-data/colors.jsonl
+   ```
+4. Trigger refresh jobs if you need fresh data immediately (see `convex/crons.ts` or run `internal.catalog.refreshWorker.drainCatalogRefreshOutbox` via the Convex dashboard/CLI).
 
 ## Convex Type Sharing (Frontend/Backend)
 

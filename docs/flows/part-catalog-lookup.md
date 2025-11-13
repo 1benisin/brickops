@@ -59,7 +59,7 @@ User searches for parts in the catalog. System checks cache first, then fetches 
 - `src/components/catalog/CatalogResultCard.tsx` - Part card display
 - `src/components/catalog/PartDetailDrawer.tsx` - Part detail drawer
 - `convex/catalog/queries.ts::searchParts` - Catalog search query
-- `convex/marketplaces/bricklink/client.ts` - Stateless Bricklink catalog helpers
+- `convex/marketplaces/bricklink/catalog/parts/actions.ts` - Stateless BrickLink part fetch helpers
 
 ## Notes
 

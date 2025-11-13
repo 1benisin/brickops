@@ -1,0 +1,1 @@
+Add code comments to this file so that a junior developer can understand the purpose of the file and each functions. As well as be able to step through the code and quickly and easily understand the flow.

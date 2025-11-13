@@ -16,7 +16,7 @@ import {
   type BLOrderPaymentStatusUpdatePayload,
   type BLDriveThruOptions,
 } from "./schema";
-import { withBlClient, type BLApiResponse, generateCorrelationId } from "../client";
+import { withBlClient, type BLApiResponse, generateCorrelationId } from "../transport";
 
 export interface OrderListParams {
   businessAccountId: Id<"businessAccounts">;

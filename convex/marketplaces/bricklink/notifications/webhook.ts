@@ -4,7 +4,7 @@ import type { ActionCtx } from "../../../_generated/server";
 import type { Id } from "../../../_generated/dataModel";
 import { recordMetric } from "../../../lib/external/metrics";
 import { requireUserRole } from "../../../users/authorization";
-import { withBlClient, type BLApiResponse } from "../client";
+import { withBlClient, type BLApiResponse } from "../transport";
 import { buildNotificationDedupeKey, isNotificationReplay } from "./utilities";
 import { blNotificationSchema, type BLNotification } from "./schema";
 

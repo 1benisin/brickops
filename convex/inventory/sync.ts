@@ -11,7 +11,7 @@ import {
 import {
   mapConvexToBrickOwlCreate,
   mapConvexToBrickOwlUpdate,
-} from "../marketplaces/brickowl/storeMappers";
+} from "../marketplaces/brickowl/inventory/transformers";
 import { partialInventoryItemData } from "./validators";
 import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
 import {

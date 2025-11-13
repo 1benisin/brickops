@@ -110,4 +110,4 @@ export function buildAuthorizationHeader(
   return `OAuth ${params.map(([key, value]) => `${percentEncode(key)}="${percentEncode(value)}"`).join(", ")}`;
 }
 
-export { generateCorrelationId } from "./shared/ids";
+export { generateCorrelationId } from "./ids";

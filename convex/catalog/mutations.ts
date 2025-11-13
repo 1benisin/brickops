@@ -1,5 +1,6 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
+import type { Infer } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 
 // ============================================================================
@@ -64,29 +65,33 @@ export const enqueueCatalogRefresh = internalMutation({
 // UPSERT MUTATIONS
 // ============================================================================
 
+export const upsertPartDataValidator = v.object({
+  no: v.string(),
+  name: v.string(),
+  type: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
+  categoryId: v.optional(v.number()),
+  alternateNo: v.optional(v.string()),
+  imageUrl: v.optional(v.string()),
+  thumbnailUrl: v.optional(v.string()),
+  weight: v.optional(v.number()),
+  dimX: v.optional(v.string()),
+  dimY: v.optional(v.string()),
+  dimZ: v.optional(v.string()),
+  yearReleased: v.optional(v.number()),
+  description: v.optional(v.string()),
+  isObsolete: v.optional(v.boolean()),
+  brickowlId: v.optional(v.string()),
+  ldrawId: v.optional(v.string()),
+  legoId: v.optional(v.string()),
+  lastFetched: v.number(),
+  createdAt: v.number(),
+});
+
+export type UpsertPartData = Infer<typeof upsertPartDataValidator>;
+
 export const upsertPart = internalMutation({
   args: {
-    data: v.object({
-      no: v.string(),
-      name: v.string(),
-      type: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
-      categoryId: v.optional(v.number()),
-      alternateNo: v.optional(v.string()),
-      imageUrl: v.optional(v.string()),
-      thumbnailUrl: v.optional(v.string()),
-      weight: v.optional(v.number()),
-      dimX: v.optional(v.string()),
-      dimY: v.optional(v.string()),
-      dimZ: v.optional(v.string()),
-      yearReleased: v.optional(v.number()),
-      description: v.optional(v.string()),
-      isObsolete: v.optional(v.boolean()),
-      brickowlId: v.optional(v.string()),
-      ldrawId: v.optional(v.string()),
-      legoId: v.optional(v.string()),
-      lastFetched: v.number(),
-      createdAt: v.number(),
-    }),
+    data: upsertPartDataValidator,
   },
   handler: async (ctx, args) => {
     // Check if part already exists
@@ -128,21 +133,23 @@ export const updatePartBrickowlId = internalMutation({
   },
 });
 
+export const partColorRecordValidator = v.object({
+  partNo: v.string(),
+  colorId: v.number(),
+  quantity: v.number(),
+  lastFetched: v.number(),
+  createdAt: v.number(),
+});
+
+export type PartColorRecord = Infer<typeof partColorRecordValidator>;
+
 /**
  * Upsert part colors into database
  * Internal mutation used by refresh actions and background queue processor
  */
 export const upsertPartColors = internalMutation({
   args: {
-    data: v.array(
-      v.object({
-        partNo: v.string(),
-        colorId: v.number(),
-        quantity: v.number(),
-        lastFetched: v.number(),
-        createdAt: v.number(),
-      }),
-    ),
+    data: v.array(partColorRecordValidator),
   },
   handler: async (ctx, args) => {
     for (const partColor of args.data) {
@@ -162,6 +169,40 @@ export const upsertPartColors = internalMutation({
         // Insert new
         await ctx.db.insert("partColors", partColor);
       }
+    }
+  },
+});
+
+/**
+ * Upsert color data into database
+ * Internal mutation used by refresh actions and background queue processor
+ */
+export const colorRecordValidator = v.object({
+  colorId: v.number(),
+  colorName: v.string(),
+  colorCode: v.optional(v.string()),
+  colorType: v.optional(v.string()),
+  lastFetched: v.number(),
+  createdAt: v.number(),
+});
+
+export type ColorRecord = Infer<typeof colorRecordValidator>;
+
+export const upsertColor = internalMutation({
+  args: {
+    data: colorRecordValidator,
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("colors")
+      .withIndex("by_colorId", (q) => q.eq("colorId", args.data.colorId))
+      .first();
+
+    if (existing) {
+      const { createdAt: _unused, ...updateData } = args.data;
+      await ctx.db.patch(existing._id, updateData);
+    } else {
+      await ctx.db.insert("colors", args.data);
     }
   },
 });
@@ -199,27 +240,33 @@ export const upsertCategory = internalMutation({
  * Upsert price guide data into database
  * Internal mutation used by refresh actions to insert/update all 4 price records
  */
+const priceGuideRecordValidator = v.object({
+  partNo: v.string(),
+  partType: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
+  colorId: v.number(),
+  newOrUsed: v.union(v.literal("N"), v.literal("U")),
+  currencyCode: v.string(),
+  minPrice: v.optional(v.number()),
+  maxPrice: v.optional(v.number()),
+  avgPrice: v.optional(v.number()),
+  qtyAvgPrice: v.optional(v.number()),
+  unitQuantity: v.optional(v.number()),
+  totalQuantity: v.optional(v.number()),
+  guideType: v.union(v.literal("sold"), v.literal("stock")),
+  lastFetched: v.number(),
+  createdAt: v.number(),
+});
+
+export type PriceGuideRecord = Infer<typeof priceGuideRecordValidator>;
+
+const upsertPriceGuideArgsValidator = v.object({
+  prices: v.array(priceGuideRecordValidator),
+});
+
+export type UpsertPriceGuideArgs = Infer<typeof upsertPriceGuideArgsValidator>;
+
 export const upsertPriceGuide = internalMutation({
-  args: {
-    prices: v.array(
-      v.object({
-        partNo: v.string(),
-        partType: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
-        colorId: v.number(),
-        newOrUsed: v.union(v.literal("N"), v.literal("U")),
-        currencyCode: v.string(),
-        minPrice: v.optional(v.number()),
-        maxPrice: v.optional(v.number()),
-        avgPrice: v.optional(v.number()),
-        qtyAvgPrice: v.optional(v.number()),
-        unitQuantity: v.optional(v.number()),
-        totalQuantity: v.optional(v.number()),
-        guideType: v.union(v.literal("sold"), v.literal("stock")),
-        lastFetched: v.number(),
-        createdAt: v.number(),
-      }),
-    ),
-  },
+  args: upsertPriceGuideArgsValidator,
   handler: async (ctx, args) => {
     for (const price of args.prices) {
       // Find existing record by part + color + condition + guide type

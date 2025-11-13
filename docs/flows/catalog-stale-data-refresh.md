@@ -64,7 +64,7 @@ When a user requests part catalog data, the system checks if data exists and is 
 - `convex/catalog/actions.ts::enqueueRefreshPart` - Enqueue refresh action
 - `convex/catalog/refreshWorker.ts::drainCatalogRefreshOutbox` - Batch worker
 - `convex/catalog/refreshWorker.ts::processSingleOutboxMessage` - Immediate worker
-- `convex/marketplaces/bricklink/client.ts` - Stateless Bricklink catalog helpers
+- `convex/marketplaces/bricklink/catalog/*/actions.ts` - BrickLink catalog fetch helpers built on the shared transport layer
 - `convex/crons.ts` - Cron job definitions
 
 ## Notes

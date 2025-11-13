@@ -277,7 +277,7 @@ export default function SettingsPage() {
       const result = await deleteAllInventory({});
       setDevMessage({
         type: "success",
-        text: `Successfully deleted ${result.deletedItems} inventory items, ${result.deletedQuantityLedgerEntries} quantity ledger entries, and ${result.deletedLocationLedgerEntries} location ledger entries.`,
+        text: `Successfully deleted ${result.deletedItems} inventory items, ${result.deletedQuantityLedgerEntries} quantity ledger entries, ${result.deletedLocationLedgerEntries} location ledger entries, and ${result.deletedMarketplaceOutboxMessages} marketplace outbox messages.`,
       });
       setTimeout(() => setDevMessage(null), 5000);
     } catch (error) {
@@ -1158,9 +1158,7 @@ export default function SettingsPage() {
 
                 {/* Delete All Orders */}
                 <div className="space-y-2 border-t pt-4">
-                  <h3 className="text-sm font-medium text-foreground text-destructive">
-                    Delete All Orders
-                  </h3>
+                  <h3 className="text-sm font-medium text-destructive">Delete All Orders</h3>
                   <p className="text-xs text-muted-foreground">
                     Permanently delete all Bricklink orders and order items for this business
                     account. This action cannot be undone.
@@ -1207,9 +1205,7 @@ export default function SettingsPage() {
 
                 {/* Delete All Inventory */}
                 <div className="space-y-2 border-t pt-4">
-                  <h3 className="text-sm font-medium text-foreground text-destructive">
-                    Delete All Inventory
-                  </h3>
+                  <h3 className="text-sm font-medium text-destructive">Delete All Inventory</h3>
                   <p className="text-xs text-muted-foreground">
                     Permanently delete all inventory items and ledger entries for this business
                     account. This action cannot be undone.
