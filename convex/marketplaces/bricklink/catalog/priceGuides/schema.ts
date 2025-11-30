@@ -31,5 +31,3 @@ export const blCatalogPriceGuideResponseSchema = z.object({
 });
 
 export type BLCatalogPriceGuideResponse = z.infer<typeof blCatalogPriceGuideResponseSchema>;
-
-

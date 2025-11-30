@@ -119,7 +119,7 @@ export default function CatalogPage() {
     status: paginationStatus,
     loadMore,
     isLoading: searchLoading,
-  } = usePaginatedQuery(api.catalog.queries.searchParts, searchArgs, {
+  } = usePaginatedQuery(api.catalog.parts.searchParts, searchArgs, {
     initialNumItems: pageSize,
   });
 

@@ -1,45 +1,44 @@
-import type { Doc } from "../../../_generated/dataModel";
 import type {
   BLInventoryCreatePayload,
   BLInventoryResponse,
   BLInventoryUpdatePayload,
 } from "./schema";
-
-type InventoryItemDoc = Doc;
-
-type InsertableInventoryItem = Omit<
-  InventoryItemDoc,
-  "_id" | "_creationTime" | "createdBy" | "createdAt" | "updatedAt"
->;
+import type { InventoryItemDoc } from "./schema";
+import type { AddInventoryItemArgs } from "../../../inventory/validators";
 
 /**
  * Map a BrickLink inventory response into the Convex inventory shape.
+ * Accepts both full and partial responses (from list endpoints).
  */
 export function mapBlToConvexInventory(
-  bricklinkInventory: BLInventoryResponse,
-  businessAccountId: InventoryItemDoc["businessAccountId"],
-): InsertableInventoryItem {
-  const condition: "new" | "used" = bricklinkInventory.new_or_used === "N" ? "new" : "used";
-
-  const location = bricklinkInventory.remarks || "Main";
-
-  const price = bricklinkInventory.unit_price
-    ? parseFloat(bricklinkInventory.unit_price)
-    : undefined;
-
-  const notes = bricklinkInventory.description || undefined;
+  bricklinkInventory: BLInventoryResponse | Partial<BLInventoryResponse>,
+): AddInventoryItemArgs {
+  // Validate required fields
+  if (!bricklinkInventory.item?.no) {
+    throw new Error("BrickLink inventory missing required item.no field");
+  }
+  if (bricklinkInventory.color_id === undefined) {
+    throw new Error("BrickLink inventory missing required color_id field");
+  }
+  if (bricklinkInventory.quantity === undefined) {
+    throw new Error("BrickLink inventory missing required quantity field");
+  }
+  if (!bricklinkInventory.new_or_used) {
+    throw new Error("BrickLink inventory missing required new_or_used field");
+  }
 
   return {
-    businessAccountId,
     name: bricklinkInventory.item.name ?? bricklinkInventory.item.no,
     partNumber: bricklinkInventory.item.no,
     colorId: bricklinkInventory.color_id.toString(),
-    location,
+    location: bricklinkInventory.remarks || "Main",
     quantityAvailable: bricklinkInventory.quantity,
     quantityReserved: 0,
-    condition,
-    price,
-    notes,
+    condition: bricklinkInventory.new_or_used === "N" ? "new" : "used",
+    price: bricklinkInventory.unit_price ? parseFloat(bricklinkInventory.unit_price) : undefined,
+    saleRate: bricklinkInventory.sale_rate ? bricklinkInventory.sale_rate : undefined,
+    myCost: bricklinkInventory.my_cost ? parseFloat(bricklinkInventory.my_cost) : undefined,
+    note: bricklinkInventory.description || "",
   };
 }
 
@@ -51,7 +50,7 @@ export function mapConvexToBlCreate(convexInventory: InventoryItemDoc): BLInvent
 
   const unit_price = convexInventory.price?.toFixed(4) ?? "0.0000";
 
-  const description = convexInventory.notes || "";
+  const description = convexInventory.note || "";
 
   const remarks = convexInventory.location || "";
 
@@ -94,7 +93,7 @@ export function mapConvexToBlUpdate(
 
   const new_or_used: "N" | "U" = convexInventory.condition === "new" ? "N" : "U";
 
-  const description = convexInventory.notes || "";
+  const description = convexInventory.note || "";
 
   const remarks = convexInventory.location || "";
 

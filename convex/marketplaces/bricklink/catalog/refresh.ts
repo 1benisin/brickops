@@ -142,7 +142,6 @@ export const checkAndScheduleRefresh = internalMutation({
           status: "pending",
           attempt: 0,
           nextAttemptAt: now, // Immediate processing
-          createdAt: now,
         });
       }
     }

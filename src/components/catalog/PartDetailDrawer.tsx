@@ -56,7 +56,7 @@ export function PartDetailDrawer({ open, onOpenChange, partNumber }: PartDetailD
 
   // Overlay is still a simple query (no refresh needed)
   const overlayArgs = open && partNumber ? { partNumber } : "skip";
-  const overlay = useQuery(api.catalog.queries.getPartOverlay, overlayArgs);
+  const overlay = useQuery(api.catalog.parts.getPartOverlay, overlayArgs);
   const overlayLoading = open && partNumber && overlay === undefined;
 
   const [addToInventoryOpen, setAddToInventoryOpen] = useState(false);

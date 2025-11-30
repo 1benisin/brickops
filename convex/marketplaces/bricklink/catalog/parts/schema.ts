@@ -32,5 +32,3 @@ export type BLPartExternalIds = {
   ldrawId?: string;
   legoId?: string;
 };
-
-

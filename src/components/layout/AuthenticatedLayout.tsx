@@ -1,12 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 import { AuthenticatedHeader } from "@/components/layout/AuthenticatedHeader";
 import type { NavigationItem } from "@/components/layout/AppNavigation";
+import { api } from "@/convex/_generated/api";
 
 const NAVIGATION: NavigationItem[] = [
   { label: "Dashboard", href: "/dashboard" },
@@ -26,6 +29,25 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const { signOut } = useAuthActions();
   const [isPending, startTransition] = useTransition();
 
+  // Use getAuthState which doesn't throw - it returns auth state even if user doesn't exist
+  const authState = useQuery(api.users.queries.getAuthState);
+
+  // Redirect to login if user is not authenticated or doesn't exist
+  useEffect(() => {
+    if (authState === undefined) {
+      // Still loading, wait
+      return;
+    }
+
+    if (
+      authState.isAuthenticated === false ||
+      (authState.isAuthenticated === true && authState.user === null)
+    ) {
+      // User is not authenticated or doesn't exist in database
+      router.replace("/login");
+    }
+  }, [authState, router]);
+
   const handleSignOut = () => {
     if (isPending) {
       return;
@@ -36,6 +58,15 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
       router.replace("/login");
     });
   };
+
+  // Don't render content if user is not authenticated or doesn't exist
+  if (
+    authState === undefined ||
+    authState.isAuthenticated === false ||
+    (authState.isAuthenticated === true && authState.user === null)
+  ) {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/20">

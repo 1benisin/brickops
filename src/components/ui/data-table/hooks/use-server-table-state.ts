@@ -1,6 +1,6 @@
 /**
  * useServerTableState Hook
- * 
+ *
  * Manages server-side table state (sorting, filtering, pagination) with:
  * - Debouncing for text filters (500ms)
  * - Immediate updates for non-text filters
@@ -9,8 +9,18 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ColumnDef, SortingState, ColumnFiltersState, PaginationState } from "@tanstack/react-table";
-import { columnFiltersToQuerySpec, querySpecToColumnFilters, shouldDebounceFilter, type QuerySpecFilters } from "../utils/filter-state";
+import type {
+  ColumnDef,
+  SortingState,
+  ColumnFiltersState,
+  PaginationState,
+} from "@tanstack/react-table";
+import {
+  columnFiltersToQuerySpec,
+  querySpecToColumnFilters,
+  shouldDebounceFilter,
+  type QuerySpecFilters,
+} from "../utils/filter-state";
 import type { EnhancedColumnMeta } from "../column-definitions";
 
 /**
@@ -53,11 +63,15 @@ export interface UseServerTableStateReturn {
   /** TanStack Table column filters state (for immediate UI updates) */
   columnFilters: ColumnFiltersState;
   /** Handler for column filter changes */
-  onColumnFiltersChange: (updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState)) => void;
+  onColumnFiltersChange: (
+    updater: ColumnFiltersState | ((old: ColumnFiltersState) => ColumnFiltersState),
+  ) => void;
   /** TanStack Table pagination state */
   pagination: PaginationState;
   /** Handler for pagination changes */
-  onPaginationChange: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => void;
+  onPaginationChange: (
+    updater: PaginationState | ((old: PaginationState) => PaginationState),
+  ) => void;
   /** Built QuerySpec ready for server query */
   querySpec: ServerTableQuerySpec;
   /** Current filter values for UI display (record format) */
@@ -69,7 +83,7 @@ export interface UseServerTableStateReturn {
  */
 export function useServerTableState<TData>({
   columns,
-  defaultSort = [{ id: "createdAt", desc: true }],
+  defaultSort = [{ id: "_creationTime", desc: true }],
   defaultPageSize = 25,
   textFilterDebounceMs = 500,
   onQuerySpecChange,

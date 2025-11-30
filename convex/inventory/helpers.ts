@@ -79,7 +79,6 @@ export async function ensureBrickowlIdForPart(ctx: MutationCtx, partNumber: stri
       status: "pending",
       attempt: 0,
       nextAttemptAt: Date.now(),
-      createdAt: Date.now(),
     });
   }
 
@@ -277,7 +276,6 @@ export async function enqueueMarketplaceSync(
     status: "pending",
     attempt: 0,
     nextAttemptAt: Date.now(),
-    createdAt: Date.now(),
     correlationId: args.correlationId,
   });
 

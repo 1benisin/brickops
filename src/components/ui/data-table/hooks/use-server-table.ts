@@ -17,7 +17,7 @@ interface UseServerTableOptions<TData> {
 export function useServerTable<TData>({
   queryFn,
   defaultPageSize = 25,
-  defaultSort = [{ id: "createdAt", desc: true }],
+  defaultSort = [{ id: "_creationTime", desc: true }],
 }: UseServerTableOptions<TData>) {
   // Query state
   const [filters, setFilters] = useState<QuerySpec["filters"]>({});
@@ -80,39 +80,33 @@ export function useServerTable<TData>({
     setPagination((prev) => ({ ...prev, cursor: undefined }));
   }, []);
 
-  const updateSort = useCallback(
-    (newSort: QuerySpec["sort"]) => {
-      setSort(newSort);
-      // Reset to first page when sort changes
-      setPagination((prev) => ({ ...prev, cursor: undefined }));
-    },
-    [],
-  );
+  const updateSort = useCallback((newSort: QuerySpec["sort"]) => {
+    setSort(newSort);
+    // Reset to first page when sort changes
+    setPagination((prev) => ({ ...prev, cursor: undefined }));
+  }, []);
 
   // Add method to toggle column sort
-  const toggleSort = useCallback(
-    (columnId: string) => {
-      setSort((prev) => {
-        const currentSort = prev.find((s) => s.id === columnId);
-        if (currentSort) {
-          // Toggle direction: asc -> desc -> remove
-          if (currentSort.desc) {
-            // Remove from sort (default)
-            return prev.filter((s) => s.id !== columnId);
-          } else {
-            // Change to desc
-            return prev.map((s) => (s.id === columnId ? { ...s, desc: true } : s));
-          }
+  const toggleSort = useCallback((columnId: string) => {
+    setSort((prev) => {
+      const currentSort = prev.find((s) => s.id === columnId);
+      if (currentSort) {
+        // Toggle direction: asc -> desc -> remove
+        if (currentSort.desc) {
+          // Remove from sort (default)
+          return prev.filter((s) => s.id !== columnId);
         } else {
-          // Add new sort (default to asc)
-          return [{ id: columnId, desc: false }, ...prev];
+          // Change to desc
+          return prev.map((s) => (s.id === columnId ? { ...s, desc: true } : s));
         }
-      });
-      // Reset to first page
-      setPagination((prev) => ({ ...prev, cursor: undefined }));
-    },
-    [],
-  );
+      } else {
+        // Add new sort (default to asc)
+        return [{ id: columnId, desc: false }, ...prev];
+      }
+    });
+    // Reset to first page
+    setPagination((prev) => ({ ...prev, cursor: undefined }));
+  }, []);
 
   const nextPage = useCallback(() => {
     setPagination((prev) => {

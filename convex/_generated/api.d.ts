@@ -15,10 +15,12 @@ import type {
 } from "convex/server";
 import type * as api_rebrickable from "../api/rebrickable.js";
 import type * as auth from "../auth.js";
-import type * as catalog_actions from "../catalog/actions.js";
+import type * as catalog_categories from "../catalog/categories.js";
+import type * as catalog_colors from "../catalog/colors.js";
 import type * as catalog_helpers from "../catalog/helpers.js";
-import type * as catalog_mutations from "../catalog/mutations.js";
-import type * as catalog_queries from "../catalog/queries.js";
+import type * as catalog_outbox from "../catalog/outbox.js";
+import type * as catalog_parts from "../catalog/parts.js";
+import type * as catalog_prices from "../catalog/prices.js";
 import type * as catalog_refreshWorker from "../catalog/refreshWorker.js";
 import type * as catalog_validators from "../catalog/validators.js";
 import type * as crons from "../crons.js";
@@ -87,6 +89,7 @@ import type * as marketplaces_bricklink_request from "../marketplaces/bricklink/
 import type * as marketplaces_bricklink_transport from "../marketplaces/bricklink/transport.js";
 import type * as marketplaces_brickowl_actions from "../marketplaces/brickowl/actions.js";
 import type * as marketplaces_brickowl_bulk from "../marketplaces/brickowl/bulk.js";
+import type * as marketplaces_brickowl_catalog from "../marketplaces/brickowl/catalog.js";
 import type * as marketplaces_brickowl_client from "../marketplaces/brickowl/client.js";
 import type * as marketplaces_brickowl_credentials from "../marketplaces/brickowl/credentials.js";
 import type * as marketplaces_brickowl_errors from "../marketplaces/brickowl/errors.js";
@@ -144,10 +147,12 @@ import type * as users_queries from "../users/queries.js";
 declare const fullApi: ApiFromModules<{
   "api/rebrickable": typeof api_rebrickable;
   auth: typeof auth;
-  "catalog/actions": typeof catalog_actions;
+  "catalog/categories": typeof catalog_categories;
+  "catalog/colors": typeof catalog_colors;
   "catalog/helpers": typeof catalog_helpers;
-  "catalog/mutations": typeof catalog_mutations;
-  "catalog/queries": typeof catalog_queries;
+  "catalog/outbox": typeof catalog_outbox;
+  "catalog/parts": typeof catalog_parts;
+  "catalog/prices": typeof catalog_prices;
   "catalog/refreshWorker": typeof catalog_refreshWorker;
   "catalog/validators": typeof catalog_validators;
   crons: typeof crons;
@@ -216,6 +221,7 @@ declare const fullApi: ApiFromModules<{
   "marketplaces/bricklink/transport": typeof marketplaces_bricklink_transport;
   "marketplaces/brickowl/actions": typeof marketplaces_brickowl_actions;
   "marketplaces/brickowl/bulk": typeof marketplaces_brickowl_bulk;
+  "marketplaces/brickowl/catalog": typeof marketplaces_brickowl_catalog;
   "marketplaces/brickowl/client": typeof marketplaces_brickowl_client;
   "marketplaces/brickowl/credentials": typeof marketplaces_brickowl_credentials;
   "marketplaces/brickowl/errors": typeof marketplaces_brickowl_errors;

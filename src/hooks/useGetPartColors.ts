@@ -23,8 +23,8 @@ export function useGetPartColors(partNumber: string | null): UseGetPartColorsRes
   // Memoize args object to prevent unnecessary re-renders
   const args = useMemo(() => (partNumber ? { partNumber } : null), [partNumber]);
 
-  const res = useQuery(api.catalog.queries.getPartColors, args ?? "skip");
-  const refresh = useAction(api.catalog.actions.enqueueRefreshPartColors);
+  const res = useQuery(api.catalog.colors.getPartColors, args ?? "skip");
+  const refresh = useAction(api.catalog.colors.enqueueRefreshPartColors);
 
   // Deduplication for auto-refresh
   const seen = useRef(new Set<string>());

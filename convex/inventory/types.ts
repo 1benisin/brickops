@@ -49,7 +49,7 @@ export const querySpecValidator = v.object({
       ),
 
       // Date range filters
-      createdAt: v.optional(
+      _creationTime: v.optional(
         v.object({
           kind: v.literal("dateRange"),
           start: v.optional(v.number()),

@@ -88,7 +88,6 @@ export const saveCredentials = mutation({
       inventorySyncEnabled: false,
       webhookStatus: "unconfigured",
       createdBy: userId,
-      createdAt: now,
       updatedAt: now,
       validationStatus: "pending",
     });
@@ -287,7 +286,7 @@ export const getCredentialStatus = query({
       webhookRegisteredAt: credential.webhookRegisteredAt,
       webhookLastCheckedAt: credential.webhookLastCheckedAt,
       webhookLastError: credential.webhookLastError,
-      createdAt: credential.createdAt,
+      createdAt: credential._creationTime,
       updatedAt: credential.updatedAt,
       webhookToken: credential.webhookToken,
       maskedCredentials:

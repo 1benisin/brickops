@@ -27,7 +27,7 @@ export const listInventoryItems = query({
     const activeItems = items.filter((item) => !item.isArchived);
 
     // Sort by createdAt descending (newest first)
-    return activeItems.sort((a, b) => b.createdAt - a.createdAt);
+    return activeItems.sort((a, b) => b._creationTime - a._creationTime);
   },
 });
 
@@ -517,7 +517,7 @@ export const listInventoryItemsFiltered = query({
     let indexName: IndexName;
     let queryBuilder;
 
-    if (filters?.condition && primarySort === "createdAt") {
+    if (filters?.condition && primarySort === "_creationTime") {
       // Use composite index: by_businessAccount_condition_createdAt
       indexName = "by_businessAccount_condition_createdAt";
       const conditionValue = filters.condition.value as "new" | "used";
@@ -580,7 +580,7 @@ export const listInventoryItemsFiltered = query({
         .query("inventoryItems")
         .withIndex(indexName, (q) => q.eq("businessAccountId", businessAccountId));
     } else {
-      // Default: sort by createdAt
+      // Default: sort by _creationTime
       indexName = "by_businessAccount_createdAt";
       queryBuilder = ctx.db
         .query("inventoryItems")
@@ -662,21 +662,21 @@ export const listInventoryItemsFiltered = query({
         }
 
         // Date ranges
-        if (filters?.createdAt?.kind === "dateRange") {
-          if (filters.createdAt.start !== undefined) {
-            filter = q.and(filter, q.gte(q.field("createdAt"), filters.createdAt.start));
+        if (filters?._creationTime?.kind === "dateRange") {
+          if (filters._creationTime.start !== undefined) {
+            filter = q.and(filter, q.gte(q.field("_creationTime"), filters._creationTime.start));
           }
-          if (filters.createdAt.end !== undefined) {
-            filter = q.and(filter, q.lte(q.field("createdAt"), filters.createdAt.end));
+          if (filters._creationTime.end !== undefined) {
+            filter = q.and(filter, q.lte(q.field("_creationTime"), filters._creationTime.end));
           }
         }
 
         if (filters?.updatedAt?.kind === "dateRange") {
           if (filters.updatedAt.start !== undefined) {
-            filter = q.and(filter, q.gte(q.field("updatedAt"), filters.updatedAt.start));
+            filter = q.and(filter, q.gte(q.field("updatedTime"), filters.updatedAt.start));
           }
           if (filters.updatedAt.end !== undefined) {
-            filter = q.and(filter, q.lte(q.field("updatedAt"), filters.updatedAt.end));
+            filter = q.and(filter, q.lte(q.field("updatedTime"), filters.updatedAt.end));
           }
         }
 
@@ -697,18 +697,18 @@ export const listInventoryItemsFiltered = query({
             if (sortDesc) {
               // For desc: get items with createdAt < cursor OR (createdAt == cursor AND _id > cursor)
               return q.or(
-                q.lt(q.field("createdAt"), cursorDoc.createdAt),
+                q.lt(q.field("_creationTime"), cursorDoc._creationTime),
                 q.and(
-                  q.eq(q.field("createdAt"), cursorDoc.createdAt),
+                  q.eq(q.field("_creationTime"), cursorDoc._creationTime),
                   q.gt(q.field("_id"), cursorDoc._id),
                 ),
               );
             } else {
               // For asc: get items with createdAt > cursor OR (createdAt == cursor AND _id > cursor)
               return q.or(
-                q.gt(q.field("createdAt"), cursorDoc.createdAt),
+                q.gt(q.field("_creationTime"), cursorDoc._creationTime),
                 q.and(
-                  q.eq(q.field("createdAt"), cursorDoc.createdAt),
+                  q.eq(q.field("_creationTime"), cursorDoc._creationTime),
                   q.gt(q.field("_id"), cursorDoc._id),
                 ),
               );
@@ -822,21 +822,27 @@ export const listInventoryItemsFiltered = query({
               );
             }
           } else if (primarySort === "updatedAt") {
-            // Date/timestamp sort for updatedAt (optional field, use createdAt if undefined)
-            // For cursor: use updatedAt if present, otherwise createdAt
-            const cursorValue = cursorDoc.updatedAt ?? cursorDoc.createdAt;
+            // Date/timestamp sort for updatedTime (optional field, use _creationTime if undefined)
+            // For cursor: use updatedTime if present, otherwise _creationTime
+            const cursorValue = cursorDoc.updatedTime ?? cursorDoc._creationTime;
             if (sortDesc) {
-              // Descending: items with updatedAt < cursor OR (updatedAt == cursor AND _id > cursor)
-              // Note: Items without updatedAt will sort by createdAt in the query itself
+              // Descending: items with updatedTime < cursor OR (updatedTime == cursor AND _id > cursor)
+              // Note: Items without updatedTime will sort by _creationTime in the query itself
               return q.or(
-                q.lt(q.field("updatedAt"), cursorValue),
-                q.and(q.eq(q.field("updatedAt"), cursorValue), q.gt(q.field("_id"), cursorDoc._id)),
+                q.lt(q.field("updatedTime"), cursorValue),
+                q.and(
+                  q.eq(q.field("updatedTime"), cursorValue),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
               );
             } else {
-              // Ascending: items with updatedAt > cursor OR (updatedAt == cursor AND _id > cursor)
+              // Ascending: items with updatedTime > cursor OR (updatedTime == cursor AND _id > cursor)
               return q.or(
-                q.gt(q.field("updatedAt"), cursorValue),
-                q.and(q.eq(q.field("updatedAt"), cursorValue), q.gt(q.field("_id"), cursorDoc._id)),
+                q.gt(q.field("updatedTime"), cursorValue),
+                q.and(
+                  q.eq(q.field("updatedTime"), cursorValue),
+                  q.gt(q.field("_id"), cursorDoc._id),
+                ),
               );
             }
           }

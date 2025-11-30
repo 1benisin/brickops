@@ -5,6 +5,7 @@ import { recordMetric } from "../../../lib/external/metrics";
 import type { StoreOperationError, StoreOperationResult } from "../../shared/storeTypes";
 import {
   blInventoryCreatePayloadSchema,
+  blInventoryListEnvelopeSchema,
   blInventoryResponseSchema,
   blInventoryUpdatePayloadSchema,
   type BLInventoryCreatePayload,
@@ -16,15 +17,26 @@ import { normalizeBlStoreError } from "../errors";
 import { generateCorrelationId } from "../ids";
 
 export async function getBLInventories(ctx: ActionCtx): Promise<BLInventoryResponse[]> {
-  const response = await makeBlRequest<BLInventoryResponse[]>(ctx, {
-    path: "/inventories",
-    method: "GET",
-    query: {
-      status: "-R",
-    },
-  });
-  const inventories = response.data.data ?? [];
-  return inventories.map((inventory) => blInventoryResponseSchema.parse(inventory));
+  try {
+    const response = await makeBlRequest<BLInventoryResponse[]>(ctx, {
+      path: "/inventories",
+      method: "GET",
+    });
+
+    // Validate the entire envelope structure at once
+    const parsed = blInventoryListEnvelopeSchema.parse(response.data);
+
+    // Return the parsed inventory responses
+    // Note: The list endpoint returns partial data, but we validate against the schema
+    // which allows partial responses with required fields. We cast to full BLInventoryResponse[]
+    // since all required fields (inventory_id, item, color_id, quantity, new_or_used) are present.
+    return parsed.data as BLInventoryResponse[];
+  } catch (error) {
+    console.error("[BrickLink] getBLInventories request error", {
+      error,
+    });
+    throw error;
+  }
 }
 
 export async function getBLInventory(
