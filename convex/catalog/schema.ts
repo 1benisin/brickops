@@ -71,6 +71,8 @@ export const catalogTables = {
     attempt: v.number(), // Retry attempt number (starts at 0)
     nextAttemptAt: v.number(), // Timestamp for next retry attempt
     lastError: v.optional(v.string()), // Last error message (renamed from errorMessage)
+    failureReason: v.optional(v.string()),
+    failureCode: v.optional(v.string()),
     processedAt: v.optional(v.number()),
   })
     .index("by_status_time", ["status", "nextAttemptAt"]) // NEW: For worker queries
