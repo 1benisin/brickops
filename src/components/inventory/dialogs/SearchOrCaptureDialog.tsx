@@ -339,11 +339,9 @@ export function SearchOrCaptureDialog({
     };
   }, [partName, partNumber]);
 
-  const { results: searchResults } = usePaginatedQuery(
-    api.catalog.queries.searchParts,
-    searchArgs,
-    { initialNumItems: 10 },
-  );
+  const { results: searchResults } = usePaginatedQuery(api.catalog.parts.searchParts, searchArgs, {
+    initialNumItems: 10,
+  });
 
   // Handle search submission
   const handleSearchSubmit = useCallback(() => {

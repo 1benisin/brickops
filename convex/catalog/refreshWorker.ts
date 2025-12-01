@@ -8,7 +8,7 @@ import { fetchBlColor } from "../marketplaces/bricklink/catalog/colors/actions";
 import { fetchBlPart, fetchBlPartColors } from "../marketplaces/bricklink/catalog/parts/actions";
 import { fetchBlPriceGuide } from "../marketplaces/bricklink/catalog/priceGuides/actions";
 import { RebrickableClient, type RebrickablePart } from "../api/rebrickable";
-import type { PriceGuideRecord } from "./mutations";
+import type { PriceGuideRecord } from "./prices";
 
 /**
  * Query to get pending outbox messages ready for processing
@@ -116,7 +116,7 @@ function computeNextAttempt(attempt: number): number {
  * Extract external IDs from Rebrickable part response
  * Returns the first element from each external ID array if available
  */
-function extractExternalIdsFromRebrickable(rebrickableParts: RebrickablePart[]): {
+function _extractExternalIdsFromRebrickable(rebrickableParts: RebrickablePart[]): {
   brickowlId?: string;
   ldrawId?: string;
   legoId?: string;
@@ -161,7 +161,11 @@ export const drainCatalogRefreshOutbox = internalAction({
 
     // Process each message
     for (const message of pendingMessages) {
-      await processOutboxMessage(ctx, message);
+      const shouldContinue = await processOutboxMessage(ctx, message);
+      if (!shouldContinue) {
+        console.log("[catalog] Rate limit hit, stopping batch processing");
+        break;
+      }
     }
   },
 });
@@ -176,7 +180,7 @@ export const processSingleOutboxMessage = internalAction({
   },
   handler: async (ctx, args) => {
     // Fetch the message to ensure it exists and is still pending
-    const message = await ctx.runQuery(internal.catalog.queries.getOutboxMessageById, {
+    const message = await ctx.runQuery(internal.catalog.outbox.getOutboxMessageById, {
       messageId: args.messageId,
     });
 
@@ -193,8 +197,12 @@ export const processSingleOutboxMessage = internalAction({
 /**
  * Process a single outbox message
  * Fetches data from Bricklink and updates database
+ * Returns true if processing should continue, false if batch should stop (e.g. rate limit)
  */
-async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefreshOutbox">) {
+async function processOutboxMessage(
+  ctx: ActionCtx,
+  message: Doc<"catalogRefreshOutbox">,
+): Promise<boolean> {
   try {
     // Mark as inflight (CAS to avoid double processing)
     const marked = await ctx.runMutation(internal.catalog.refreshWorker.markOutboxInflight, {
@@ -204,7 +212,7 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
 
     if (!marked.success) {
       console.log(`Message ${message._id} already being processed or state changed`);
-      return;
+      return true; // Continue to next message
     }
 
     // Take rate limit token
@@ -220,19 +228,38 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
 
     // Fetch from Bricklink based on table type
     if (message.tableName === "parts") {
-      // Fetch external IDs from Rebrickable first (gracefully handle failures)
-      let externalIds: { brickowlId?: string; ldrawId?: string; legoId?: string } = {};
+      // Fetch BrickOwl ID from BrickOwl API
+      let brickowlId = "";
+      try {
+        brickowlId = await ctx.runAction(internal.marketplaces.brickowl.catalog.lookupBrickowlId, {
+          bricklinkPartNo: message.primaryKey,
+        });
+      } catch (error) {
+        // Log error but continue with Bricklink data only
+        console.warn(
+          `Failed to fetch BrickOwl ID for part ${message.primaryKey}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      // Fetch additional external IDs from Rebrickable (ldraw, lego)
+      let ldrawId: string | undefined;
+      let legoId: string | undefined;
       try {
         const rebrickableClient = new RebrickableClient();
         const rebrickablePartsMap = await rebrickableClient.getPartsByBricklinkIds([
           message.primaryKey,
         ]);
         const rebrickableParts = rebrickablePartsMap.get(message.primaryKey) ?? [];
-        externalIds = extractExternalIdsFromRebrickable(rebrickableParts);
+        if (rebrickableParts.length > 0) {
+          const part = rebrickableParts[0];
+          ldrawId = part.external_ids.LDraw?.[0];
+          legoId = part.external_ids.LEGO?.[0];
+        }
       } catch (error) {
         // Log error but continue with Bricklink data only
         console.warn(
-          `Failed to fetch external IDs from Rebrickable for part ${message.primaryKey}:`,
+          `Failed to fetch additional external IDs from Rebrickable for part ${message.primaryKey}:`,
           error instanceof Error ? error.message : String(error),
         );
       }
@@ -240,12 +267,16 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
       // Fetch from Bricklink and merge external IDs
       const partData = await fetchBlPart(ctx, {
         itemNo: message.primaryKey,
-        externalIds,
+        externalIds: {
+          brickowlId,
+          ldrawId,
+          legoId,
+        },
       });
-      await ctx.runMutation(internal.catalog.mutations.upsertPart, { data: partData });
+      await ctx.runMutation(internal.catalog.parts.upsertPart, { data: partData });
     } else if (message.tableName === "partColors") {
       const partColorsData = await fetchBlPartColors(ctx, { itemNo: message.primaryKey });
-      await ctx.runMutation(internal.catalog.mutations.upsertPartColors, {
+      await ctx.runMutation(internal.catalog.colors.upsertPartColors, {
         data: partColorsData,
       });
     } else if (message.tableName === "partPrices") {
@@ -266,19 +297,51 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
         priceGuides.usedSold,
       ];
 
-      await ctx.runMutation(internal.catalog.mutations.upsertPriceGuide, {
+      await ctx.runMutation(internal.catalog.prices.upsertPriceGuide, {
         prices,
       });
     } else if (message.tableName === "colors") {
       const colorId = Number.parseInt(message.primaryKey, 10);
       const colorData = await fetchBlColor(ctx, { colorId });
-      await ctx.runMutation(internal.catalog.mutations.upsertColor, {
-        data: colorData,
+
+      // Fetch BrickOwl mapping from Rebrickable
+      let brickowlColorId: number | null | undefined;
+      try {
+        const rebrickableClient = new RebrickableClient();
+        const colors = await rebrickableClient.getColors();
+
+        // Find the Rebrickable color that has this BrickLink ID
+        const matchingColor = colors.find((c) =>
+          c.external_ids.BrickLink?.some((id) => Number(id) === colorId),
+        );
+
+        if (
+          matchingColor &&
+          matchingColor.external_ids.BrickOwl &&
+          matchingColor.external_ids.BrickOwl.length > 0
+        ) {
+          brickowlColorId = Number(matchingColor.external_ids.BrickOwl[0]);
+        } else {
+          brickowlColorId = null; // Checked but not found
+        }
+      } catch (error) {
+        console.warn(
+          `Failed to fetch BrickOwl color mapping for color ${colorId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        // Leave undefined to retry later
+      }
+
+      await ctx.runMutation(internal.catalog.colors.upsertColor, {
+        data: {
+          ...colorData,
+          brickowlColorId,
+        },
       });
     } else if (message.tableName === "categories") {
       const categoryId = Number.parseInt(message.primaryKey, 10);
       const categoryData = await fetchBlCategory(ctx, { categoryId });
-      await ctx.runMutation(internal.catalog.mutations.upsertCategory, {
+      await ctx.runMutation(internal.catalog.categories.upsertCategory, {
         data: categoryData,
       });
     }
@@ -287,13 +350,54 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
     await ctx.runMutation(internal.catalog.refreshWorker.markOutboxSucceeded, {
       messageId: message._id,
     });
+
+    return true; // Success, continue
   } catch (error) {
     console.error(`Error processing message ${message._id}:`, error);
 
-    // Schedule retry with backoff
-    const nextAttempt = computeNextAttempt(message.attempt);
+    // Normalize the error to get structured information
+    const { normalizeBlStoreError } = await import("../marketplaces/bricklink/errors");
+    const normalizedError = normalizeBlStoreError(error);
     const errorMsg = error instanceof Error ? error.message : String(error);
 
+    // Check if error is retriable
+    const isRetriable = normalizedError.retryable;
+    const isRateLimit = normalizedError.code === "RATE_LIMITED";
+
+    // Decision tree for error handling:
+    // 1. Non-retriable errors (404, 400, etc.) → mark as permanently failed
+    // 2. Exceeded max attempts → mark as permanently failed
+    // 3. Retriable errors → schedule retry with backoff
+    // 4. Rate limit → schedule retry AND stop batch processing
+
+    if (!isRetriable) {
+      // Permanent failure - no point retrying
+      await ctx.runMutation(internal.catalog.outbox.markOutboxPermanentlyFailed, {
+        messageId: message._id,
+        failureReason: normalizedError.message,
+        failureCode: normalizedError.code,
+        lastError: errorMsg,
+      });
+      console.warn(
+        `Message ${message._id} permanently failed: ${normalizedError.code} - ${normalizedError.message}`,
+      );
+      return true; // Continue processing other messages
+    }
+
+    // Check if exceeded max attempts (5 attempts)
+    if (message.attempt >= 5) {
+      await ctx.runMutation(internal.catalog.outbox.markOutboxPermanentlyFailed, {
+        messageId: message._id,
+        failureReason: "Exceeded maximum retry attempts (5)",
+        failureCode: "MAX_RETRIES_EXCEEDED",
+        lastError: errorMsg,
+      });
+      console.warn(`Message ${message._id} exceeded 5 attempts, marking as permanently failed`);
+      return true; // Continue processing other messages
+    }
+
+    // Retriable error - schedule retry with backoff
+    const nextAttempt = computeNextAttempt(message.attempt);
     await ctx.runMutation(internal.catalog.refreshWorker.markOutboxFailed, {
       messageId: message._id,
       attempt: message.attempt + 1,
@@ -301,9 +405,12 @@ async function processOutboxMessage(ctx: ActionCtx, message: Doc<"catalogRefresh
       error: errorMsg,
     });
 
-    // If too many attempts, alert (but keep retrying)
-    if (message.attempt >= 5) {
-      console.warn(`Message ${message._id} exceeded 5 attempts: ${errorMsg}`);
+    // If rate limit, stop batch processing to avoid further failures
+    if (isRateLimit) {
+      console.warn(`Rate limit hit for message ${message._id}, stopping batch processing`);
+      return false; // Stop batch processing
     }
+
+    return true; // Continue processing other messages
   }
 }

@@ -25,7 +25,6 @@ export const marketplaceTables = {
     ),
     validationMessage: v.optional(v.string()),
     createdBy: v.id("users"),
-    createdAt: v.number(),
     updatedAt: v.number(),
     // Webhook configuration for BrickLink push notifications
     webhookToken: v.optional(v.string()), // Unique token for webhook URL routing
@@ -68,7 +67,6 @@ export const marketplaceTables = {
     // Metadata
     lastRequestAt: v.number(),
     lastResetAt: v.number(),
-    createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_business_provider", ["businessAccountId", "provider"]),
 
@@ -90,10 +88,9 @@ export const marketplaceTables = {
     attempts: v.number(), // Number of processing attempts
     lastError: v.optional(v.string()), // Last error message if failed
     processedAt: v.optional(v.number()), // When processing completed
-    createdAt: v.number(), // When notification was received/created
     updatedAt: v.number(),
   })
     .index("by_business_status", ["businessAccountId", "status"])
     .index("by_dedupe", ["dedupeKey"])
-    .index("by_business_created", ["businessAccountId", "createdAt"]),
+    .index("by_business_created", ["businessAccountId"]),
 };

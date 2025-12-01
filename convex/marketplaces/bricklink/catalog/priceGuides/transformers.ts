@@ -32,8 +32,5 @@ export function mapPriceGuide(
     totalQuantity: input.total_quantity,
     guideType,
     lastFetched: now,
-    createdAt: now,
   };
 }
-
-

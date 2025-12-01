@@ -33,8 +33,8 @@ export function useGetPriceGuide(
     [partNumber, colorId],
   );
 
-  const res = useQuery(api.catalog.queries.getPriceGuide, args ?? "skip");
-  const refresh = useAction(api.catalog.actions.enqueueRefreshPriceGuide);
+  const res = useQuery(api.catalog.prices.getPriceGuide, args ?? "skip");
+  const refresh = useAction(api.catalog.prices.enqueueRefreshPriceGuide);
 
   // Deduplication for auto-refresh
   const seen = useRef(new Set<string>());

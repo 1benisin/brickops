@@ -130,7 +130,6 @@ export const createUserInvite = mutation({
       role: args.role,
       expiresAt,
       createdBy: user._id,
-      createdAt: now,
     });
 
     await ctx.db.insert("userAuditLogs", {
@@ -138,7 +137,6 @@ export const createUserInvite = mutation({
       targetUserId: undefined,
       action: "invite_created",
       actorUserId: user._id,
-      createdAt: now,
     });
 
     const inviteLink = `${args.inviteBaseUrl}?token=${token}`;
@@ -184,7 +182,6 @@ export const updateUserRole = mutation({
       fromRole: target.role as RoleLiteral,
       toRole: args.role as RoleLiteral,
       actorUserId: user._id,
-      createdAt: now,
     });
   },
 });
@@ -218,7 +215,6 @@ export const removeUser = mutation({
       targetUserId: target._id,
       action: "user_removed",
       actorUserId: user._id,
-      createdAt: now,
     });
   },
 });

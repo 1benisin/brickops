@@ -6,9 +6,11 @@
  */
 
 import { ConvexError, v } from "convex/values";
-import { mutation, query, type MutationCtx } from "../_generated/server";
+import { mutation, query, action, internalMutation, type MutationCtx } from "../_generated/server";
+import { internal } from "../_generated/api";
 import type { Id, Doc } from "../_generated/dataModel";
 import { requireUser } from "./helpers";
+import { requireActiveUser } from "../users/authorization";
 import { now, getNextSeqForItem, enqueueMarketplaceSync, ensureBrickowlIdForPart } from "./helpers";
 
 /**
@@ -53,7 +55,7 @@ async function createInventoryItemWithLedger(
     quantityReserved: number;
     condition: "new" | "used";
     price?: number;
-    notes?: string;
+    note?: string;
   },
 ): Promise<Id<"inventoryItems">> {
   if (itemData.quantityAvailable < 0) {
@@ -73,9 +75,8 @@ async function createInventoryItemWithLedger(
     quantityReserved: itemData.quantityReserved ?? 0,
     condition: itemData.condition,
     price: itemData.price,
-    notes: itemData.notes,
-    createdBy: userId,
-    createdAt: timestamp,
+    note: itemData.note,
+    createdByUserId: userId,
     marketplaceSync: {
       bricklink: {
         status: "pending",
@@ -259,7 +260,7 @@ export const generateMockInventoryItems = mutation({
           quantityReserved: 0,
           condition: (Math.random() > 0.5 ? "new" : "used") as "new" | "used",
           price: parseFloat((Math.random() * 9.99 + 0.01).toFixed(2)), // $0.01-$10.00
-          notes: undefined, // Leave notes empty as specified
+          note: undefined, // Leave notes empty as specified
         };
 
         // Create item with proper ledger tracking
@@ -310,60 +311,201 @@ export const generateMockInventoryItems = mutation({
 });
 
 /**
- * Delete all inventory items for the current business account
- *
- * DEVELOPMENT ONLY: This mutation is only available in development environments.
- * Use with caution - this permanently deletes all inventory items and cannot be undone.
+ * Internal mutation to delete marketplace outbox messages in batches using recursive scheduling
+ * Processes one batch per execution and schedules the next batch if more items exist
  */
-export const deleteAllInventoryItems = mutation({
-  args: {},
-  handler: async (ctx) => {
-    // Guard: only allow in development
-    if (!isDevelopmentMode()) {
-      throw new ConvexError("This mutation is only available in development environments");
+export const deleteMarketplaceOutboxMessages = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const BATCH_SIZE = 1000;
+
+    // Execute a single paginated query
+    const cursor: string | null = args.cursor ?? null;
+    const { page, continueCursor } = await ctx.db
+      .query("marketplaceOutbox")
+      .filter((q) => q.eq(q.field("businessAccountId"), args.businessAccountId))
+      .paginate({ numItems: BATCH_SIZE, cursor });
+
+    if (page.length === 0) {
+      return { status: "complete" as const, count: 0 };
     }
 
-    const { user } = await requireUser(ctx);
-    const businessAccountId = user.businessAccountId as Id<"businessAccounts">;
+    // Delete all items in the current batch
+    await Promise.all(page.map((message) => ctx.db.delete(message._id)));
 
-    // Query all inventory items for this business
-    const allItems = await ctx.db
+    // If there are more items, schedule the next batch
+    if (continueCursor) {
+      await ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteMarketplaceOutboxMessages, {
+        businessAccountId: args.businessAccountId,
+        cursor: continueCursor,
+      });
+      return { status: "processing" as const, count: page.length };
+    }
+
+    return { status: "complete" as const, count: page.length };
+  },
+});
+
+/**
+ * Internal mutation to delete inventory items in batches using recursive scheduling
+ * Processes one batch per execution and schedules the next batch if more items exist
+ */
+export const deleteInventoryItemsInternal = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const BATCH_SIZE = 1000;
+
+    // Execute a single paginated query
+    const cursor: string | null = args.cursor ?? null;
+    const { page, continueCursor } = await ctx.db
       .query("inventoryItems")
-      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
-      .collect();
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", args.businessAccountId))
+      .paginate({ numItems: BATCH_SIZE, cursor });
 
-    // Clear any marketplace outbox messages for this business account before deleting items
-    const marketplaceOutboxMessages = await ctx.db
-      .query("marketplaceOutbox")
-      .filter((q) => q.eq(q.field("businessAccountId"), businessAccountId))
-      .collect();
+    if (page.length === 0) {
+      return { status: "complete" as const, count: 0 };
+    }
 
-    await Promise.all(
-      marketplaceOutboxMessages.map((message) => ctx.db.delete(message._id)),
-    );
+    // Delete all items in the current batch
+    await Promise.all(page.map((item) => ctx.db.delete(item._id)));
 
-    // Delete all items
-    await Promise.all(allItems.map((item) => ctx.db.delete(item._id)));
+    // If there are more items, schedule the next batch
+    if (continueCursor) {
+      await ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteInventoryItemsInternal, {
+        businessAccountId: args.businessAccountId,
+        cursor: continueCursor,
+      });
+      return { status: "processing" as const, count: page.length };
+    }
 
-    // Also delete related ledger entries for clean slate
-    const allQuantityLedgerEntries = await ctx.db
+    return { status: "complete" as const, count: page.length };
+  },
+});
+
+/**
+ * Internal mutation to delete quantity ledger entries in batches using recursive scheduling
+ * Processes one batch per execution and schedules the next batch if more items exist
+ */
+export const deleteQuantityLedgerEntries = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const BATCH_SIZE = 1000;
+
+    // Execute a single paginated query
+    const cursor: string | null = args.cursor ?? null;
+    const { page, continueCursor } = await ctx.db
       .query("inventoryQuantityLedger")
-      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
-      .collect();
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", args.businessAccountId))
+      .paginate({ numItems: BATCH_SIZE, cursor });
 
-    const allLocationLedgerEntries = await ctx.db
+    if (page.length === 0) {
+      return { status: "complete" as const, count: 0 };
+    }
+
+    // Delete all items in the current batch
+    await Promise.all(page.map((entry) => ctx.db.delete(entry._id)));
+
+    // If there are more items, schedule the next batch
+    if (continueCursor) {
+      await ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteQuantityLedgerEntries, {
+        businessAccountId: args.businessAccountId,
+        cursor: continueCursor,
+      });
+      return { status: "processing" as const, count: page.length };
+    }
+
+    return { status: "complete" as const, count: page.length };
+  },
+});
+
+/**
+ * Internal mutation to delete location ledger entries in batches using recursive scheduling
+ * Processes one batch per execution and schedules the next batch if more items exist
+ */
+export const deleteLocationLedgerEntries = internalMutation({
+  args: {
+    businessAccountId: v.id("businessAccounts"),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const BATCH_SIZE = 1000;
+
+    // Execute a single paginated query
+    const cursor: string | null = args.cursor ?? null;
+    const { page, continueCursor } = await ctx.db
       .query("inventoryLocationLedger")
-      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", businessAccountId))
-      .collect();
+      .withIndex("by_businessAccount", (q) => q.eq("businessAccountId", args.businessAccountId))
+      .paginate({ numItems: BATCH_SIZE, cursor });
 
-    await Promise.all(allQuantityLedgerEntries.map((entry) => ctx.db.delete(entry._id)));
-    await Promise.all(allLocationLedgerEntries.map((entry) => ctx.db.delete(entry._id)));
+    if (page.length === 0) {
+      return { status: "complete" as const, count: 0 };
+    }
+
+    // Delete all items in the current batch
+    await Promise.all(page.map((entry) => ctx.db.delete(entry._id)));
+
+    // If there are more items, schedule the next batch
+    if (continueCursor) {
+      await ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteLocationLedgerEntries, {
+        businessAccountId: args.businessAccountId,
+        cursor: continueCursor,
+      });
+      return { status: "processing" as const, count: page.length };
+    }
+
+    return { status: "complete" as const, count: page.length };
+  },
+});
+
+/**
+ * Delete all inventory items for the current business account
+ *
+ * DEVELOPMENT ONLY: This action is only available in development environments.
+ * Use with caution - this permanently deletes all inventory items and cannot be undone.
+ *
+ * This uses an action to schedule the first batch of each deletion process.
+ * Each deletion function will recursively schedule itself until all items are deleted.
+ */
+export const deleteAllInventoryItems = action({
+  args: {},
+  handler: async (ctx): Promise<{ message: string }> => {
+    // Guard: only allow in development
+    if (!isDevelopmentMode()) {
+      throw new ConvexError("This action is only available in development environments");
+    }
+
+    // Get user and business account (works with actions)
+    const { businessAccountId } = await requireActiveUser(ctx);
+
+    // Schedule the first batch of each deletion process
+    // Each function will recursively schedule itself until completion
+    await Promise.all([
+      ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteMarketplaceOutboxMessages, {
+        businessAccountId,
+      }),
+      ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteInventoryItemsInternal, {
+        businessAccountId,
+      }),
+      ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteQuantityLedgerEntries, {
+        businessAccountId,
+      }),
+      ctx.scheduler.runAfter(0, internal.inventory.mocks.deleteLocationLedgerEntries, {
+        businessAccountId,
+      }),
+    ]);
 
     return {
-      deletedMarketplaceOutboxMessages: marketplaceOutboxMessages.length,
-      deletedItems: allItems.length,
-      deletedQuantityLedgerEntries: allQuantityLedgerEntries.length,
-      deletedLocationLedgerEntries: allLocationLedgerEntries.length,
+      message:
+        "Deletion process started in the background. All inventory items and related data will be deleted recursively.",
     };
   },
 });

@@ -158,7 +158,6 @@ export const upsertOrder = internalMutation({
     } else {
       await db.insert("orders", {
         ...orderDoc,
-        createdAt: now,
       });
     }
 
@@ -205,7 +204,6 @@ export const upsertOrder = internalMutation({
         location: item.location,
         status: item.status,
         providerData: item.providerData,
-        createdAt: now,
         updatedAt: now,
       });
 

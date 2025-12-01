@@ -15,7 +15,5 @@ export function mapColor(input: {
     colorCode: input.color_code,
     colorType: input.color_type,
     lastFetched: now,
-    createdAt: now,
   };
 }
-

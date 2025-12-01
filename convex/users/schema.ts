@@ -6,7 +6,6 @@ export const usersTables = {
     name: v.string(),
     ownerUserId: v.optional(v.id("users")),
     inviteCode: v.string(),
-    createdAt: v.number(),
   })
     .index("by_owner", ["ownerUserId"])
     .index("by_inviteCode", ["inviteCode"]),
@@ -33,7 +32,6 @@ export const usersTables = {
     // User preferences
     useSortLocations: v.optional(v.boolean()),
 
-    createdAt: v.number(),
     updatedAt: v.number(),
     status: v.union(v.literal("active"), v.literal("invited")),
   })
@@ -51,7 +49,6 @@ export const usersTables = {
     expiresAt: v.number(),
     redeemedAt: v.optional(v.number()),
     createdBy: v.id("users"),
-    createdAt: v.number(),
   })
     .index("by_token", ["token"]) // resolve invite token quickly
     .index("by_email", ["email"]) // enforce uniqueness/window if desired
@@ -75,16 +72,13 @@ export const usersTables = {
     ),
     actorUserId: v.id("users"),
     reason: v.optional(v.string()),
-    createdAt: v.number(),
   })
     .index("by_targetUser", ["targetUserId"]) // fetch logs per user
-    .index("by_businessAccount", ["businessAccountId"]) // fetch logs per tenant
-    .index("by_createdAt", ["businessAccountId", "createdAt"]),
+    .index("by_businessAccount", ["businessAccountId"]), // fetch logs per tenant
 
   // Generic rate limiting events to protect sensitive endpoints
   rateLimitEvents: defineTable({
     key: v.string(), // e.g., ba:{id}:invite_create, email:{addr}:invite_create, token:{token}:invite_redeem
     kind: v.string(), // logical bucket, e.g., invite_create, invite_redeem
-    createdAt: v.number(),
   }).index("by_key_kind", ["key", "kind"]),
 };

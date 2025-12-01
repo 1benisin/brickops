@@ -79,7 +79,6 @@ export async function ensureBrickowlIdForPart(ctx: MutationCtx, partNumber: stri
       status: "pending",
       attempt: 0,
       nextAttemptAt: Date.now(),
-      createdAt: Date.now(),
     });
   }
 
@@ -101,7 +100,7 @@ export async function ensureBrickowlIdForPartAction(
   ctx: ActionCtx,
   partNumber: string,
 ): Promise<string | null> {
-  const part = await ctx.runQuery(internal.catalog.queries.getPartInternal, { partNumber });
+  const part = await ctx.runQuery(internal.catalog.parts.getPartInternal, { partNumber });
 
   if (!part) {
     return null;
@@ -111,7 +110,7 @@ export async function ensureBrickowlIdForPartAction(
     return part.brickowlId ?? "";
   }
 
-  let messageId = await ctx.runMutation(internal.catalog.mutations.enqueueCatalogRefresh, {
+  let messageId = await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
     tableName: "parts",
     primaryKey: partNumber,
     secondaryKey: undefined,
@@ -120,7 +119,7 @@ export async function ensureBrickowlIdForPartAction(
   });
 
   if (!messageId) {
-    const existing = await ctx.runQuery(internal.catalog.queries.getOutboxMessage, {
+    const existing = await ctx.runQuery(internal.catalog.outbox.getOutboxMessage, {
       tableName: "parts",
       primaryKey: partNumber,
     });
@@ -136,12 +135,12 @@ export async function ensureBrickowlIdForPartAction(
     });
   }
 
-  const refreshed = await ctx.runQuery(internal.catalog.queries.getPartInternal, { partNumber });
+  const refreshed = await ctx.runQuery(internal.catalog.parts.getPartInternal, { partNumber });
   if (refreshed?.brickowlId !== undefined) {
     return refreshed.brickowlId ?? "";
   }
 
-  await ctx.runMutation(internal.catalog.mutations.updatePartBrickowlId, {
+  await ctx.runMutation(internal.catalog.parts.updatePartBrickowlId, {
     partNumber,
     brickowlId: "",
   });
@@ -277,7 +276,6 @@ export async function enqueueMarketplaceSync(
     status: "pending",
     attempt: 0,
     nextAttemptAt: Date.now(),
-    createdAt: Date.now(),
     correlationId: args.correlationId,
   });
 

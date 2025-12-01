@@ -256,4 +256,53 @@ export class RebrickableClient {
       throw apiError;
     }
   }
+  /**
+   * Get all colors with external IDs
+   * Returns a list of colors
+   */
+  async getColors(): Promise<RebrickableColor[]> {
+    const started = Date.now();
+    try {
+      // Fetch all colors (page_size=1000 should cover all ~200 colors)
+      const result = await this.request<RebrickableColorListResponse>({
+        path: "/lego/colors/",
+        query: { page_size: 1000 },
+      });
+
+      const duration = Date.now() - started;
+      recordMetric("external.rebrickable.getColors", {
+        count: result.data.results.length,
+        durationMs: duration,
+      });
+
+      return result.data.results;
+    } catch (error) {
+      const duration = Date.now() - started;
+      const apiError = normalizeApiError("rebrickable", error, {
+        endpoint: "/lego/colors/",
+      });
+
+      recordMetric("external.rebrickable.getColors.error", {
+        errorCode: apiError.error.code,
+        durationMs: duration,
+      });
+
+      throw apiError;
+    }
+  }
+}
+
+export interface RebrickableColor {
+  id: number;
+  name: string;
+  rgb: string;
+  is_trans: boolean;
+  external_ids: RebrickableExternalIds;
+}
+
+export interface RebrickableColorListResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: RebrickableColor[];
 }

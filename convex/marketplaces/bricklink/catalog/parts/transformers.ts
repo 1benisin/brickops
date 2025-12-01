@@ -43,7 +43,6 @@ export function mapPart(
     ldrawId: externalIds?.ldrawId,
     legoId: externalIds?.legoId,
     lastFetched: now,
-    createdAt: now,
   };
 }
 
@@ -58,8 +57,5 @@ export function mapPartColors(
     colorId: color.color_id,
     quantity: color.quantity,
     lastFetched: now,
-    createdAt: now,
   }));
 }
-
-

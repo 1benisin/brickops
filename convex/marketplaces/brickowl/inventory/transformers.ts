@@ -14,7 +14,7 @@ type InventoryItemDoc = {
   condition: "new" | "used";
   price?: number | null;
   location?: string | null;
-  notes?: string | null;
+  note?: string | null;
   [key: string]: unknown;
 };
 
@@ -28,7 +28,7 @@ type InventorySnapshot = {
   quantityReserved: number;
   condition: "new" | "used";
   price: number;
-  notes?: string;
+  note?: string;
 };
 
 function parseNumberLike(value: number | string | undefined | null): number | undefined {
@@ -99,7 +99,7 @@ export function mapBrickOwlToConvexInventory(
       ? brickowlInventory.personal_note.trim()
       : "";
   const price = resolveBrickOwlPrice(brickowlInventory);
-  const notes =
+  const note =
     typeof brickowlInventory.public_note === "string" ? brickowlInventory.public_note : undefined;
   const quantityAvailable = resolveBrickOwlQuantity(brickowlInventory);
 
@@ -121,7 +121,7 @@ export function mapBrickOwlToConvexInventory(
     quantityReserved: 0,
     condition,
     price: price ?? 0,
-    notes,
+    note,
   };
 }
 
@@ -137,8 +137,8 @@ export function mapConvexToBrickOwlCreate(
       ? convexInventory.location
       : undefined;
   const public_note =
-    typeof convexInventory.notes === "string" && convexInventory.notes.length > 0
-      ? convexInventory.notes
+    typeof convexInventory.note === "string" && convexInventory.note.length > 0
+      ? convexInventory.note
       : undefined;
 
   return {
@@ -179,8 +179,8 @@ export function mapConvexToBrickOwlUpdate(
       ? convexInventory.location
       : undefined;
   const public_note =
-    typeof convexInventory.notes === "string" && convexInventory.notes.length > 0
-      ? convexInventory.notes
+    typeof convexInventory.note === "string" && convexInventory.note.length > 0
+      ? convexInventory.note
       : undefined;
   const condition = convexInventory.condition === "new" ? ("new" as const) : ("usedn" as const);
 

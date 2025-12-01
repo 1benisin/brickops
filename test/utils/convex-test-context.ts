@@ -29,7 +29,7 @@ type ChainableQuery<T> = {
   field: (field: keyof T & string) => FieldRef<T>;
 };
 
-type FieldInput<T> = keyof T & string | FieldRef<T>;
+type FieldInput<T> = (keyof T & string) | FieldRef<T>;
 
 type FilterExpression<T> = {
   evaluate: (doc: T) => boolean;
@@ -338,13 +338,13 @@ function createComparisonExpression<T>(
         case "eq":
           return left === value;
         case "lt":
-          return left < value;
+          return left < (value as any);
         case "lte":
-          return left <= value;
+          return left <= (value as any);
         case "gt":
-          return left > value;
+          return left > (value as any);
         case "gte":
-          return left >= value;
+          return left >= (value as any);
         default:
           return false;
       }

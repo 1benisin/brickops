@@ -32,11 +32,11 @@ export async function checkAndConsumeRateLimitDirect(
     .withIndex("by_key_kind", (q) => q.eq("key", args.key).eq("kind", args.kind))
     .collect();
 
-  const inWindow = events.filter((e) => e.createdAt >= since);
+  const inWindow = events.filter((e) => e._creationTime >= since);
   if (inWindow.length >= args.limit) {
     const oldest = inWindow.reduce(
-      (min, event) => (event.createdAt < min ? event.createdAt : min),
-      inWindow[0].createdAt,
+      (min, event) => (event._creationTime < min ? event._creationTime : min),
+      inWindow[0]._creationTime,
     );
     const retryAfterMs = Math.max(0, args.windowMs - (now - oldest));
     return { allowed: false, remaining: 0, retryAfterMs } as const;
@@ -45,12 +45,11 @@ export async function checkAndConsumeRateLimitDirect(
   await ctx.db.insert("rateLimitEvents", {
     key: args.key,
     kind: args.kind,
-    createdAt: now,
   });
 
   // Opportunistic pruning: remove entries older than current window for this key/kind
   // Best-effort only; ignore failures
-  const oldEntries = events.filter((e) => e.createdAt < since);
+  const oldEntries = events.filter((e) => e._creationTime < since);
   await Promise.all(
     oldEntries.map(async (e) => {
       try {

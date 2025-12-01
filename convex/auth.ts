@@ -135,6 +135,13 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
   const profile = args.profile as ProfileParams;
   const email = normalizeEmail(assertString(profile.email, "email"));
 
+  // Check if a user with this email already exists
+  const existingUserByEmail = await ctx.db
+    .query("users")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .first();
+
+  // If we have an existingUserId, use it (for sign-in or account linking)
   if (args.existingUserId) {
     const existingUser = await ctx.db.get(args.existingUserId);
     if (!existingUser) {
@@ -162,6 +169,27 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
 
     await ctx.db.patch(args.existingUserId, updates);
     return args.existingUserId;
+  }
+
+  // If a user with this email already exists but wasn't linked, use that user
+  if (existingUserByEmail) {
+    const updates: Record<string, unknown> = {
+      updatedAt: now,
+      status: "active" satisfies UserStatus,
+    };
+
+    if (profile.firstName) {
+      updates.firstName = profile.firstName;
+    }
+    if (profile.lastName) {
+      updates.lastName = profile.lastName;
+    }
+    if (profile.name) {
+      updates.name = profile.name;
+    }
+
+    await ctx.db.patch(existingUserByEmail._id, updates);
+    return existingUserByEmail._id;
   }
 
   const firstName = assertString(profile.firstName, "firstName");
@@ -229,7 +257,6 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
     businessAccountId = await ctx.db.insert("businessAccounts", {
       name: businessName,
       inviteCode,
-      createdAt: now,
     });
   }
 
@@ -241,7 +268,6 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
     businessAccountId,
     role,
     status: "active" satisfies UserStatus,
-    createdAt: now,
     updatedAt: now,
   });
 
@@ -251,7 +277,6 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
       targetUserId: userId,
       action: "invite_redeemed",
       actorUserId: userId,
-      createdAt: now,
     });
   }
 

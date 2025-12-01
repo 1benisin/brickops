@@ -10,4 +10,3 @@ export type BLCatalogCategoryResponse = z.infer<typeof blCatalogCategoryResponse
 
 export const blCategoryIdSchema = z.number();
 export type BLCategoryId = z.infer<typeof blCategoryIdSchema>;
-

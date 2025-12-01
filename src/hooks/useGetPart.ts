@@ -27,8 +27,8 @@ export function useGetPart(partNumber: string | null): UseGetPartResult {
   // Memoize args object to prevent unnecessary re-renders
   const args = useMemo(() => (partNumber ? { partNumber } : null), [partNumber]);
 
-  const res = useQuery(api.catalog.queries.getPart, args ?? "skip");
-  const refresh = useAction(api.catalog.actions.enqueueRefreshPart);
+  const res = useQuery(api.catalog.parts.getPart, args ?? "skip");
+  const refresh = useAction(api.catalog.parts.enqueueRefreshPart);
 
   // Deduplication for auto-refresh
   const seen = useRef(new Set<string>());

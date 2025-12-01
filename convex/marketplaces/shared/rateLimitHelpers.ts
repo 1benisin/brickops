@@ -27,7 +27,6 @@ export function buildInitialRateLimitRecord(
     circuitBreakerOpenUntil: undefined as number | undefined,
     lastRequestAt: now,
     lastResetAt: now,
-    createdAt: now,
     updatedAt: now,
   };
 }

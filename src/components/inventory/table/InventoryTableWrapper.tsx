@@ -45,7 +45,7 @@ export function InventoryTableWrapper({
   // Query state for server-side sorting and filtering
   const [querySpec, setQuerySpec] = useState<QuerySpec>({
     filters: {},
-    sort: [{ id: "createdAt", desc: true }],
+    sort: [{ id: "_creationTime", desc: true }],
     pagination: { pageSize: 25 },
   });
 
@@ -54,7 +54,7 @@ export function InventoryTableWrapper({
 
   // Client-side sorting state (when data is provided)
   const [clientSorting, setClientSorting] = useState<Array<{ id: string; desc: boolean }>>([
-    { id: "createdAt", desc: true },
+    { id: "_creationTime", desc: true },
   ]);
 
   // Client-side filtering state (when data is provided)
@@ -120,15 +120,15 @@ export function InventoryTableWrapper({
       }
 
       // Date range filters
-      if (clientFilters.createdAt && typeof clientFilters.createdAt === "object") {
-        const dateFilter = clientFilters.createdAt as { start?: number; end?: number };
-        const timestamp = item.createdAt as number;
+      if (clientFilters._creationTime && typeof clientFilters._creationTime === "object") {
+        const dateFilter = clientFilters._creationTime as { start?: number; end?: number };
+        const timestamp = item._creationTime as number;
         if (dateFilter.start !== undefined && timestamp < dateFilter.start) return false;
         if (dateFilter.end !== undefined && timestamp > dateFilter.end) return false;
       }
       if (clientFilters.updatedAt && typeof clientFilters.updatedAt === "object") {
         const dateFilter = clientFilters.updatedAt as { start?: number; end?: number };
-        const timestamp = (item.updatedAt as number | undefined) || item.createdAt;
+        const timestamp = (item.updatedAt as number | undefined) || item._creationTime;
         if (dateFilter.start !== undefined && timestamp < dateFilter.start) return false;
         if (dateFilter.end !== undefined && timestamp > dateFilter.end) return false;
       }
@@ -146,9 +146,9 @@ export function InventoryTableWrapper({
 
     const sorted = [...filtered];
 
-    // If no active sorts, use default sort by createdAt desc
+    // If no active sorts, use default sort by _creationTime desc
     const activeSorts =
-      clientSorting.length > 0 ? clientSorting : [{ id: "createdAt", desc: true }];
+      clientSorting.length > 0 ? clientSorting : [{ id: "_creationTime", desc: true }];
 
     // Single sort function that considers all sort criteria (multi-column sorting)
     sorted.sort((a, b) => {
@@ -238,7 +238,7 @@ export function InventoryTableWrapper({
           sort.id === "quantityReserved" ||
           sort.id === "price" ||
           sort.id === "totalPrice" ||
-          sort.id === "createdAt" ||
+          sort.id === "_creationTime" ||
           sort.id === "updatedAt" ||
           sort.id === "marketplaceSync.bricklink" ||
           sort.id === "marketplaceSync.brickowl";
@@ -376,16 +376,16 @@ export function InventoryTableWrapper({
             }
           }
           // Date range filters
-          else if (columnId === "createdAt" || columnId === "updatedAt") {
+          else if (columnId === "_creationTime" || columnId === "updatedAt") {
             if (value && typeof value === "object") {
               const rangeValue = value as { start?: number; end?: number };
-              if (columnId === "createdAt") {
-                newFilters.createdAt = { kind: "dateRange", ...rangeValue };
+              if (columnId === "_creationTime") {
+                newFilters._creationTime = { kind: "dateRange", ...rangeValue };
               } else if (columnId === "updatedAt") {
                 newFilters.updatedAt = { kind: "dateRange", ...rangeValue };
               }
             } else {
-              if (columnId === "createdAt") delete newFilters.createdAt;
+              if (columnId === "_creationTime") delete newFilters._creationTime;
               else if (columnId === "updatedAt") delete newFilters.updatedAt;
             }
           }
@@ -504,10 +504,10 @@ export function InventoryTableWrapper({
     }
 
     // Date range filters
-    if (querySpec.filters?.createdAt) {
-      filters.createdAt = {
-        start: querySpec.filters.createdAt.start,
-        end: querySpec.filters.createdAt.end,
+    if (querySpec.filters?._creationTime) {
+      filters._creationTime = {
+        start: querySpec.filters._creationTime.start,
+        end: querySpec.filters._creationTime.end,
       };
     }
     if (querySpec.filters?.updatedAt) {

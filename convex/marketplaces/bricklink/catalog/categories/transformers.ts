@@ -20,8 +20,5 @@ export function mapCategory(input: {
     categoryName: decodeHtmlEntities(input.category_name),
     parentId: input.parent_id && input.parent_id !== 0 ? input.parent_id : undefined,
     lastFetched: now,
-    createdAt: now,
   };
 }
-
-

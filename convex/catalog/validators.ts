@@ -29,6 +29,118 @@ import { v } from "convex/values";
 export const partTypeValidator = v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET"));
 
 /**
+ * Color type literal
+ */
+export const colorTypeValidator = v.union(
+  v.literal("Modulex"),
+  v.literal("Speckle"),
+  v.literal("Glitter"),
+  v.literal("Milky"),
+  v.literal("Metallic"),
+  v.literal("Satin"),
+  v.literal("Pearl"),
+  v.literal("Chrome"),
+  v.literal("Transparent"),
+  v.literal("Solid"),
+);
+
+/**
+ * New or used condition literal (for price guides)
+ */
+export const newOrUsedValidator = v.union(v.literal("N"), v.literal("U"));
+
+/**
+ * Guide type literal (sold or stock)
+ */
+export const guideTypeValidator = v.union(v.literal("sold"), v.literal("stock"));
+
+// ============================================================================
+// TABLE FIELD DEFINITIONS (Schema source of truth)
+// ============================================================================
+
+/**
+ * Parts table field definitions
+ * These match the database schema exactly and are used both in schema.ts and mutation validators
+ */
+export const partTableFields = {
+  no: v.string(), // Bricklink's no (part number)
+  name: v.string(), // Bricklink's name
+  type: partTypeValidator, // Bricklink's type
+  categoryId: v.optional(v.number()), // Bricklink's category_id
+  alternateNo: v.optional(v.string()), // Bricklink's alternate_no
+  imageUrl: v.optional(v.string()), // Bricklink's image_url
+  thumbnailUrl: v.optional(v.string()), // Bricklink's thumbnail_url
+  weight: v.optional(v.number()), // Bricklink's weight (grams, 2 decimal places)
+  dimX: v.optional(v.string()), // Bricklink's dim_x (string with 2 decimal places)
+  dimY: v.optional(v.string()), // Bricklink's dim_y (string with 2 decimal places)
+  dimZ: v.optional(v.string()), // Bricklink's dim_z (string with 2 decimal places)
+  yearReleased: v.optional(v.number()), // Bricklink's year_released
+  description: v.optional(v.string()), // Bricklink's description
+  isObsolete: v.optional(v.boolean()), // Bricklink's is_obsolete
+  brickowlId: v.optional(v.string()), // BrickOwl part ID
+  ldrawId: v.optional(v.string()), // LDraw part ID from Rebrickable
+  legoId: v.optional(v.string()), // LEGO part ID from Rebrickable
+  lastFetched: v.number(), // Universal freshness timestamp
+};
+
+/**
+ * Colors table field definitions
+ */
+export const colorTableFields = {
+  colorId: v.number(), // Bricklink's color_id (primary)
+  colorName: v.string(), // Bricklink's color_name
+  colorCode: v.optional(v.string()), // Bricklink's color_code (hex)
+  colorType: v.optional(colorTypeValidator), // Bricklink's color_type
+  brickowlColorId: v.optional(v.union(v.number(), v.null())), // BrickOwl's color_id (from Rebrickable mapping)
+  lastFetched: v.number(), // Universal freshness timestamp
+};
+
+/**
+ * Categories table field definitions
+ */
+export const categoryTableFields = {
+  categoryId: v.number(), // Bricklink's category_id
+  categoryName: v.string(), // Bricklink's category_name
+  parentId: v.optional(v.number()), // Bricklink's parent_id (0 if root)
+  lastFetched: v.number(), // Universal freshness timestamp
+};
+
+/**
+ * Part colors table field definitions
+ */
+export const partColorTableFields = {
+  partNo: v.string(), // Bricklink's part no
+  colorId: v.number(), // Bricklink's color_id
+  quantity: v.number(), // Bricklink's quantity
+  lastFetched: v.number(), // Universal freshness timestamp
+};
+
+/**
+ * Part prices table field definitions
+ */
+export const partPriceTableFields = {
+  partNo: v.string(), // Bricklink's item.no
+  partType: partTypeValidator, // Bricklink's item.type
+  colorId: v.number(), // Bricklink's color_id (required - every price is for a specific color)
+  newOrUsed: newOrUsedValidator, // Bricklink's new_or_used (N=new, U=used)
+  currencyCode: v.string(), // Bricklink's currency_code
+  minPrice: v.optional(v.number()), // Bricklink's min_price
+  maxPrice: v.optional(v.number()), // Bricklink's max_price
+  avgPrice: v.optional(v.number()), // Bricklink's avg_price
+  qtyAvgPrice: v.optional(v.number()), // Bricklink's qty_avg_price
+  unitQuantity: v.optional(v.number()), // Bricklink's unit_quantity
+  totalQuantity: v.optional(v.number()), // Bricklink's total_quantity
+  guideType: guideTypeValidator, // Bricklink's guide_type (sold/stock)
+  lastFetched: v.number(), // Universal freshness timestamp
+};
+
+// ============================================================================
+// SHARED COMPONENT VALIDATORS (API Return Types)
+// ============================================================================
+
+/**
+
+/**
  * Individual catalog part (used in search results)
  */
 export const catalogPartValidator = v.object({
@@ -144,7 +256,7 @@ export const colorsReturnValidator = v.array(
     colorId: v.number(),
     colorName: v.string(),
     colorCode: v.optional(v.string()),
-    colorType: v.optional(v.string()),
+    colorType: v.optional(colorTypeValidator),
     lastFetched: v.number(),
   }),
 );

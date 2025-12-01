@@ -23,12 +23,7 @@ export const orderStatusValidator = v.union(
 
 export type OrderStatus = Infer<typeof orderStatusValidator>;
 
-export const ORDER_ITEM_STATUS_VALUES = [
-  "picked",
-  "unpicked",
-  "skipped",
-  "issue",
-] as const;
+export const ORDER_ITEM_STATUS_VALUES = ["picked", "unpicked", "skipped", "issue"] as const;
 
 export const orderItemStatusValidator = v.union(
   ...ORDER_ITEM_STATUS_VALUES.map((status) => v.literal(status)),
@@ -76,7 +71,6 @@ export const ordersTables = {
     costCoupon: v.optional(v.number()),
     providerData: v.optional(v.any()),
     lastSyncedAt: v.number(),
-    createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_business_order", ["businessAccountId", "orderId"])
@@ -132,7 +126,6 @@ export const ordersTables = {
     location: v.optional(v.string()),
     status: orderItemStatusValidator,
     providerData: v.optional(v.any()),
-    createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_order", ["businessAccountId", "orderId"])
@@ -158,10 +151,9 @@ export const ordersTables = {
     lastError: v.optional(v.string()),
     processedAt: v.optional(v.number()),
     payloadSnapshot: v.optional(v.any()),
-    createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_business_provider_status", ["businessAccountId", "provider", "status"])
     .index("by_dedupe", ["dedupeKey"])
-    .index("by_business_created", ["businessAccountId", "createdAt"]),
+    .index("by_business_created", ["businessAccountId"]),
 };

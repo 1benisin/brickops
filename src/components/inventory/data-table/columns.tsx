@@ -237,8 +237,8 @@ export const createColumns = (
     },
     // Date Created column
     {
-      id: "createdAt",
-      accessorKey: "createdAt",
+      id: "_creationTime",
+      accessorKey: "_creationTime",
       meta: { label: "Date Created" },
       header: "Date Created",
       enableSorting: true,
@@ -246,7 +246,7 @@ export const createColumns = (
       minSize: 100,
       maxSize: 250,
       cell: ({ row }) => {
-        const timestamp = row.getValue("createdAt") as number;
+        const timestamp = row.getValue("_creationTime") as number;
         return <div className="text-sm text-muted-foreground">{formatRelativeTime(timestamp)}</div>;
       },
     },
@@ -310,7 +310,7 @@ export const createColumns = (
       maxSize: 250,
       cell: ({ row }) => {
         const updatedAt = row.getValue("updatedAt") as number | undefined;
-        const createdAt = row.original.createdAt;
+        const createdAt = row.original._creationTime;
         const timestamp = updatedAt || createdAt;
         return <div className="text-sm text-muted-foreground">{formatRelativeTime(timestamp)}</div>;
       },
