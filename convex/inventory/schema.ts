@@ -95,9 +95,6 @@ export const inventoryTables = {
     // Pattern: sort by location (dedicated index for direct sorting)
     .index("by_businessAccount_location", ["businessAccountId", "location"])
 
-    // Pattern: sort by condition (dedicated index for direct sorting)
-    .index("by_businessAccount_condition", ["businessAccountId", "condition"])
-
     // Pattern: sort by quantityReserved
     .index("by_businessAccount_quantityReserved", ["businessAccountId", "quantityReserved"])
 
