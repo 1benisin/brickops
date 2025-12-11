@@ -10,7 +10,7 @@ import {
   getCurrentAvailableFromLedger,
   getLastSyncedSeq,
   enqueueMarketplaceSync,
-  _ensureBrickowlIdForPart,
+  ensureBrickowlIdForPart,
 } from "./helpers";
 import { requireUserRole } from "../users/authorization";
 import {
@@ -29,7 +29,7 @@ async function updateMarketplaceSyncStatus(
   ctx: { db: DatabaseReader },
   itemId: Id<"inventoryItems">,
   businessAccountId: Id<"businessAccounts">,
-  status: "pending" | "syncing" | "synced" | "failed" | "disabled" = "pending",
+  status: "pending" | "syncing" | "synced" | "failed" = "pending",
 ): Promise<Partial<Doc<"inventoryItems">>> {
   // Get current item to preserve existing marketplace sync data
   const currentItem = await ctx.db.get(itemId);
@@ -82,7 +82,7 @@ export const addInventoryItem = mutation({
     }
 
     // Ensure the catalog entry for this part has a BrickOwl identifier (or an explicit placeholder).
-    // await ensureBrickowlIdForPart(ctx, args.partNumber);
+    await ensureBrickowlIdForPart(ctx, args.partNumber);
 
     // TOTO - check for duplicate item going into same drawer
     // TODO - Similarity check: verify that other parts in the same location
@@ -90,17 +90,6 @@ export const addInventoryItem = mutation({
     //        We'll use a similarity table in the inventory for this check.
 
     const timestamp = now();
-    const marketplaceSyncData: Doc<"inventoryItems">["marketplaceSync"] = args.marketplaceSync ?? {
-      bricklink: {
-        status: "pending",
-        lastSyncAttempt: timestamp,
-      },
-      brickowl: {
-        status: "pending",
-        lastSyncAttempt: timestamp,
-      },
-    };
-
     const document: Omit<Doc<"inventoryItems">, "_id" | "_creationTime"> = {
       businessAccountId,
       name: args.name,
@@ -111,12 +100,20 @@ export const addInventoryItem = mutation({
       quantityReserved: args.quantityReserved ?? 0,
       condition: args.condition,
       price: args.price,
-      note: args.note,
-      createdByUserId: user._id,
-      updatedByUserId: user._id,
-      updatedTime: timestamp,
+      notes: args.notes,
+      createdBy: user._id,
+      // createdAt removed - using _creationTime
       // TODO - add tags
-      marketplaceSync: marketplaceSyncData,
+      marketplaceSync: {
+        bricklink: {
+          status: "pending",
+          lastSyncAttempt: timestamp,
+        },
+        brickowl: {
+          status: "pending",
+          lastSyncAttempt: timestamp,
+        },
+      },
     };
 
     const id = await ctx.db.insert("inventoryItems", document);
@@ -157,36 +154,36 @@ export const addInventoryItem = mutation({
       correlationId,
     });
 
-    // // Phase 2: Enqueue outbox messages for marketplace sync
-    // const currentSeq = seq;
-    // const outboxResults = await Promise.all(
-    //   ["bricklink", "brickowl"].map(async (provider) => {
-    //     const created = await enqueueMarketplaceSync(ctx, {
-    //       businessAccountId,
-    //       itemId: id,
-    //       provider: provider as "bricklink" | "brickowl",
-    //       kind: "create",
-    //       lastSyncedSeq: 0, // New item, never synced
-    //       currentSeq,
-    //       correlationId,
-    //     });
-    //     return { provider, created };
-    //   }),
-    // );
+    // Phase 2: Enqueue outbox messages for marketplace sync
+    const currentSeq = seq;
+    const outboxResults = await Promise.all(
+      ["bricklink", "brickowl"].map(async (provider) => {
+        const created = await enqueueMarketplaceSync(ctx, {
+          businessAccountId,
+          itemId: id,
+          provider: provider as "bricklink" | "brickowl",
+          kind: "create",
+          lastSyncedSeq: 0, // New item, never synced
+          currentSeq,
+          correlationId,
+        });
+        return { provider, created };
+      }),
+    );
 
-    // // Phase 3: Update sync status based on whether outbox messages were created
-    // // Only set to "syncing" if we have credentials configured
-    // const hasAnyOutbox = outboxResults.some((r) => r.created);
-    // if (!hasAnyOutbox) {
-    //   // No credentials configured or sync disabled, set to "disabled"
-    //   await ctx.db.patch(id, {
-    //     marketplaceSync: {
-    //       bricklink: { status: "disabled", lastSyncAttempt: timestamp },
-    //       brickowl: { status: "disabled", lastSyncAttempt: timestamp },
-    //     },
-    //   });
-    // }
-    // // If outbox messages were created, status remains "pending" and worker will handle it
+    // Phase 3: Update sync status based on whether outbox messages were created
+    // Only set to "syncing" if we have credentials configured
+    const hasAnyOutbox = outboxResults.some((r) => r.created);
+    if (!hasAnyOutbox) {
+      // No credentials configured, set to "synced" (no sync needed)
+      await ctx.db.patch(id, {
+        marketplaceSync: {
+          bricklink: { status: "synced", lastSyncAttempt: timestamp },
+          brickowl: { status: "synced", lastSyncAttempt: timestamp },
+        },
+      });
+    }
+    // If outbox messages were created, status remains "pending" and worker will handle it
 
     return id;
   },
@@ -215,10 +212,10 @@ export const updateInventoryItem = mutation({
     // Capture previous state for potential rollback
 
     const timestamp = now();
-    const updates: Partial<Doc<"inventoryItems">> & { updatedTime: number } = {
-      updatedTime: timestamp,
+    const updates: Partial<Doc<"inventoryItems">> & { updatedAt: number } = {
+      updatedAt: timestamp,
     };
-    (["name", "partNumber", "colorId", "location", "condition", "price", "note"] as const).forEach(
+    (["name", "partNumber", "colorId", "location", "condition", "price", "notes"] as const).forEach(
       (key) => {
         if (args[key] !== undefined) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -299,17 +296,17 @@ export const updateInventoryItem = mutation({
         (r: { provider: string; created: boolean }) => r.created,
       );
       if (!hasAnyOutbox) {
-        // Gate: Mark as disabled if no credentials configured or sync disabled
+        // Gate: Mark as synced if no credentials configured
         await ctx.db.patch(args.itemId, {
           marketplaceSync: {
             ...item.marketplaceSync,
             bricklink: {
-              status: "disabled",
+              status: "synced",
               lastSyncAttempt: timestamp,
               ...item.marketplaceSync?.bricklink,
             },
             brickowl: {
-              status: "disabled",
+              status: "synced",
               lastSyncAttempt: timestamp,
               ...item.marketplaceSync?.brickowl,
             },
@@ -367,7 +364,7 @@ export const deleteInventoryItem = mutation({
     await ctx.db.patch(args.itemId, {
       isArchived: true,
       deletedAt: timestamp,
-      updatedTime: timestamp,
+      updatedAt: timestamp,
     });
 
     // Generate correlationId ONCE for both ledger and immediateSync
@@ -419,17 +416,17 @@ export const deleteInventoryItem = mutation({
     // Update sync status based on whether outbox messages were created
     const hasAnyOutbox = outboxResults.some((r) => r.created);
     if (!hasAnyOutbox) {
-      // Gate: Mark as disabled if no credentials configured or sync disabled
+      // Gate: Mark as synced if no credentials configured
       await ctx.db.patch(args.itemId, {
         marketplaceSync: {
           ...item.marketplaceSync,
           bricklink: {
-            status: "disabled",
+            status: "synced",
             lastSyncAttempt: timestamp,
             ...item.marketplaceSync?.bricklink,
           },
           brickowl: {
-            status: "disabled",
+            status: "synced",
             lastSyncAttempt: timestamp,
             ...item.marketplaceSync?.brickowl,
           },

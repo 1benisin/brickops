@@ -1,22 +1,20 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
-const syncStatus = v.union(
-  v.literal("pending"),
-  v.literal("syncing"),
-  v.literal("synced"),
-  v.literal("failed"),
-  v.literal("disabled"),
-);
-
 const marketplaceSync = v.optional(
   v.object({
     bricklink: v.optional(
       v.object({
         lotId: v.optional(v.number()),
-        status: syncStatus,
+        status: v.union(
+          v.literal("pending"),
+          v.literal("syncing"),
+          v.literal("synced"),
+          v.literal("failed"),
+        ),
         lastSyncAttempt: v.optional(v.number()),
         error: v.optional(v.string()),
+        // Phase 2: Cursor tracking for retry logic
         lastSyncedSeq: v.optional(v.number()), // Last ledger sequence applied to marketplace
         lastSyncedAvailable: v.optional(v.number()), // Denormalized available quantity at last sync
       }),
@@ -24,9 +22,15 @@ const marketplaceSync = v.optional(
     brickowl: v.optional(
       v.object({
         lotId: v.optional(v.string()),
-        status: syncStatus,
+        status: v.union(
+          v.literal("pending"),
+          v.literal("syncing"),
+          v.literal("synced"),
+          v.literal("failed"),
+        ),
         lastSyncAttempt: v.optional(v.number()),
         error: v.optional(v.string()),
+        // Phase 2: Cursor tracking for retry logic
         lastSyncedSeq: v.optional(v.number()),
         lastSyncedAvailable: v.optional(v.number()),
       }),
@@ -42,21 +46,29 @@ export const inventoryTables = {
     colorId: v.string(),
     location: v.string(),
     quantityAvailable: v.number(),
-    quantityReserved: v.number(), // quantity sold but still in physical location
+    // Quantity splits to support status tracking
+    quantityReserved: v.number(),
     condition: v.union(v.literal("new"), v.literal("used")),
     price: v.optional(v.number()), // Unit price for marketplace sync
-    saleRate: v.optional(v.number()), // Sale rate for marketplace sync (must be 0 to 100)
-    myCost: v.optional(v.number()),
-    note: v.optional(v.string()), // Description from marketplace
+    notes: v.optional(v.string()), // Description/remarks from marketplace
+    createdBy: v.id("users"),
+    // createdAt removed - using _creationTime
+    updatedAt: v.optional(v.number()),
+    // Soft delete support
+    isArchived: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+    // Consolidated marketplace sync tracking (refactored from individual fields)
     marketplaceSync: marketplaceSync,
-    createdByUserId: v.id("users"),
-    updatedTime: v.number(),
-    updatedByUserId: v.id("users"),
   })
     // Existing indexes (keep these)
     .index("by_businessAccount", ["businessAccountId"])
 
     // NEW: Composite indexes for common query patterns
+    // Pattern: default listing (sort by createdAt desc)
+
+    // Pattern: filter by condition + sort by date
+    .index("by_businessAccount_condition", ["businessAccountId", "condition"])
+
     // Pattern: filter by location + sort by part number (for location view)
     .index("by_businessAccount_location_partNumber", [
       "businessAccountId",
@@ -90,7 +102,7 @@ export const inventoryTables = {
     .index("by_businessAccount_quantityReserved", ["businessAccountId", "quantityReserved"])
 
     // Pattern: sort by updatedAt
-    .index("by_businessAccount_updatedAt", ["businessAccountId", "updatedTime"]),
+    .index("by_businessAccount_updatedAt", ["businessAccountId", "updatedAt"]),
 
   // NEW: Specialized ledger for quantity changes
   inventoryQuantityLedger: defineTable({
@@ -180,8 +192,9 @@ export const inventoryTables = {
     attempt: v.number(),
     nextAttemptAt: v.number(),
     lastError: v.optional(v.string()),
+    // createdAt removed - using _creationTime
     correlationId: v.optional(v.string()),
   })
     .index("by_status_time", ["status", "nextAttemptAt"])
-    .index("by_item_provider_time", ["itemId", "provider"]),
+    .index("by_item_provider", ["itemId", "provider"]),
 };

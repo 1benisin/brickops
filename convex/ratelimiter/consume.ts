@@ -51,6 +51,7 @@ export const consumeToken = internalMutation({
       remaining,
       resetAt,
       updatedAt: now,
+      // createdAt removed - using _creationTime
     };
 
     if (isNew) {

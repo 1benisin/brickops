@@ -83,6 +83,7 @@ export async function upsertNotification(
     dedupeKey: args.dedupeKey,
     status: "pending",
     attempts: 0,
+    // createdAt removed - using _creationTime
     updatedAt: now,
   });
 }

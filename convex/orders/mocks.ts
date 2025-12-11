@@ -296,7 +296,7 @@ async function createDefaultTestInventoryItems(
       quantityReserved: 0,
       condition: item.condition,
       createdBy: userId,
-      createdAt: now,
+      // createdAt removed - using _creationTime
       marketplaceSync: {
         bricklink: {
           status: "synced",

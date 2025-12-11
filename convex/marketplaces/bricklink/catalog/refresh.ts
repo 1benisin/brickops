@@ -8,42 +8,11 @@
  * - Bricklink API integration
  */
 
-import { internalMutation } from "../../../_generated/server";
-import type { MutationCtx } from "../../../_generated/server";
-import type { Doc } from "../../../_generated/dataModel";
+import { internalMutation } from "../../../../_generated/server";
 import { v } from "convex/values";
+import { isStale as isRefreshStale } from "../freshness";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-export const THIRTY_DAYS_MS = 30 * DAY_MS;
-
-interface CatalogRefreshIndexRange {
-  eq(field: "tableName", value: string): CatalogRefreshIndexRange;
-  eq(field: "primaryKey", value: string): CatalogRefreshIndexRange;
-  eq(field: "secondaryKey", value: string | undefined): CatalogRefreshIndexRange;
-}
-
-interface CatalogRefreshFilterBuilder {
-  field(name: "status"): unknown;
-  eq(lhs: unknown, rhs: unknown): unknown;
-  or(...conditions: unknown[]): unknown;
-}
-
-type CatalogRefreshQuery = {
-  withIndex(
-    index: "by_table_primary_secondary",
-    builder: (range: CatalogRefreshIndexRange) => CatalogRefreshIndexRange,
-  ): {
-    filter(predicate: (builder: CatalogRefreshFilterBuilder) => unknown): {
-      first(): Promise<Doc | null>;
-    };
-  };
-};
-
-export function isStale(lastFetched: number | undefined, maxAgeMs = THIRTY_DAYS_MS): boolean {
-  if (!lastFetched) return true;
-  return Date.now() - lastFetched > maxAgeMs;
-}
+export { isStale } from "../freshness";
 
 // ============================================================================
 // CONSTANTS
@@ -92,13 +61,13 @@ export const checkAndScheduleRefresh = internalMutation({
     freshnessThresholdDays: v.optional(v.number()),
     priority: v.optional(v.number()),
   },
-  handler: async (ctx: MutationCtx, params) => {
+  handler: async (ctx, params) => {
     const thresholdDays = params.freshnessThresholdDays ?? 30;
     const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
     const now = Date.now();
 
     // If no lastFetched or older than threshold, it's stale
-    const stale = isStale(params.lastFetched, thresholdMs);
+    const stale = isRefreshStale(params.lastFetched, thresholdMs);
 
     if (stale) {
       // Normalize keys to strings
@@ -111,11 +80,8 @@ export const checkAndScheduleRefresh = internalMutation({
         (params.tableName === "categories" ? REFRESH_PRIORITY.LOW : REFRESH_PRIORITY.MEDIUM);
 
       // Check if already queued (pending or inflight)
-      const refreshOutboxQuery = ctx.db.query(
-        "catalogRefreshOutbox",
-      ) as unknown as CatalogRefreshQuery;
-
-      const existing = await refreshOutboxQuery
+      const existing = await ctx.db
+        .query("catalogRefreshOutbox")
         .withIndex("by_table_primary_secondary", (q) =>
           q
             .eq("tableName", params.tableName)
@@ -142,6 +108,7 @@ export const checkAndScheduleRefresh = internalMutation({
           status: "pending",
           attempt: 0,
           nextAttemptAt: now, // Immediate processing
+          // createdAt removed - using _creationTime
         });
       }
     }
@@ -158,7 +125,7 @@ export const checkAndScheduleRefresh = internalMutation({
  */
 export const cleanupOutbox = internalMutation({
   args: {},
-  handler: async (ctx: MutationCtx) => {
+  handler: async (ctx) => {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     const oldItems = await ctx.db
@@ -192,5 +159,80 @@ export const cleanupOutbox = internalMutation({
 /**
  * Upsert color data into database
  */
+export const upsertColor = internalMutation({
+  args: {
+    data: v.object({
+      colorId: v.number(),
+      colorName: v.string(),
+      colorCode: v.optional(v.string()),
+      colorType: v.optional(v.string()),
+      lastFetched: v.number(),
+      // createdAt removed - using _creationTime
+    }),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("colors")
+      .withIndex("by_colorId", (q) => q.eq("colorId", args.data.colorId))
+      .first();
+
+    if (existing) {
+      const { ...updateData } = args.data;
+      // Cast colorType to any to bypass strict union check if needed, or ensure input matches schema
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await ctx.db.patch(existing._id, updateData as any);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await ctx.db.insert("colors", args.data as any);
+    }
+  },
+});
+
+/**
+ * Upsert price guide data into database
+ */
+export const upsertPriceGuide = internalMutation({
+  args: {
+    data: v.object({
+      partNo: v.string(),
+      partType: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
+      colorId: v.number(),
+      newOrUsed: v.union(v.literal("N"), v.literal("U")),
+      currencyCode: v.string(),
+      minPrice: v.optional(v.number()),
+      maxPrice: v.optional(v.number()),
+      avgPrice: v.optional(v.number()),
+      qtyAvgPrice: v.optional(v.number()),
+      unitQuantity: v.optional(v.number()),
+      totalQuantity: v.optional(v.number()),
+      guideType: v.union(v.literal("sold"), v.literal("stock")),
+      lastFetched: v.number(),
+      // createdAt removed - using _creationTime
+    }),
+  },
+  handler: async (ctx, args) => {
+    // Find existing price record matching part, color, newOrUsed, and guideType
+    const existing = await ctx.db
+      .query("partPrices")
+      .withIndex("by_partNo_colorId", (q) =>
+        q.eq("partNo", args.data.partNo).eq("colorId", args.data.colorId),
+      )
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("newOrUsed"), args.data.newOrUsed),
+          q.eq(q.field("guideType"), args.data.guideType),
+        ),
+      )
+      .first();
+
+    if (existing) {
+      const { ...updateData } = args.data;
+      await ctx.db.patch(existing._id, updateData);
+    } else {
+      await ctx.db.insert("partPrices", args.data);
+    }
+  },
+});
+
 // NOTE: Queue processing moved to catalog/refreshWorker.ts
 // This file now only contains helper functions for enqueuing and cleanup
