@@ -228,7 +228,8 @@ export const getCredentialStatus = query({
       webhookRegisteredAt: credential.webhookRegisteredAt,
       webhookLastCheckedAt: credential.webhookLastCheckedAt,
       webhookLastError: credential.webhookLastError,
-      _creationTime: credential._creationTime,
+      // Keep API contract stable: expose `createdAt` rather than system fields like `_creationTime`.
+      createdAt: credential._creationTime,
       updatedAt: credential.updatedAt,
       webhookToken: credential.webhookToken,
       maskedCredentials:

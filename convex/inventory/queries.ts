@@ -496,11 +496,14 @@ export const listInventoryItemsFiltered = query({
     const { filters, sort, pagination } = args.querySpec;
 
     // Choose best index based on filters and sort
-    const primarySort = sort[0]?.id || "createdAt";
+    // Back-compat: treat legacy "createdAt" sort as Convex system field "_creationTime".
+    const rawPrimarySort = sort[0]?.id || "_creationTime";
+    const primarySort = rawPrimarySort === "createdAt" ? "_creationTime" : rawPrimarySort;
     const sortDesc = sort[0]?.desc ?? true;
 
     // Index selection logic - using const assertions for type safety
     type IndexName =
+      | "by_businessAccount"
       | "by_businessAccount_condition"
       | "by_businessAccount_location_partNumber"
       | "by_businessAccount_price"
@@ -516,7 +519,7 @@ export const listInventoryItemsFiltered = query({
     let indexName: IndexName;
     let queryBuilder;
 
-    if (filters?.condition && primarySort === "createdAt") {
+    if (filters?.condition && primarySort === "_creationTime") {
       // Use composite index: by_businessAccount_condition
       indexName = "by_businessAccount_condition";
       const conditionValue = filters.condition.value as "new" | "used";
@@ -692,7 +695,7 @@ export const listInventoryItemsFiltered = query({
       if (cursorDoc) {
         // Filter items after cursor based on sort field
         queryBuilder = queryBuilder.filter((q) => {
-          if (primarySort === "createdAt") {
+          if (primarySort === "_creationTime") {
             if (sortDesc) {
               // For desc: get items with _creationTime < cursor OR (_creationTime == cursor AND _id > cursor)
               return q.or(

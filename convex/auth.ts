@@ -164,6 +164,33 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
     return args.existingUserId;
   }
 
+  // If no existingUserId is provided (e.g. sign-in/account-linking), fall back to
+  // finding an existing user by email to avoid duplicate accounts.
+  const existingUserByEmail = await ctx.db
+    .query("users")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .first();
+
+  if (existingUserByEmail) {
+    const updates: Record<string, unknown> = {
+      updatedAt: now,
+      status: "active" satisfies UserStatus,
+    };
+
+    if (profile.firstName) {
+      updates.firstName = profile.firstName;
+    }
+    if (profile.lastName) {
+      updates.lastName = profile.lastName;
+    }
+    if (profile.name) {
+      updates.name = profile.name;
+    }
+
+    await ctx.db.patch(existingUserByEmail._id, updates);
+    return existingUserByEmail._id;
+  }
+
   const firstName = assertString(profile.firstName, "firstName");
   const lastName = assertString(profile.lastName, "lastName");
   const name = profile.name ?? `${firstName} ${lastName}`.trim();

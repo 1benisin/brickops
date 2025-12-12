@@ -8,11 +8,7 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
+import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
 import type * as api_rebrickable from "../api/rebrickable.js";
 import type * as auth from "../auth.js";
 import type * as catalog_categories from "../catalog/categories.js";
@@ -72,6 +68,7 @@ import type * as marketplaces_bricklink_catalog_shared_transformers from "../mar
 import type * as marketplaces_bricklink_credentials from "../marketplaces/bricklink/credentials.js";
 import type * as marketplaces_bricklink_envelope from "../marketplaces/bricklink/envelope.js";
 import type * as marketplaces_bricklink_errors from "../marketplaces/bricklink/errors.js";
+import type * as marketplaces_bricklink_freshness from "../marketplaces/bricklink/freshness.js";
 import type * as marketplaces_bricklink_ids from "../marketplaces/bricklink/ids.js";
 import type * as marketplaces_bricklink_inventory_actions from "../marketplaces/bricklink/inventory/actions.js";
 import type * as marketplaces_bricklink_inventory_transformers from "../marketplaces/bricklink/inventory/transformers.js";
@@ -107,6 +104,7 @@ import type * as marketplaces_brickowl_orders from "../marketplaces/brickowl/ord
 import type * as marketplaces_brickowl_rateLimit from "../marketplaces/brickowl/rateLimit.js";
 import type * as marketplaces_brickowl_request from "../marketplaces/brickowl/request.js";
 import type * as marketplaces_brickowl_validators from "../marketplaces/brickowl/validators.js";
+import type * as marketplaces_shared_auth from "../marketplaces/shared/auth.js";
 import type * as marketplaces_shared_credentialHelpers from "../marketplaces/shared/credentialHelpers.js";
 import type * as marketplaces_shared_credentialTypes from "../marketplaces/shared/credentialTypes.js";
 import type * as marketplaces_shared_credentials from "../marketplaces/shared/credentials.js";
@@ -206,6 +204,7 @@ declare const fullApi: ApiFromModules<{
   "marketplaces/bricklink/credentials": typeof marketplaces_bricklink_credentials;
   "marketplaces/bricklink/envelope": typeof marketplaces_bricklink_envelope;
   "marketplaces/bricklink/errors": typeof marketplaces_bricklink_errors;
+  "marketplaces/bricklink/freshness": typeof marketplaces_bricklink_freshness;
   "marketplaces/bricklink/ids": typeof marketplaces_bricklink_ids;
   "marketplaces/bricklink/inventory/actions": typeof marketplaces_bricklink_inventory_actions;
   "marketplaces/bricklink/inventory/transformers": typeof marketplaces_bricklink_inventory_transformers;
@@ -241,6 +240,7 @@ declare const fullApi: ApiFromModules<{
   "marketplaces/brickowl/rateLimit": typeof marketplaces_brickowl_rateLimit;
   "marketplaces/brickowl/request": typeof marketplaces_brickowl_request;
   "marketplaces/brickowl/validators": typeof marketplaces_brickowl_validators;
+  "marketplaces/shared/auth": typeof marketplaces_shared_auth;
   "marketplaces/shared/credentialHelpers": typeof marketplaces_shared_credentialHelpers;
   "marketplaces/shared/credentialTypes": typeof marketplaces_shared_credentialTypes;
   "marketplaces/shared/credentials": typeof marketplaces_shared_credentials;
@@ -272,11 +272,5 @@ declare const fullApi: ApiFromModules<{
   "users/mutations": typeof users_mutations;
   "users/queries": typeof users_queries;
 }>;
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
+export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
+export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
