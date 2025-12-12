@@ -8,7 +8,7 @@
  * - Bricklink API integration
  */
 
-import { internalMutation } from "../../../../_generated/server";
+import { internalMutation } from "../../../_generated/server";
 import { v } from "convex/values";
 import { isStale as isRefreshStale } from "../freshness";
 

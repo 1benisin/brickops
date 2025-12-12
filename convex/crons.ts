@@ -25,7 +25,7 @@ crons.interval(
 crons.daily(
   "cleanup-catalog-refresh-outbox",
   { hourUTC: 2, minuteUTC: 0 },
-  internal.marketplaces.bricklink.catalog.refresh.index.cleanupOutbox,
+  internal.marketplaces.bricklink.catalog.refresh.cleanupOutbox,
 );
 
 // Drain marketplace outbox every 5 minutes (10 items per run = 120 API calls/hour max)
