@@ -130,7 +130,6 @@ import type * as orders_queries from "../orders/queries.js";
 import type * as orders_refactor_baseline_fixtures from "../orders/refactor_baseline/fixtures.js";
 import type * as ratelimiter_consume from "../ratelimiter/consume.js";
 import type * as ratelimiter_rateLimitConfig from "../ratelimiter/rateLimitConfig.js";
-import type * as test_schema from "../test_schema.js";
 import type * as users_actions from "../users/actions.js";
 import type * as users_authorization from "../users/authorization.js";
 import type * as users_mutations from "../users/mutations.js";
@@ -266,7 +265,6 @@ declare const fullApi: ApiFromModules<{
   "orders/refactor_baseline/fixtures": typeof orders_refactor_baseline_fixtures;
   "ratelimiter/consume": typeof ratelimiter_consume;
   "ratelimiter/rateLimitConfig": typeof ratelimiter_rateLimitConfig;
-  test_schema: typeof test_schema;
   "users/actions": typeof users_actions;
   "users/authorization": typeof users_authorization;
   "users/mutations": typeof users_mutations;

@@ -1,6 +1,14 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
+import type { Infer } from "convex/values";
 import type { Id } from "../_generated/dataModel";
+import {
+  categoryTableFields,
+  colorTableFields,
+  partColorTableFields,
+  partPriceTableFields,
+  partTableFields,
+} from "./validators";
 
 // ============================================================================
 // INTERNAL MUTATIONS (for data upserts and outbox management)
@@ -64,29 +72,12 @@ export const enqueueCatalogRefresh = internalMutation({
 // UPSERT MUTATIONS
 // ============================================================================
 
+export const upsertPartDataValidator = v.object(partTableFields);
+export type UpsertPartData = Infer<typeof upsertPartDataValidator>;
+
 export const upsertPart = internalMutation({
   args: {
-    data: v.object({
-      no: v.string(),
-      name: v.string(),
-      type: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
-      categoryId: v.optional(v.number()),
-      alternateNo: v.optional(v.string()),
-      imageUrl: v.optional(v.string()),
-      thumbnailUrl: v.optional(v.string()),
-      weight: v.optional(v.number()),
-      dimX: v.optional(v.string()),
-      dimY: v.optional(v.string()),
-      dimZ: v.optional(v.string()),
-      yearReleased: v.optional(v.number()),
-      description: v.optional(v.string()),
-      isObsolete: v.optional(v.boolean()),
-      brickowlId: v.optional(v.string()),
-      ldrawId: v.optional(v.string()),
-      legoId: v.optional(v.string()),
-      lastFetched: v.number(),
-      createdAt: v.number(),
-    }),
+    data: upsertPartDataValidator,
   },
   handler: async (ctx, args) => {
     // Check if part already exists
@@ -96,9 +87,8 @@ export const upsertPart = internalMutation({
       .first();
 
     if (existing) {
-      // Update existing part (preserve original createdAt)
-      const { ...updateData } = args.data;
-      await ctx.db.patch(existing._id, updateData);
+      // Update existing part (system field: _creationTime is preserved automatically)
+      await ctx.db.patch(existing._id, args.data);
     } else {
       // Insert new part
       await ctx.db.insert("parts", args.data);
@@ -132,17 +122,12 @@ export const updatePartBrickowlId = internalMutation({
  * Upsert part colors into database
  * Internal mutation used by refresh actions and background queue processor
  */
+export const partColorRecordValidator = v.object(partColorTableFields);
+export type PartColorRecord = Infer<typeof partColorRecordValidator>;
+
 export const upsertPartColors = internalMutation({
   args: {
-    data: v.array(
-      v.object({
-        partNo: v.string(),
-        colorId: v.number(),
-        quantity: v.number(),
-        lastFetched: v.number(),
-        createdAt: v.number(),
-      }),
-    ),
+    data: v.array(partColorRecordValidator),
   },
   handler: async (ctx, args) => {
     for (const partColor of args.data) {
@@ -155,9 +140,8 @@ export const upsertPartColors = internalMutation({
         .first();
 
       if (existing) {
-        // Update existing (preserve original createdAt)
-        const { ...updateData } = partColor;
-        await ctx.db.patch(existing._id, updateData);
+        // Update existing (system field: _creationTime is preserved automatically)
+        await ctx.db.patch(existing._id, partColor);
       } else {
         // Insert new
         await ctx.db.insert("partColors", partColor);
@@ -170,15 +154,15 @@ export const upsertPartColors = internalMutation({
  * Upsert category data into database
  * Internal mutation used by refresh actions and background queue processor
  */
+export const categoryRecordValidator = v.object(categoryTableFields);
+export type CategoryRecord = Infer<typeof categoryRecordValidator>;
+
+export const colorRecordValidator = v.object(colorTableFields);
+export type ColorRecord = Infer<typeof colorRecordValidator>;
+
 export const upsertCategory = internalMutation({
   args: {
-    data: v.object({
-      categoryId: v.number(),
-      categoryName: v.string(),
-      parentId: v.optional(v.number()),
-      lastFetched: v.number(),
-      createdAt: v.number(),
-    }),
+    data: categoryRecordValidator,
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -187,8 +171,8 @@ export const upsertCategory = internalMutation({
       .first();
 
     if (existing) {
-      const { ...updateData } = args.data;
-      await ctx.db.patch(existing._id, updateData);
+      // Update existing (system field: _creationTime is preserved automatically)
+      await ctx.db.patch(existing._id, args.data);
     } else {
       await ctx.db.insert("categories", args.data);
     }
@@ -199,26 +183,12 @@ export const upsertCategory = internalMutation({
  * Upsert price guide data into database
  * Internal mutation used by refresh actions to insert/update all 4 price records
  */
+export const priceGuideRecordValidator = v.object(partPriceTableFields);
+export type PriceGuideRecord = Infer<typeof priceGuideRecordValidator>;
+
 export const upsertPriceGuide = internalMutation({
   args: {
-    prices: v.array(
-      v.object({
-        partNo: v.string(),
-        partType: v.union(v.literal("PART"), v.literal("MINIFIG"), v.literal("SET")),
-        colorId: v.number(),
-        newOrUsed: v.union(v.literal("N"), v.literal("U")),
-        currencyCode: v.string(),
-        minPrice: v.optional(v.number()),
-        maxPrice: v.optional(v.number()),
-        avgPrice: v.optional(v.number()),
-        qtyAvgPrice: v.optional(v.number()),
-        unitQuantity: v.optional(v.number()),
-        totalQuantity: v.optional(v.number()),
-        guideType: v.union(v.literal("sold"), v.literal("stock")),
-        lastFetched: v.number(),
-        createdAt: v.number(),
-      }),
-    ),
+    prices: v.array(priceGuideRecordValidator),
   },
   handler: async (ctx, args) => {
     for (const price of args.prices) {
@@ -235,9 +205,8 @@ export const upsertPriceGuide = internalMutation({
         .first();
 
       if (existing) {
-        // Update existing (preserve original createdAt)
-        const { ...updateData } = price;
-        await ctx.db.patch(existing._id, updateData);
+        // Update existing (system field: _creationTime is preserved automatically)
+        await ctx.db.patch(existing._id, price);
       } else {
         // Insert new
         await ctx.db.insert("partPrices", price);
