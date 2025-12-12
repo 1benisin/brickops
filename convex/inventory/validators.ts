@@ -151,7 +151,7 @@ export const listInventoryItemsReturns = v.array(
     colorId: v.string(),
     location: v.string(),
     quantityAvailable: v.number(),
-    quantityReserved: v.optional(v.number()),
+    quantityReserved: v.number(),
     condition: itemCondition,
     price: v.optional(v.number()),
     notes: v.optional(v.string()),
