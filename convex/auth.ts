@@ -135,13 +135,6 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
   const profile = args.profile as ProfileParams;
   const email = normalizeEmail(assertString(profile.email, "email"));
 
-  // Check if a user with this email already exists
-  const existingUserByEmail = await ctx.db
-    .query("users")
-    .withIndex("by_email", (q) => q.eq("email", email))
-    .first();
-
-  // If we have an existingUserId, use it (for sign-in or account linking)
   if (args.existingUserId) {
     const existingUser = await ctx.db.get(args.existingUserId);
     if (!existingUser) {
@@ -171,7 +164,13 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
     return args.existingUserId;
   }
 
-  // If a user with this email already exists but wasn't linked, use that user
+  // If no existingUserId is provided (e.g. sign-in/account-linking), fall back to
+  // finding an existing user by email to avoid duplicate accounts.
+  const existingUserByEmail = await ctx.db
+    .query("users")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .first();
+
   if (existingUserByEmail) {
     const updates: Record<string, unknown> = {
       updatedAt: now,
@@ -257,6 +256,7 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
     businessAccountId = await ctx.db.insert("businessAccounts", {
       name: businessName,
       inviteCode,
+      // createdAt removed - using _creationTime
     });
   }
 
@@ -277,6 +277,7 @@ async function createOrUpdateUser(ctx: AuthMutationCtx, args: CreateOrUpdateUser
       targetUserId: userId,
       action: "invite_redeemed",
       actorUserId: userId,
+      // createdAt removed - using _creationTime
     });
   }
 

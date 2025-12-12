@@ -45,6 +45,7 @@ export async function checkAndConsumeRateLimitDirect(
   await ctx.db.insert("rateLimitEvents", {
     key: args.key,
     kind: args.kind,
+    // createdAt removed - using _creationTime
   });
 
   // Opportunistic pruning: remove entries older than current window for this key/kind

@@ -1,4 +1,3 @@
-// Convex schema definitions for marketplace credentials, rate limits, and webhook records.
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -15,7 +14,7 @@ export const marketplaceTables = {
     // Encrypted API key for BrickOwl
     brickowlApiKey: v.optional(v.string()), // encrypted
     // Metadata
-    isActive: v.boolean(), // Whether the credentials are active and can be used
+    isActive: v.boolean(),
     syncEnabled: v.optional(v.boolean()), // Default: true for backward compatibility
     ordersSyncEnabled: v.optional(v.boolean()), // Per-provider order ingestion toggle
     inventorySyncEnabled: v.optional(v.boolean()), // Per-provider inventory sync toggle
@@ -25,6 +24,7 @@ export const marketplaceTables = {
     ),
     validationMessage: v.optional(v.string()),
     createdBy: v.id("users"),
+    // createdAt removed - using _creationTime
     updatedAt: v.number(),
     // Webhook configuration for BrickLink push notifications
     webhookToken: v.optional(v.string()), // Unique token for webhook URL routing
@@ -67,6 +67,7 @@ export const marketplaceTables = {
     // Metadata
     lastRequestAt: v.number(),
     lastResetAt: v.number(),
+    // createdAt removed - using _creationTime
     updatedAt: v.number(),
   }).index("by_business_provider", ["businessAccountId", "provider"]),
 
@@ -88,6 +89,7 @@ export const marketplaceTables = {
     attempts: v.number(), // Number of processing attempts
     lastError: v.optional(v.string()), // Last error message if failed
     processedAt: v.optional(v.number()), // When processing completed
+    // createdAt removed - using _creationTime
     updatedAt: v.number(),
   })
     .index("by_business_status", ["businessAccountId", "status"])

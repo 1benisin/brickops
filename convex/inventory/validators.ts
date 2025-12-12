@@ -21,7 +21,6 @@ export const syncStatus = v.union(
   v.literal("syncing"),
   v.literal("synced"),
   v.literal("failed"),
-  v.literal("disabled"),
 );
 
 export const marketplaceProvider = v.union(v.literal("bricklink"), v.literal("brickowl"));
@@ -65,18 +64,15 @@ export const partialInventoryItemData = v.optional(
     quantityReserved: v.optional(v.number()),
     condition: v.optional(itemCondition),
     price: v.optional(v.number()),
-    saleRate: v.optional(v.number()),
-    myCost: v.optional(v.number()),
-    note: v.optional(v.string()),
-    createdByUserId: v.optional(userId),
-    updatedTime: v.optional(v.number()),
-    updatedByUserId: v.optional(userId),
+    notes: v.optional(v.string()),
+    createdBy: v.optional(userId),
+    // createdAt removed - using _creationTime
+    updatedAt: v.optional(v.number()),
     isArchived: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
     marketplaceSync: marketplaceSync,
   }),
 );
-export type PartialInventoryItemData = Infer<typeof partialInventoryItemData>;
 
 // ============================================================================
 // MUTATION ARGS
@@ -91,13 +87,9 @@ export const addInventoryItemArgs = v.object({
   quantityReserved: v.optional(v.number()),
   condition: itemCondition,
   price: v.optional(v.number()),
-  saleRate: v.optional(v.number()),
-  myCost: v.optional(v.number()),
-  note: v.optional(v.string()),
-  // this is optional because it's only set when the item is created from a marketplace sync
-  marketplaceSync: v.optional(marketplaceSync),
+  notes: v.optional(v.string()),
+  reason: v.optional(v.string()), // For history tracking
 });
-export type AddInventoryItemArgs = Infer<typeof addInventoryItemArgs>;
 
 export const updateInventoryItemArgs = v.object({
   itemId: inventoryItemId,
@@ -109,30 +101,24 @@ export const updateInventoryItemArgs = v.object({
   quantityAvailable: v.optional(v.number()),
   quantityReserved: v.optional(v.number()),
   price: v.optional(v.number()),
-  saleRate: v.optional(v.number()),
-  myCost: v.optional(v.number()),
-  note: v.optional(v.string()),
+  notes: v.optional(v.string()),
   reason: v.optional(v.string()),
   correlationId: v.optional(v.string()), // For idempotency
   batchId: v.optional(v.string()), // For batch operations
 });
-export type UpdateInventoryItemArgs = Infer<typeof updateInventoryItemArgs>;
 
 export const deleteInventoryItemArgs = v.object({
   itemId: inventoryItemId,
   reason: v.optional(v.string()),
 });
-export type DeleteInventoryItemArgs = Infer<typeof deleteInventoryItemArgs>;
 
 // ============================================================================
 // QUERY ARGS
 // ============================================================================
 
 export const listInventoryItemsArgs = v.object({});
-export type ListInventoryItemsArgs = Infer<typeof listInventoryItemsArgs>;
 
 export const getInventoryTotalsArgs = v.object({});
-export type GetInventoryTotalsArgs = Infer<typeof getInventoryTotalsArgs>;
 
 export const getItemSyncStatusArgs = v.object({
   itemId: inventoryItemId,
@@ -168,12 +154,10 @@ export const listInventoryItemsReturns = v.array(
     quantityReserved: v.number(),
     condition: itemCondition,
     price: v.optional(v.number()),
-    saleRate: v.optional(v.number()),
-    myCost: v.optional(v.number()),
-    note: v.optional(v.string()),
-    createdByUserId: userId,
-    updatedTime: v.number(),
-    updatedByUserId: userId,
+    notes: v.optional(v.string()),
+    createdBy: userId,
+    // createdAt removed - using _creationTime
+    updatedAt: v.optional(v.number()),
     isArchived: v.optional(v.boolean()), // Matches schema - optional field
     deletedAt: v.optional(v.number()),
     marketplaceSync: marketplaceSync,
@@ -203,11 +187,14 @@ const importError = v.object({
 });
 
 export const importSummaryValidator = v.object({
+  provider: marketplaceProvider,
   imported: v.number(),
-  total: v.number(),
+  skippedExisting: v.number(),
+  skippedUnavailable: v.number(),
+  skippedInvalid: v.number(),
+  totalRemote: v.number(),
   errors: v.array(importError),
 });
-export type ImportSummary = Infer<typeof importSummaryValidator>;
 
 const inventoryImportIssue = v.object({
   code: v.string(),
@@ -245,7 +232,6 @@ export const inventoryImportCandidateValidator = v.object({
   issues: v.array(inventoryImportIssue),
   preview: inventoryImportCandidatePreview,
 });
-export type InventoryImportCandidate = Infer<typeof inventoryImportCandidateValidator>;
 
 export const inventoryImportValidationResultValidator = v.object({
   provider: marketplaceProvider,
@@ -256,6 +242,21 @@ export const inventoryImportValidationResultValidator = v.object({
   unavailableCount: v.number(),
   candidates: v.array(inventoryImportCandidateValidator),
 });
+
+// ============================================================================
+// TYPESCRIPT TYPE EXPORTS (for convenience)
+// ============================================================================
+
+export type AddInventoryItemArgs = Infer<typeof addInventoryItemArgs>;
+export type UpdateInventoryItemArgs = Infer<typeof updateInventoryItemArgs>;
+export type DeleteInventoryItemArgs = Infer<typeof deleteInventoryItemArgs>;
+export type ListInventoryItemsArgs = Infer<typeof listInventoryItemsArgs>;
+export type GetInventoryTotalsArgs = Infer<typeof getInventoryTotalsArgs>;
+
+// Partial inventory item data type (equivalent to Partial<Doc<"inventoryItems">>)
+export type PartialInventoryItemData = Infer<typeof partialInventoryItemData>;
+export type ImportSummary = Infer<typeof importSummaryValidator>;
+export type InventoryImportCandidate = Infer<typeof inventoryImportCandidateValidator>;
 export type InventoryImportValidationResult = Infer<
   typeof inventoryImportValidationResultValidator
 >;
