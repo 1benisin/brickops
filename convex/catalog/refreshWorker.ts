@@ -239,6 +239,11 @@ async function processJob(ctx: ActionCtx, message: Doc<"catalogRefreshJobs">): P
         },
       });
       await ctx.runMutation(internal.catalog.parts.upsertPart, { data: partData });
+
+      // Trigger promotion of inventory items waiting for this part
+      await ctx.runMutation(internal.inventory.mutations.promoteItemsForPart, {
+        partNumber: message.primaryKey,
+      });
     } else if (message.tableName === "partColors") {
       const partColorsData = await fetchBlPartColors(ctx, { itemNo: message.primaryKey });
       await ctx.runMutation(internal.catalog.colors.upsertPartColors, {

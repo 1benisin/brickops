@@ -61,9 +61,17 @@ export const inventoryTables = {
     deletedAt: v.optional(v.number()),
     // Consolidated marketplace sync tracking (refactored from individual fields)
     marketplaceSync: marketplaceSync,
+    // Unified lifecycle status for the item
+    lifecycleStatus: v.union(
+      v.literal("awaiting_catalog"),
+      v.literal("ready_to_sync"),
+      v.literal("synced"),
+      v.literal("error"),
+    ),
   })
     // Existing indexes (keep these)
     .index("by_businessAccount", ["businessAccountId"])
+    .index("by_partNumber_lifecycleStatus", ["partNumber", "lifecycleStatus"])
 
     // NEW: Composite indexes for common query patterns
     // Pattern: default listing (sort by createdAt desc)

@@ -1,4 +1,5 @@
 import { internalMutation } from "../_generated/server";
+import type { DatabaseWriter } from "../_generated/server";
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 import type { Id } from "../_generated/dataModel";
@@ -9,6 +10,53 @@ import {
   partPriceTableFields,
   partTableFields,
 } from "./validators";
+
+// ============================================================================
+// SHARED MUTATION HELPERS
+// ============================================================================
+
+/**
+ * Logic to ensure a part exists, creating a placeholder if it doesn't.
+ * Can be called from any mutation.
+ */
+export async function ensurePartPlaceholder(ctx: { db: DatabaseWriter }, partNumber: string) {
+  const existing = await ctx.db
+    .query("parts")
+    .withIndex("by_no", (q) => q.eq("no", partNumber))
+    .first();
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create placeholder part
+  const partId = await ctx.db.insert("parts", {
+    no: partNumber,
+    name: `Placeholder for ${partNumber}`,
+    type: "PART", // Default to PART, worker will correct it
+    lastFetched: 0,
+    status: "pending",
+    updatedAt: Date.now(),
+  });
+
+  // Enqueue refresh job
+  const recordId = partNumber;
+  await ctx.db.insert("catalogRefreshJobs", {
+    tableName: "parts",
+    primaryKey: partNumber,
+    secondaryKey: undefined,
+    recordId,
+    priority: 1,
+    lastFetched: 0,
+    status: "pending",
+    attempt: 0,
+    nextAttemptAt: Date.now(),
+  });
+
+  const part = await ctx.db.get(partId);
+  if (!part) throw new Error("Failed to retrieve created part");
+  return part;
+}
 
 // ============================================================================
 // INTERNAL MUTATIONS (for data upserts and outbox management)
@@ -88,10 +136,10 @@ export const upsertPart = internalMutation({
 
     if (existing) {
       // Update existing part (system field: _creationTime is preserved automatically)
-      await ctx.db.patch(existing._id, args.data);
+      await ctx.db.patch(existing._id, { ...args.data, status: "complete" });
     } else {
       // Insert new part
-      await ctx.db.insert("parts", args.data);
+      await ctx.db.insert("parts", { ...args.data, status: "complete" });
     }
   },
 });
