@@ -47,7 +47,7 @@ Run Playwright locally or via workflow when changes affect:
    npx convex import --table bricklinkElementReference docs/external-documentation/api-bricklink/seed-data/bricklinkElementReference.jsonl
    npx convex import --table colors docs/external-documentation/api-bricklink/seed-data/colors.jsonl
    ```
-4. Trigger refresh jobs if you need fresh data immediately (see `convex/crons.ts` or run `internal.catalog.refreshWorker.drainCatalogRefreshOutbox` via the Convex dashboard/CLI).
+4. Trigger refresh jobs if you need fresh data immediately (see `convex/crons.ts` or run `internal.catalog.refreshWorker.processCatalogRefreshJobs` via the Convex dashboard/CLI).
 
 ## Convex Type Sharing (Frontend/Backend)
 

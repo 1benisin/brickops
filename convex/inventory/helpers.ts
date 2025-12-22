@@ -59,7 +59,7 @@ export async function ensureBrickowlIdForPart(ctx: MutationCtx, partNumber: stri
 
   // Check whether there's already an outstanding refresh request for this part.
   const existingMessage = await ctx.db
-    .query("catalogRefreshOutbox")
+    .query("catalogRefreshJobs")
     .withIndex("by_table_primary_secondary", (q) =>
       q.eq("tableName", "parts").eq("primaryKey", partNumber).eq("secondaryKey", undefined),
     )
@@ -69,7 +69,7 @@ export async function ensureBrickowlIdForPart(ctx: MutationCtx, partNumber: stri
   let messageId = existingMessage?._id;
 
   if (!existingMessage) {
-    messageId = await ctx.db.insert("catalogRefreshOutbox", {
+    messageId = await ctx.db.insert("catalogRefreshJobs", {
       tableName: "parts",
       primaryKey: partNumber,
       secondaryKey: undefined,
@@ -226,6 +226,31 @@ export async function computeDeltaFromWindow(
 }
 
 /**
+ * Check if inventory should be synced to a marketplace provider
+ * Returns true if credentials exist, are active, and inventory sync is enabled
+ */
+export async function shouldSyncInventoryToMarketplace(
+  db: DatabaseReader,
+  businessAccountId: Id<"businessAccounts">,
+  provider: "bricklink" | "brickowl",
+): Promise<boolean> {
+  const creds = await db
+    .query("marketplaceCredentials")
+    .withIndex("by_business_provider", (q) =>
+      q.eq("businessAccountId", businessAccountId).eq("provider", provider),
+    )
+    .first();
+
+  if (!creds?.isActive) {
+    return false;
+  }
+
+  // Check inventorySyncEnabled first (more specific), fallback to syncEnabled, then default to true
+  const inventorySyncEnabled = creds.inventorySyncEnabled ?? creds.syncEnabled ?? true;
+  return inventorySyncEnabled;
+}
+
+/**
  * Enqueue a marketplace sync operation in the outbox
  * Call this after writing to the ledger to ensure transactional consistency
  */
@@ -253,12 +278,13 @@ export async function enqueueMarketplaceSync(
     )
     .first();
 
-  // Check if credentials are active and sync enabled (default syncEnabled to true if not set)
-  const syncEnabled = creds?.syncEnabled ?? true;
+  // Check if credentials are active and inventory sync enabled
+  // Check inventorySyncEnabled first (more specific), fallback to syncEnabled, then default to true
+  const inventorySyncEnabled = creds?.inventorySyncEnabled ?? creds?.syncEnabled ?? true;
 
-  if (!creds?.isActive || !syncEnabled) {
+  if (!creds?.isActive || !inventorySyncEnabled) {
     console.log(
-      `Skipping outbox for ${args.provider}: isActive=${creds?.isActive}, syncEnabled=${syncEnabled}`,
+      `Skipping outbox for ${args.provider}: isActive=${creds?.isActive}, inventorySyncEnabled=${inventorySyncEnabled}`,
     );
     return false; // No sync needed if credentials not available or disabled
   }

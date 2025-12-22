@@ -55,7 +55,7 @@ export const getPriceGuide = query({
 
     // Check if refresh is in progress (outbox)
     const outboxMessage = await ctx.db
-      .query("catalogRefreshOutbox")
+      .query("catalogRefreshJobs")
       .withIndex("by_table_primary_secondary", (q) =>
         q
           .eq("tableName", "partPrices")

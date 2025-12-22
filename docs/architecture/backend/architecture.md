@@ -374,7 +374,7 @@ export const getPartDetails = mutation({ ... });
 
 // Internal API (server-only)
 export const checkAndScheduleRefresh = internalMutation({ ... });
-export const drainCatalogRefreshOutbox = internalAction({ ... });
+export const processCatalogRefreshJobs = internalAction({ ... });
 ```
 
 ### Critical Patterns for BrickOps
@@ -498,7 +498,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 
 // Action orchestrates external API and persistence
-export const drainCatalogRefreshOutbox = internalAction({
+export const processCatalogRefreshJobs = internalAction({
   args: {},
   handler: async (ctx) => {
     // Read queue (query)
@@ -812,9 +812,9 @@ const crons = cronJobs();
 
 // Drain catalog refresh outbox every 10 minutes
 crons.interval(
-  "drain-catalog-refresh-outbox",
+  "process-catalog-refresh-jobs",
   { minutes: 10 },
-  internal.catalog.refreshWorker.drainCatalogRefreshOutbox,
+  internal.catalog.refreshWorker.processCatalogRefreshJobs,
 );
 
 // Clean up old catalog refresh jobs daily

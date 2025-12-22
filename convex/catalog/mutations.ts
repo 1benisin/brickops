@@ -27,10 +27,10 @@ export const enqueueCatalogRefresh = internalMutation({
     lastFetched: v.optional(v.number()),
     priority: v.number(),
   },
-  handler: async (ctx, args): Promise<Id<"catalogRefreshOutbox"> | undefined> => {
+  handler: async (ctx, args): Promise<Id<"catalogRefreshJobs"> | undefined> => {
     // Check if already queued (pending or inflight)
     const existing = await ctx.db
-      .query("catalogRefreshOutbox")
+      .query("catalogRefreshJobs")
       .withIndex("by_table_primary_secondary", (q) =>
         q
           .eq("tableName", args.tableName)
@@ -51,7 +51,7 @@ export const enqueueCatalogRefresh = internalMutation({
       : args.primaryKey;
 
     // Insert to outbox and return ID
-    const messageId = await ctx.db.insert("catalogRefreshOutbox", {
+    const messageId = await ctx.db.insert("catalogRefreshJobs", {
       tableName: args.tableName,
       primaryKey: args.primaryKey,
       secondaryKey: args.secondaryKey,

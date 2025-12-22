@@ -29,7 +29,8 @@ describe("consumeToken", () => {
     const config = getRateLimitConfig(provider);
 
     expect(result).toMatchObject({
-      granted: true,
+      ok: true,
+      retryAfter: 0,
       remaining: config.capacity - 1,
       resetAt: now.getTime() + config.windowDurationMs,
     });
@@ -75,7 +76,8 @@ describe("consumeToken", () => {
     const result = await (consumeToken as any)._handler(ctx as any, { bucket, provider });
 
     expect(result).toMatchObject({
-      granted: true,
+      ok: true,
+      retryAfter: 0,
       remaining: seededRemaining - 1,
       resetAt: now.getTime() + config.windowDurationMs,
     });
@@ -113,7 +115,8 @@ describe("consumeToken", () => {
     const result = await (consumeToken as any)._handler(ctx as any, { bucket, provider });
 
     expect(result).toEqual({
-      granted: false,
+      ok: false,
+      retryAfter: config.windowDurationMs,
       remaining: 0,
       resetAt,
     });
@@ -151,7 +154,8 @@ describe("consumeToken", () => {
     const result = await (consumeToken as any)._handler(ctx as any, { bucket, provider });
 
     expect(result).toMatchObject({
-      granted: true,
+      ok: true,
+      retryAfter: 0,
       remaining: config.capacity - 1,
       resetAt: now.getTime() + config.windowDurationMs,
     });

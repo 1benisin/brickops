@@ -8,6 +8,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, type MutationCtx } from "../_generated/server";
 import type { Id, Doc } from "../_generated/dataModel";
+import type { WithoutSystemFields } from "convex/server";
 import { requireUser } from "./helpers";
 import { now, getNextSeqForItem, enqueueMarketplaceSync, ensureBrickowlIdForPart } from "./helpers";
 
@@ -63,7 +64,7 @@ async function createInventoryItemWithLedger(
   await ensureBrickowlIdForPart(ctx, itemData.partNumber);
 
   const timestamp = now();
-  const document: Omit<Doc<"inventoryItems">, "_id" | "_creationTime"> = {
+  const document: WithoutSystemFields<Doc<"inventoryItems">> = {
     businessAccountId,
     name: itemData.name,
     partNumber: itemData.partNumber,

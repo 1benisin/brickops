@@ -81,7 +81,7 @@ export const checkAndScheduleRefresh = internalMutation({
 
       // Check if already queued (pending or inflight)
       const existing = await ctx.db
-        .query("catalogRefreshOutbox")
+        .query("catalogRefreshJobs")
         .withIndex("by_table_primary_secondary", (q) =>
           q
             .eq("tableName", params.tableName)
@@ -98,7 +98,7 @@ export const checkAndScheduleRefresh = internalMutation({
         const recordId = secondaryKey ? `${primaryKey}:${secondaryKey}` : primaryKey;
 
         // Add to outbox - worker will process it
-        await ctx.db.insert("catalogRefreshOutbox", {
+        await ctx.db.insert("catalogRefreshJobs", {
           tableName: params.tableName,
           primaryKey,
           secondaryKey,
@@ -129,7 +129,7 @@ export const cleanupOutbox = internalMutation({
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     const oldItems = await ctx.db
-      .query("catalogRefreshOutbox")
+      .query("catalogRefreshJobs")
       .filter((q) =>
         q.and(
           q.or(q.eq(q.field("status"), "succeeded"), q.eq(q.field("status"), "failed")),

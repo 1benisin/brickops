@@ -7,32 +7,26 @@ import { fetchBlCategory } from "../marketplaces/bricklink/catalog/categories/ac
 import { fetchBlColor } from "../marketplaces/bricklink/catalog/colors/actions";
 import { fetchBlPart, fetchBlPartColors } from "../marketplaces/bricklink/catalog/parts/actions";
 import { fetchBlPriceGuide } from "../marketplaces/bricklink/catalog/priceGuides/actions";
-import { RebrickableClient, type RebrickablePart } from "../api/rebrickable";
+import { RebrickableClient } from "../api/rebrickable";
 import type { PriceGuideRecord } from "./prices";
 
 /**
- * Query to get pending outbox messages ready for processing
+ * Query to get pending jobs ready for processing
+ * Returns highest priority jobs first (priority 1 = highest, 3 = lowest)
+ * Uses index-based sorting by priority, then nextAttemptAt
  */
-export const getPendingOutboxMessages = internalQuery({
+export const getPendingJobs = internalQuery({
   args: { maxNextAttemptAt: v.number() },
   handler: async (ctx, args) => {
-    const query = ctx.db
-      .query("catalogRefreshOutbox")
-      .withIndex("by_status_time", (q) =>
-        q.eq("status", "pending").lte("nextAttemptAt", args.maxNextAttemptAt),
-      );
-
-    const typedQuery = query as {
-      take?: (limit: number) => Promise<Array<Doc<"catalogRefreshOutbox">>>;
-      collect: () => Promise<Array<Doc<"catalogRefreshOutbox">>>;
-    };
-
-    if (typeof typedQuery.take === "function") {
-      return await typedQuery.take(10);
-    }
-
-    const results = await typedQuery.collect();
-    return results.slice(0, 10);
+    // Use priority-aware index: ["status", "priority", "nextAttemptAt"]
+    // Results are automatically sorted by priority (ascending), then nextAttemptAt (ascending)
+    // Filter by nextAttemptAt, then take top 10
+    return await ctx.db
+      .query("catalogRefreshJobs")
+      .withIndex("by_status_priority_time", (q) => q.eq("status", "pending"))
+      .filter((q) => q.lte(q.field("nextAttemptAt"), args.maxNextAttemptAt))
+      .order("asc")
+      .take(10);
   },
 });
 
@@ -42,7 +36,7 @@ export const getPendingOutboxMessages = internalQuery({
  */
 export const markOutboxInflight = internalMutation({
   args: {
-    messageId: v.id("catalogRefreshOutbox"),
+    messageId: v.id("catalogRefreshJobs"),
     currentAttempt: v.number(),
   },
   handler: async (ctx, args) => {
@@ -69,7 +63,7 @@ export const markOutboxInflight = internalMutation({
  */
 export const markOutboxSucceeded = internalMutation({
   args: {
-    messageId: v.id("catalogRefreshOutbox"),
+    messageId: v.id("catalogRefreshJobs"),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.messageId, {
@@ -84,7 +78,7 @@ export const markOutboxSucceeded = internalMutation({
  */
 export const markOutboxFailed = internalMutation({
   args: {
-    messageId: v.id("catalogRefreshOutbox"),
+    messageId: v.id("catalogRefreshJobs"),
     attempt: v.number(),
     nextAttemptAt: v.number(),
     error: v.string(),
@@ -113,44 +107,18 @@ function computeNextAttempt(attempt: number): number {
 }
 
 /**
- * Extract external IDs from Rebrickable part response
- * Returns the first element from each external ID array if available
+ * Worker that processes catalog refresh jobs
+ * Processes pending jobs and refreshes data from Bricklink
  */
-function _extractExternalIdsFromRebrickable(rebrickableParts: RebrickablePart[]): {
-  brickowlId?: string;
-  ldrawId?: string;
-  legoId?: string;
-} {
-  if (rebrickableParts.length === 0) {
-    return {
-      brickowlId: "",
-    };
-  }
-
-  const part = rebrickableParts[0];
-  const externalIds = part.external_ids;
-
-  return {
-    brickowlId: externalIds.BrickOwl?.[0] ?? "",
-    ldrawId: externalIds.LDraw?.[0],
-    legoId: externalIds.LEGO?.[0],
-  };
-}
-
-/**
- * Worker that drains the catalog refresh outbox
- * Processes pending messages and refreshes data from Bricklink
- */
-export const drainCatalogRefreshOutbox = internalAction({
+export const processCatalogRefreshJobs = internalAction({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
 
-    // Find pending messages ready for processing
-    const pendingMessages = await ctx.runQuery(
-      internal.catalog.refreshWorker.getPendingOutboxMessages,
-      { maxNextAttemptAt: now },
-    );
+    // Find pending jobs ready for processing
+    const pendingMessages = await ctx.runQuery(internal.catalog.refreshWorker.getPendingJobs, {
+      maxNextAttemptAt: now,
+    });
 
     if (pendingMessages.length === 0) {
       console.log("[catalog] No pending outbox messages");
@@ -161,7 +129,7 @@ export const drainCatalogRefreshOutbox = internalAction({
 
     // Process each message
     for (const message of pendingMessages) {
-      const shouldContinue = await processOutboxMessage(ctx, message);
+      const shouldContinue = await processJob(ctx, message);
       if (!shouldContinue) {
         console.log("[catalog] Rate limit hit, stopping batch processing");
         break;
@@ -176,7 +144,7 @@ export const drainCatalogRefreshOutbox = internalAction({
  */
 export const processSingleOutboxMessage = internalAction({
   args: {
-    messageId: v.id("catalogRefreshOutbox"),
+    messageId: v.id("catalogRefreshJobs"),
   },
   handler: async (ctx, args) => {
     // Fetch the message to ensure it exists and is still pending
@@ -189,20 +157,17 @@ export const processSingleOutboxMessage = internalAction({
       return;
     }
 
-    // Use existing processOutboxMessage helper
-    await processOutboxMessage(ctx, message);
+    // Use existing processJob helper
+    await processJob(ctx, message);
   },
 });
 
 /**
- * Process a single outbox message
+ * Process a single catalog refresh job
  * Fetches data from Bricklink and updates database
  * Returns true if processing should continue, false if batch should stop (e.g. rate limit)
  */
-async function processOutboxMessage(
-  ctx: ActionCtx,
-  message: Doc<"catalogRefreshOutbox">,
-): Promise<boolean> {
+async function processJob(ctx: ActionCtx, message: Doc<"catalogRefreshJobs">): Promise<boolean> {
   try {
     // Mark as inflight (CAS to avoid double processing)
     const marked = await ctx.runMutation(internal.catalog.refreshWorker.markOutboxInflight, {
@@ -221,8 +186,8 @@ async function processOutboxMessage(
       provider: "bricklink",
     });
 
-    if (!token.granted) {
-      const retryAfterMs = Math.max(0, token.resetAt - Date.now());
+    if (!token.ok) {
+      const retryAfterMs = token.retryAfter;
       throw new Error(`RATE_LIMIT_EXCEEDED: retry after ${retryAfterMs}ms`);
     }
 

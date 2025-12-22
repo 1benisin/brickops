@@ -49,9 +49,10 @@ describe("upstreamRequest", () => {
   it("performs a successful JSON request with rate limiting and telemetry", async () => {
     const resetAt = Date.now() + 1000;
     consumeTokenMock.mockResolvedValueOnce({
-      granted: true,
+      ok: true,
       remaining: 42,
       resetAt,
+      retryAfter: 0,
     });
 
     fetchMock.mockResolvedValueOnce(
@@ -156,9 +157,10 @@ describe("upstreamRequest", () => {
     const mathRandomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
 
     consumeTokenMock.mockResolvedValue({
-      granted: true,
+      ok: true,
       remaining: 12,
       resetAt: Date.now() + 1000,
+      retryAfter: 0,
     });
 
     fetchMock

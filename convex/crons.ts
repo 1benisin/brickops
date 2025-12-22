@@ -13,12 +13,12 @@ export const logHeartbeat = internalAction({
 
 crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbeat);
 
-// Drain catalog refresh outbox every 5 minutes (10 items per run = 120 API calls/hour max)
+// Process catalog refresh jobs every 5 minutes (10 items per run = 120 API calls/hour max)
 // refreshes catalog data
 crons.interval(
-  "drain-catalog-refresh-outbox",
+  "process-catalog-refresh-jobs",
   { minutes: 1 },
-  internal.catalog.refreshWorker.drainCatalogRefreshOutbox,
+  internal.catalog.refreshWorker.processCatalogRefreshJobs,
 );
 
 // Clean up old outbox items daily at 2 AM UTC
