@@ -110,9 +110,9 @@ describe("catalog status queries", () => {
             createdAt: fetchedAt,
           },
         ],
-        catalogRefreshOutbox: [
+        catalogRefreshJobs: [
           {
-            _id: "catalogRefreshOutbox:1",
+            _id: "catalogRefreshJobs:1",
             tableName: "parts" as const,
             primaryKey: "3001",
             secondaryKey: null,
@@ -273,9 +273,9 @@ describe("catalog status queries", () => {
             createdAt: fetchedAt,
           },
         ],
-        catalogRefreshOutbox: [
+        catalogRefreshJobs: [
           {
-            _id: "catalogRefreshOutbox:1",
+            _id: "catalogRefreshJobs:1",
             tableName: "partColors" as const,
             primaryKey: "3001",
             secondaryKey: null,
@@ -470,9 +470,9 @@ describe("catalog status queries", () => {
             createdAt: fetchedAt,
           },
         ],
-        catalogRefreshOutbox: [
+        catalogRefreshJobs: [
           {
-            _id: "catalogRefreshOutbox:1",
+            _id: "catalogRefreshJobs:1",
             tableName: "partPrices" as const,
             primaryKey: "3001",
             secondaryKey: "21",

@@ -4,7 +4,7 @@ import { ConvexError } from "convex/values";
 
 import { enqueueCatalogRefresh } from "@/convex/catalog/mutations";
 import {
-  getPendingOutboxMessages,
+  getPendingJobs,
   markOutboxInflight,
   markOutboxSucceeded,
   markOutboxFailed,
@@ -153,7 +153,7 @@ describe("catalog refresh outbox", () => {
       });
 
       // Should only have one message
-      const messages = await ctx.db.query("catalogRefreshOutbox").collect();
+      const messages = await ctx.db.query("catalogRefreshJobs").collect();
       expect(messages.length).toBe(1);
     });
 
@@ -193,7 +193,7 @@ describe("catalog refresh outbox", () => {
       });
 
       const messages = await ctx.db
-        .query("catalogRefreshOutbox")
+        .query("catalogRefreshJobs")
         .filter((q: any) => q.eq(q.field("status"), "pending"))
         .collect();
       expect(messages.length).toBe(1);
@@ -212,14 +212,14 @@ describe("catalog refresh outbox", () => {
         priority: 1,
       });
 
-      const messages = await ctx.db.query("catalogRefreshOutbox").collect();
+      const messages = await ctx.db.query("catalogRefreshJobs").collect();
       expect(messages.length).toBe(1);
       expect(messages[0].recordId).toBe("3001:1");
     });
   });
 
   describe("worker queries", () => {
-    it("getPendingOutboxMessages returns messages ready for processing", async () => {
+    it("getPendingJobs returns messages ready for processing", async () => {
       const ctx = createConvexTestContext({
         seed: baseSeed,
       });
@@ -227,7 +227,7 @@ describe("catalog refresh outbox", () => {
       const now = Date.now();
 
       // Create messages with different nextAttemptAt times
-      await ctx.db.insert("catalogRefreshOutbox", {
+      await ctx.db.insert("catalogRefreshJobs", {
         tableName: "parts",
         primaryKey: "3001",
         secondaryKey: undefined,
@@ -239,7 +239,7 @@ describe("catalog refresh outbox", () => {
         createdAt: now,
       });
 
-      await ctx.db.insert("catalogRefreshOutbox", {
+      await ctx.db.insert("catalogRefreshJobs", {
         tableName: "parts",
         primaryKey: "3002",
         secondaryKey: undefined,
@@ -251,7 +251,7 @@ describe("catalog refresh outbox", () => {
         createdAt: now,
       });
 
-      const pending = await (getPendingOutboxMessages as any)._handler(ctx, {
+      const pending = await (getPendingJobs as any)._handler(ctx, {
         maxNextAttemptAt: now,
       });
 
@@ -265,7 +265,7 @@ describe("catalog refresh outbox", () => {
       });
 
       const now = Date.now();
-      const messageId = await ctx.db.insert("catalogRefreshOutbox", {
+      const messageId = await ctx.db.insert("catalogRefreshJobs", {
         tableName: "parts",
         primaryKey: "3001",
         secondaryKey: undefined,
@@ -443,7 +443,7 @@ describe("catalog refresh outbox", () => {
         identity: createTestIdentity({ subject: `${userId}|session-001` }),
       });
 
-      await ctx.db.insert("catalogRefreshOutbox", {
+      await ctx.db.insert("catalogRefreshJobs", {
         tableName: "parts",
         primaryKey: "3001",
         secondaryKey: undefined,

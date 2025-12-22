@@ -40,6 +40,9 @@ export const initialBricklinkInventoryImport = action({
         const baseRecord = mapBlToConvexInventory(blInventory);
 
         // Build the complete record with marketplace sync data
+        // Note: Convex doesn't provide a FunctionArgs utility like FunctionReturnType.
+        // The recommended pattern is to use Infer<typeof validator> from validators.ts
+        // TypeScript will still type-check ctx.runMutation() calls automatically.
         const record: AddInventoryItemArgs = {
           ...baseRecord,
           // Set marketplace sync data for initial import
@@ -85,8 +88,12 @@ export const initialBricklinkInventoryImport = action({
     }
 
     return {
+      provider: "bricklink" as const,
       imported,
-      total: blInventories.length,
+      skippedExisting: 0,
+      skippedUnavailable: 0,
+      skippedInvalid: 0,
+      totalRemote: blInventories.length,
       errors,
     };
   },

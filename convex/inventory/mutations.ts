@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, internalQuery } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
+import type { WithoutSystemFields } from "convex/server";
 import {
   now,
   requireUser,
@@ -11,6 +12,7 @@ import {
   getLastSyncedSeq,
   enqueueMarketplaceSync,
   ensureBrickowlIdForPart,
+  shouldSyncInventoryToMarketplace,
 } from "./helpers";
 import { requireUserRole } from "../users/authorization";
 import {
@@ -29,7 +31,7 @@ async function updateMarketplaceSyncStatus(
   ctx: { db: DatabaseReader },
   itemId: Id<"inventoryItems">,
   businessAccountId: Id<"businessAccounts">,
-  status: "pending" | "syncing" | "synced" | "failed" = "pending",
+  status: "pending" | "syncing" | "synced" | "failed" | "disabled" = "pending",
 ): Promise<Partial<Doc<"inventoryItems">>> {
   // Get current item to preserve existing marketplace sync data
   const currentItem = await ctx.db.get(itemId);
@@ -90,7 +92,23 @@ export const addInventoryItem = mutation({
     //        We'll use a similarity table in the inventory for this check.
 
     const timestamp = now();
-    const document: Omit<Doc<"inventoryItems">, "_id" | "_creationTime"> = {
+
+    // Build marketplaceSync: use provided values as base, merge with defaults for missing providers
+    const providedSync = args.marketplaceSync;
+    const marketplaceSyncData: Doc<"inventoryItems">["marketplaceSync"] = {
+      bricklink: {
+        ...providedSync?.bricklink,
+        status: providedSync?.bricklink?.status ?? "pending",
+        lastSyncAttempt: providedSync?.bricklink?.lastSyncAttempt ?? timestamp,
+      },
+      brickowl: {
+        ...providedSync?.brickowl,
+        status: providedSync?.brickowl?.status ?? "pending",
+        lastSyncAttempt: providedSync?.brickowl?.lastSyncAttempt ?? timestamp,
+      },
+    };
+
+    const document: WithoutSystemFields<Doc<"inventoryItems">> = {
       businessAccountId,
       name: args.name,
       partNumber: args.partNumber,
@@ -104,16 +122,7 @@ export const addInventoryItem = mutation({
       createdBy: user._id,
       // createdAt removed - using _creationTime
       // TODO - add tags
-      marketplaceSync: {
-        bricklink: {
-          status: "pending",
-          lastSyncAttempt: timestamp,
-        },
-        brickowl: {
-          status: "pending",
-          lastSyncAttempt: timestamp,
-        },
-      },
+      marketplaceSync: marketplaceSyncData,
     };
 
     const id = await ctx.db.insert("inventoryItems", document);
@@ -154,36 +163,79 @@ export const addInventoryItem = mutation({
       correlationId,
     });
 
-    // Phase 2: Enqueue outbox messages for marketplace sync
+    // Phase 2: Check which providers should sync and enqueue messages
     const currentSeq = seq;
-    const outboxResults = await Promise.all(
-      ["bricklink", "brickowl"].map(async (provider) => {
-        const created = await enqueueMarketplaceSync(ctx, {
-          businessAccountId,
-          itemId: id,
-          provider: provider as "bricklink" | "brickowl",
-          kind: "create",
-          lastSyncedSeq: 0, // New item, never synced
-          currentSeq,
-          correlationId,
-        });
-        return { provider, created };
-      }),
+    const providers = ["bricklink", "brickowl"] as const;
+    const enabledProviders = await Promise.all(
+      providers.map(async (provider) => ({
+        provider,
+        shouldSync: await shouldSyncInventoryToMarketplace(ctx.db, businessAccountId, provider),
+      })),
     );
 
-    // Phase 3: Update sync status based on whether outbox messages were created
-    // Only set to "syncing" if we have credentials configured
-    const hasAnyOutbox = outboxResults.some((r) => r.created);
-    if (!hasAnyOutbox) {
-      // No credentials configured, set to "synced" (no sync needed)
+    // Enqueue sync for providers that should sync
+    await Promise.all(
+      enabledProviders
+        .filter((p) => p.shouldSync)
+        .map(async ({ provider }) => {
+          await enqueueMarketplaceSync(ctx, {
+            businessAccountId,
+            itemId: id,
+            provider,
+            kind: "create",
+            lastSyncedSeq: 0, // New item, never synced
+            currentSeq,
+            correlationId,
+          });
+        }),
+    );
+
+    // Phase 3: Update sync status based on whether providers should sync
+    // Set to "pending" for providers that were enqueued, "disabled" for providers that shouldn't sync
+    // Preserve provided fields like lotId, lastSyncedSeq, lastSyncedAvailable from args.marketplaceSync
+    // Respect provided "synced" status if provider should sync (e.g., from import)
+    const syncStatusUpdates: Partial<Doc<"inventoryItems">>["marketplaceSync"] = {
+      ...marketplaceSyncData,
+    };
+    let hasUpdates = false;
+    for (const { provider, shouldSync } of enabledProviders) {
+      hasUpdates = true;
+      if (provider === "bricklink") {
+        const providedStatus = marketplaceSyncData.bricklink?.status;
+        // If provider should sync and provided status is "synced", preserve it; otherwise use shouldSync logic
+        const newStatus =
+          shouldSync && providedStatus === "synced"
+            ? "synced"
+            : shouldSync
+              ? "pending"
+              : "disabled";
+        syncStatusUpdates.bricklink = {
+          ...marketplaceSyncData.bricklink, // Preserve lotId, lastSyncedSeq, lastSyncedAvailable, etc.
+          status: newStatus,
+          lastSyncAttempt: timestamp,
+        };
+      } else {
+        const providedStatus = marketplaceSyncData.brickowl?.status;
+        // If provider should sync and provided status is "synced", preserve it; otherwise use shouldSync logic
+        const newStatus =
+          shouldSync && providedStatus === "synced"
+            ? "synced"
+            : shouldSync
+              ? "pending"
+              : "disabled";
+        syncStatusUpdates.brickowl = {
+          ...marketplaceSyncData.brickowl, // Preserve lotId, lastSyncedSeq, lastSyncedAvailable, etc.
+          status: newStatus,
+          lastSyncAttempt: timestamp,
+        };
+      }
+    }
+
+    if (hasUpdates) {
       await ctx.db.patch(id, {
-        marketplaceSync: {
-          bricklink: { status: "synced", lastSyncAttempt: timestamp },
-          brickowl: { status: "synced", lastSyncAttempt: timestamp },
-        },
+        marketplaceSync: syncStatusUpdates,
       });
     }
-    // If outbox messages were created, status remains "pending" and worker will handle it
 
     return id;
   },
@@ -269,48 +321,64 @@ export const updateInventoryItem = mutation({
       });
 
       // Phase 2: Enqueue outbox messages for marketplace sync
+      // Filter providers to only sync-enabled ones before enqueueing
       const currentSeq = seq;
-      const outboxResults = await Promise.all(
-        ["bricklink", "brickowl"].map(async (provider) => {
-          const lastSyncedSeq = await getLastSyncedSeq(
+      const providers = ["bricklink", "brickowl"] as const;
+      const enabledProviders = await Promise.all(
+        providers.map(async (provider) => ({
+          provider,
+          shouldSync: await shouldSyncInventoryToMarketplace(
             ctx.db,
-            args.itemId,
-            provider as "bricklink" | "brickowl",
-          );
-
-          const created = await enqueueMarketplaceSync(ctx, {
-            businessAccountId: item.businessAccountId,
-            itemId: args.itemId,
-            provider: provider as "bricklink" | "brickowl",
-            kind: "update",
-            lastSyncedSeq,
-            currentSeq,
-            correlationId,
-          });
-          return { provider, created };
-        }),
+            item.businessAccountId,
+            provider,
+          ),
+        })),
       );
 
-      // Update sync status based on whether outbox messages were created
-      const hasAnyOutbox = outboxResults.some(
-        (r: { provider: string; created: boolean }) => r.created,
+      await Promise.all(
+        enabledProviders
+          .filter((p) => p.shouldSync)
+          .map(async ({ provider }) => {
+            const lastSyncedSeq = await getLastSyncedSeq(ctx.db, args.itemId, provider);
+
+            await enqueueMarketplaceSync(ctx, {
+              businessAccountId: item.businessAccountId,
+              itemId: args.itemId,
+              provider,
+              kind: "update",
+              lastSyncedSeq,
+              currentSeq,
+              correlationId,
+            });
+          }),
       );
-      if (!hasAnyOutbox) {
-        // Gate: Mark as synced if no credentials configured
+
+      // Update sync status based on enabled providers
+      // Set to "pending" for providers that were enqueued, "disabled" for providers that shouldn't sync
+      const syncStatusUpdates: Partial<Doc<"inventoryItems">>["marketplaceSync"] = {
+        ...item.marketplaceSync,
+      };
+      let hasUpdates = false;
+      for (const { provider, shouldSync } of enabledProviders) {
+        hasUpdates = true;
+        if (provider === "bricklink") {
+          syncStatusUpdates.bricklink = {
+            status: shouldSync ? "pending" : "disabled",
+            lastSyncAttempt: timestamp,
+            ...item.marketplaceSync?.bricklink,
+          };
+        } else {
+          syncStatusUpdates.brickowl = {
+            status: shouldSync ? "pending" : "disabled",
+            lastSyncAttempt: timestamp,
+            ...item.marketplaceSync?.brickowl,
+          };
+        }
+      }
+
+      if (hasUpdates) {
         await ctx.db.patch(args.itemId, {
-          marketplaceSync: {
-            ...item.marketplaceSync,
-            bricklink: {
-              status: "synced",
-              lastSyncAttempt: timestamp,
-              ...item.marketplaceSync?.bricklink,
-            },
-            brickowl: {
-              status: "synced",
-              lastSyncAttempt: timestamp,
-              ...item.marketplaceSync?.brickowl,
-            },
-          },
+          marketplaceSync: syncStatusUpdates,
         });
       }
     }
@@ -391,46 +459,64 @@ export const deleteInventoryItem = mutation({
     });
 
     // Phase 2: Enqueue outbox messages for marketplace sync
+    // Filter providers to only sync-enabled ones before enqueueing
     const currentSeq = seq;
-    const outboxResults = await Promise.all(
-      ["bricklink", "brickowl"].map(async (provider) => {
-        const lastSyncedSeq = await getLastSyncedSeq(
+    const providers = ["bricklink", "brickowl"] as const;
+    const enabledProviders = await Promise.all(
+      providers.map(async (provider) => ({
+        provider,
+        shouldSync: await shouldSyncInventoryToMarketplace(
           ctx.db,
-          args.itemId,
-          provider as "bricklink" | "brickowl",
-        );
-
-        const created = await enqueueMarketplaceSync(ctx, {
-          businessAccountId: item.businessAccountId,
-          itemId: args.itemId,
-          provider: provider as "bricklink" | "brickowl",
-          kind: "delete",
-          lastSyncedSeq,
-          currentSeq,
-          correlationId,
-        });
-        return { provider, created };
-      }),
+          item.businessAccountId,
+          provider,
+        ),
+      })),
     );
 
-    // Update sync status based on whether outbox messages were created
-    const hasAnyOutbox = outboxResults.some((r) => r.created);
-    if (!hasAnyOutbox) {
-      // Gate: Mark as synced if no credentials configured
+    await Promise.all(
+      enabledProviders
+        .filter((p) => p.shouldSync)
+        .map(async ({ provider }) => {
+          const lastSyncedSeq = await getLastSyncedSeq(ctx.db, args.itemId, provider);
+
+          await enqueueMarketplaceSync(ctx, {
+            businessAccountId: item.businessAccountId,
+            itemId: args.itemId,
+            provider,
+            kind: "delete",
+            lastSyncedSeq,
+            currentSeq,
+            correlationId,
+          });
+        }),
+    );
+
+    // Update sync status based on enabled providers
+    // Set to "pending" for providers that were enqueued, "disabled" for providers that shouldn't sync
+    const syncStatusUpdates: Partial<Doc<"inventoryItems">>["marketplaceSync"] = {
+      ...item.marketplaceSync,
+    };
+    let hasUpdates = false;
+    for (const { provider, shouldSync } of enabledProviders) {
+      hasUpdates = true;
+      if (provider === "bricklink") {
+        syncStatusUpdates.bricklink = {
+          status: shouldSync ? "pending" : "disabled",
+          lastSyncAttempt: timestamp,
+          ...item.marketplaceSync?.bricklink,
+        };
+      } else {
+        syncStatusUpdates.brickowl = {
+          status: shouldSync ? "pending" : "disabled",
+          lastSyncAttempt: timestamp,
+          ...item.marketplaceSync?.brickowl,
+        };
+      }
+    }
+
+    if (hasUpdates) {
       await ctx.db.patch(args.itemId, {
-        marketplaceSync: {
-          ...item.marketplaceSync,
-          bricklink: {
-            status: "synced",
-            lastSyncAttempt: timestamp,
-            ...item.marketplaceSync?.bricklink,
-          },
-          brickowl: {
-            status: "synced",
-            lastSyncAttempt: timestamp,
-            ...item.marketplaceSync?.brickowl,
-          },
-        },
+        marketplaceSync: syncStatusUpdates,
       });
     }
 

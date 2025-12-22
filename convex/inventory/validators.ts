@@ -21,6 +21,7 @@ export const syncStatus = v.union(
   v.literal("syncing"),
   v.literal("synced"),
   v.literal("failed"),
+  v.literal("disabled"),
 );
 
 export const marketplaceProvider = v.union(v.literal("bricklink"), v.literal("brickowl"));
@@ -89,6 +90,7 @@ export const addInventoryItemArgs = v.object({
   price: v.optional(v.number()),
   notes: v.optional(v.string()),
   reason: v.optional(v.string()), // For history tracking
+  marketplaceSync: marketplaceSync,
 });
 
 export const updateInventoryItemArgs = v.object({

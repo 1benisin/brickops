@@ -15,7 +15,7 @@ When a user requests part catalog data, the system checks if data exists and is 
 **Convex Query** - Checks database and determines status:
 
 - Queries `parts` table by part number
-- Checks `catalogRefreshOutbox` for pending refreshes
+- Checks `catalogRefreshJobs` for pending refreshes
 - Calculates staleness: `lastFetched < (now - 30 days)`
 - Returns `{ data: {...}, status: "fresh" | "stale" | "refreshing" | "missing" }`
 
@@ -28,7 +28,7 @@ When a user requests part catalog data, the system checks if data exists and is 
 
 - Verifies user authentication
 - Checks for existing pending refresh (prevents duplicates)
-- Adds message to `catalogRefreshOutbox` table with HIGH priority
+- Adds message to `catalogRefreshJobs` table with HIGH priority
 - If data is missing: Schedules immediate processing
 
 **Background Worker** - Processes refresh requests:
@@ -62,7 +62,7 @@ When a user requests part catalog data, the system checks if data exists and is 
 - `src/hooks/useGetPriceGuide.ts` - Frontend hook for price guides
 - `convex/catalog/queries.ts::getPart` - Status-aware query
 - `convex/catalog/actions.ts::enqueueRefreshPart` - Enqueue refresh action
-- `convex/catalog/refreshWorker.ts::drainCatalogRefreshOutbox` - Batch worker
+- `convex/catalog/refreshWorker.ts::processCatalogRefreshJobs` - Batch worker
 - `convex/catalog/refreshWorker.ts::processSingleOutboxMessage` - Immediate worker
 - `convex/marketplaces/bricklink/catalog/*/actions.ts` - BrickLink catalog fetch helpers built on the shared transport layer
 - `convex/crons.ts` - Cron job definitions

@@ -60,8 +60,8 @@ export const catalogTables = {
       filterFields: ["businessAccountId", "sortLocation"],
     }),
 
-  // Refresh outbox for background data updates from Bricklink
-  catalogRefreshOutbox: defineTable({
+  // Refresh jobs for background data updates from Bricklink
+  catalogRefreshJobs: defineTable({
     tableName: v.union(
       v.literal("parts"),
       v.literal("partColors"),
@@ -86,7 +86,7 @@ export const catalogTables = {
     processedAt: v.optional(v.number()),
     // createdAt removed - using _creationTime
   })
-    .index("by_status_time", ["status", "nextAttemptAt"]) // NEW: For worker queries
+    .index("by_status_priority_time", ["status", "priority", "nextAttemptAt"]) // For priority-aware worker queries
     .index("by_table_primary", ["tableName", "primaryKey"])
     .index("by_table_primary_secondary", ["tableName", "primaryKey", "secondaryKey"]),
 
