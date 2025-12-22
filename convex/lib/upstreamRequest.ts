@@ -232,9 +232,10 @@ function serializeBody(body: unknown): { bodyInit: BodyInit | undefined; content
 }
 
 type ConsumeResult = {
-  granted: boolean;
+  ok: boolean;
   remaining: number;
   resetAt: number;
+  retryAfter: number;
 };
 
 async function consumeRateLimit(
@@ -264,11 +265,12 @@ async function consumeRateLimit(
       bucket: options.bucket,
     });
 
-    if (response.granted) {
+    if (response.ok) {
       result = {
-        granted: true,
+        ok: true,
         remaining: response.remaining,
         resetAt: response.resetAt,
+        retryAfter: 0,
       };
       onAttempt?.({
         attempt,
@@ -285,7 +287,7 @@ async function consumeRateLimit(
       break;
     }
 
-    const waitMs = Math.max(MIN_DEFERRAL_DELAY_MS, response.resetAt - Date.now());
+    const waitMs = Math.max(MIN_DEFERRAL_DELAY_MS, response.retryAfter);
     onAttempt?.({
       attempt,
       method,

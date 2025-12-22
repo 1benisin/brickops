@@ -65,6 +65,11 @@ export const consumeToken = internalMutation({
 
     console.debug(`Rate limit granted: ${bucket}, remaining: ${remaining} out of ${capacity}`);
 
-    return { granted, resetAt, remaining } as const;
+    return {
+      ok: granted,
+      retryAfter: granted ? 0 : Math.max(0, resetAt - now),
+      remaining,
+      resetAt,
+    } as const;
   },
 });

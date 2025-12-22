@@ -43,8 +43,8 @@ export const lookupBrickowlId = internalAction({
       provider: "brickowl",
     });
 
-    if (!token.granted) {
-      const retryAfterMs = Math.max(0, token.resetAt - Date.now());
+    if (!token.ok) {
+      const retryAfterMs = token.retryAfter;
       console.warn(`BrickOwl rate limit reached for catalog lookup, retry after ${retryAfterMs}ms`);
       return ""; // Gracefully degrade
     }
