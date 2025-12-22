@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, internalQuery } from "../_generated/server";
+import { mutation, internalQuery, internalMutation } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
 import type { WithoutSystemFields } from "convex/server";
@@ -11,10 +11,10 @@ import {
   getCurrentAvailableFromLedger,
   getLastSyncedSeq,
   enqueueMarketplaceSync,
-  ensureBrickowlIdForPart,
   shouldSyncInventoryToMarketplace,
 } from "./helpers";
 import { requireUserRole } from "../users/authorization";
+import { ensurePartPlaceholder } from "../catalog/mutations";
 import {
   addInventoryItemArgs,
   addInventoryItemReturns,
@@ -83,8 +83,8 @@ export const addInventoryItem = mutation({
       throw new ConvexError("Quantity available cannot be negative");
     }
 
-    // Ensure the catalog entry for this part has a BrickOwl identifier (or an explicit placeholder).
-    await ensureBrickowlIdForPart(ctx, args.partNumber);
+    // Ensure the catalog entry for this part exists (creates placeholder if missing)
+    const part = await ensurePartPlaceholder(ctx, args.partNumber);
 
     // TOTO - check for duplicate item going into same drawer
     // TODO - Similarity check: verify that other parts in the same location
@@ -123,6 +123,7 @@ export const addInventoryItem = mutation({
       // createdAt removed - using _creationTime
       // TODO - add tags
       marketplaceSync: marketplaceSyncData,
+      lifecycleStatus: part.status === "complete" ? "ready_to_sync" : "awaiting_catalog",
     };
 
     const id = await ctx.db.insert("inventoryItems", document);
@@ -173,22 +174,24 @@ export const addInventoryItem = mutation({
       })),
     );
 
-    // Enqueue sync for providers that should sync
-    await Promise.all(
-      enabledProviders
-        .filter((p) => p.shouldSync)
-        .map(async ({ provider }) => {
-          await enqueueMarketplaceSync(ctx, {
-            businessAccountId,
-            itemId: id,
-            provider,
-            kind: "create",
-            lastSyncedSeq: 0, // New item, never synced
-            currentSeq,
-            correlationId,
-          });
-        }),
-    );
+    // Enqueue sync for providers that should sync (ONLY if item is ready)
+    if (document.lifecycleStatus === "ready_to_sync") {
+      await Promise.all(
+        enabledProviders
+          .filter((p) => p.shouldSync)
+          .map(async ({ provider }) => {
+            await enqueueMarketplaceSync(ctx, {
+              businessAccountId,
+              itemId: id,
+              provider,
+              kind: "create",
+              lastSyncedSeq: 0, // New item, never synced
+              currentSeq,
+              correlationId,
+            });
+          }),
+      );
+    }
 
     // Phase 3: Update sync status based on whether providers should sync
     // Set to "pending" for providers that were enqueued, "disabled" for providers that shouldn't sync
@@ -549,6 +552,79 @@ export const deleteInventoryItem = mutation({
     // No immediate sync - worker will process outbox message within 30 seconds
 
     return { itemId: args.itemId, archived: true };
+  },
+});
+
+/**
+ * Promote inventory items for a specific part once catalog enrichment is complete.
+ * This is called by the catalog worker.
+ */
+export const promoteItemsForPart = internalMutation({
+  args: {
+    partNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Find all items awaiting catalog data for this part
+    const items = await ctx.db
+      .query("inventoryItems")
+      .withIndex("by_partNumber_lifecycleStatus", (q) =>
+        q.eq("partNumber", args.partNumber).eq("lifecycleStatus", "awaiting_catalog"),
+      )
+      .collect();
+
+    if (items.length === 0) return;
+
+    console.log(`[Promotion] Promoting ${items.length} items for part ${args.partNumber}`);
+
+    for (const item of items) {
+      const timestamp = Date.now();
+      const correlationId = crypto.randomUUID();
+
+      // 1. Update status to ready_to_sync
+      await ctx.db.patch(item._id, {
+        lifecycleStatus: "ready_to_sync",
+        updatedAt: timestamp,
+      });
+
+      // 2. Enqueue marketplace sync for enabled providers
+      const providers = ["bricklink", "brickowl"] as const;
+      const enabledProviders = await Promise.all(
+        providers.map(async (provider) => ({
+          provider,
+          shouldSync: await shouldSyncInventoryToMarketplace(
+            ctx.db,
+            item.businessAccountId,
+            provider,
+          ),
+        })),
+      );
+
+      // Get current sequence for this item
+      const lastLedgerEntry = await ctx.db
+        .query("inventoryQuantityLedger")
+        .withIndex("by_item_seq", (q) => q.eq("itemId", item._id))
+        .order("desc")
+        .first();
+      const currentSeq = lastLedgerEntry?.seq ?? 1;
+
+      await Promise.all(
+        enabledProviders
+          .filter((p) => p.shouldSync)
+          .map(async ({ provider }) => {
+            const lastSyncedSeq = await getLastSyncedSeq(ctx.db, item._id, provider);
+
+            await enqueueMarketplaceSync(ctx, {
+              businessAccountId: item.businessAccountId,
+              itemId: item._id,
+              provider,
+              kind: "create", // Treat as create since it was never synced
+              lastSyncedSeq,
+              currentSeq,
+              correlationId,
+            });
+          }),
+      );
+    }
   },
 });
 

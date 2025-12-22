@@ -21,7 +21,7 @@ import {
   updateInventory as updateBrickOwlInventory,
   deleteInventory as deleteBrickOwlInventory,
 } from "../marketplaces/brickowl/inventory/actions";
-import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
+import { formatApiError } from "./helpers";
 
 type InventoryItemDoc = Doc<"inventoryItems">;
 
@@ -427,9 +427,11 @@ async function callMarketplaceAPI(
           };
         }
 
-        const brickowlId = await ensureBrickowlIdForPartAction(ctx, args.item.partNumber);
+        const part = await ctx.runQuery(internal.catalog.parts.getPartInternal, {
+          partNumber: args.item.partNumber,
+        });
 
-        if (brickowlId === null) {
+        if (!part) {
           return {
             success: false,
             error: `Part ${args.item.partNumber} not found in catalog`,
@@ -437,7 +439,9 @@ async function callMarketplaceAPI(
           };
         }
 
-        if (brickowlId === "") {
+        const brickowlId = part.brickowlId;
+
+        if (brickowlId === undefined || brickowlId === "") {
           return {
             success: false,
             error: `BrickOwl ID not available for part ${args.item.partNumber}.`,
@@ -456,7 +460,7 @@ async function callMarketplaceAPI(
             };
           }
 
-          const color = await ctx.runQuery(internal.catalog.queries.getColorInternal, {
+          const color = await ctx.runQuery(internal.catalog.colors.getColorInternal, {
             colorId: bricklinkColorId,
           });
 

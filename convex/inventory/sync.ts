@@ -281,7 +281,7 @@ async function syncCreate(
       };
     }
 
-    const color = await ctx.runQuery(internal.catalog.queries.getColorInternal, {
+    const color = await ctx.runQuery(internal.catalog.colors.getColorInternal, {
       colorId: bricklinkColorId,
     });
 

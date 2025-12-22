@@ -81,6 +81,7 @@ export const partTableFields = {
   ldrawId: v.optional(v.string()), // LDraw part ID from Rebrickable
   legoId: v.optional(v.string()), // LEGO part ID from Rebrickable
   lastFetched: v.number(), // Universal freshness timestamp
+  status: v.union(v.literal("pending"), v.literal("complete")), // Enrichment status
 };
 
 /**

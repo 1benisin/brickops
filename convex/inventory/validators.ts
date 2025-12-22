@@ -163,6 +163,12 @@ export const listInventoryItemsReturns = v.array(
     isArchived: v.optional(v.boolean()), // Matches schema - optional field
     deletedAt: v.optional(v.number()),
     marketplaceSync: marketplaceSync,
+    lifecycleStatus: v.union(
+      v.literal("awaiting_catalog"),
+      v.literal("ready_to_sync"),
+      v.literal("synced"),
+      v.literal("error"),
+    ),
   }),
 );
 
