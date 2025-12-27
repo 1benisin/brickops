@@ -6,7 +6,7 @@
 import type { Provider } from "./schema";
 import type { RateLimitConfig } from "./schema";
 
-export const RATE_LIMIT_CONFIGS: Record<Provider, RateLimitConfig> = {
+const RATE_LIMIT_CONFIGS: Record<Provider, RateLimitConfig> = {
   bricklink: {
     capacity: 210, // requests per hour
     windowDurationMs: 60 * 60 * 1000, // 1 hour

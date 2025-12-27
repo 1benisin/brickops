@@ -1,6 +1,4 @@
 import { CircuitBreaker } from "./circuitBreaker";
-import { sharedRateLimiter } from "./inMemoryRateLimiter";
-import { RateLimiter } from "./inMemoryRateLimiter";
 import { RetryOptions, withRetry } from "./retry";
 import { ApiError, ExternalProvider, RequestContext, toApiError } from "./types";
 
@@ -35,8 +33,6 @@ const DEFAULT_RETRY: RetryOptions = {
   backoffFactor: 2,
   jitterRatio: 0.2,
 };
-
-const identitySegment = (identityKey?: string) => identityKey ?? "system";
 
 const toSearchParams = (query?: Record<string, string | number | boolean | undefined>) => {
   if (!query) {
@@ -81,7 +77,6 @@ const serializeBody = (body: unknown) => {
 
 export class ExternalHttpClient {
   private readonly circuitBreaker: CircuitBreaker;
-  private readonly rateLimiter: RateLimiter;
   private readonly fetchImpl: FetchLike;
 
   constructor(
@@ -90,12 +85,10 @@ export class ExternalHttpClient {
     private readonly defaultHeaders: Record<string, string> = {},
     options: {
       circuitBreaker?: CircuitBreaker;
-      rateLimiter?: RateLimiter;
       fetchImpl?: FetchLike;
     } = {},
   ) {
     this.circuitBreaker = options.circuitBreaker ?? new CircuitBreaker();
-    this.rateLimiter = options.rateLimiter ?? sharedRateLimiter;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -106,7 +99,8 @@ export class ExternalHttpClient {
       headers,
       body,
       identityKey,
-      rateLimit,
+      // rateLimit is kept in RequestOptions for backwards compatibility but is now a no-op.
+      // Rate limiting should be handled externally via consumeToken mutation.
       retry,
       expectJson = true,
     } = options;
@@ -127,9 +121,6 @@ export class ExternalHttpClient {
     }
 
     const url = `${this.baseUrl}${path}${toSearchParams(query)}`;
-
-    this.applyRateLimit({ endpoint: path, identityKey, rateLimit });
-
     const finalHeaders = this.buildHeaders(headers, body);
 
     const execute = async () => {
@@ -160,24 +151,6 @@ export class ExternalHttpClient {
     const withCircuitBreaker = () => this.circuitBreaker.exec(execute);
 
     return withRetry(withCircuitBreaker, retry ?? DEFAULT_RETRY);
-  }
-
-  private applyRateLimit(context: {
-    endpoint: string;
-    identityKey?: string;
-    rateLimit?: RateLimitConfig;
-  }) {
-    const { endpoint, identityKey, rateLimit } = context;
-    if (!rateLimit) {
-      return;
-    }
-
-    const key = `${this.provider}:${endpoint}:${identitySegment(identityKey)}`;
-    this.rateLimiter.consume({
-      key,
-      capacity: rateLimit.capacity,
-      intervalMs: rateLimit.intervalMs,
-    });
   }
 
   private buildHeaders(headers?: Record<string, string>, body?: unknown) {

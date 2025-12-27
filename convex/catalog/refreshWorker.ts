@@ -211,7 +211,7 @@ async function processJob(ctx: ActionCtx, message: Doc<"catalogRefreshJobs">): P
       let ldrawId: string | undefined;
       let legoId: string | undefined;
       try {
-        const rebrickableClient = new RebrickableClient();
+        const rebrickableClient = new RebrickableClient(ctx);
         const rebrickablePartsMap = await rebrickableClient.getPartsByBricklinkIds([
           message.primaryKey,
         ]);
@@ -277,7 +277,7 @@ async function processJob(ctx: ActionCtx, message: Doc<"catalogRefreshJobs">): P
       // Fetch BrickOwl mapping from Rebrickable
       let brickowlColorId: number | null | undefined;
       try {
-        const rebrickableClient = new RebrickableClient();
+        const rebrickableClient = new RebrickableClient(ctx);
         const colors = await rebrickableClient.getColors();
 
         // Find the Rebrickable color that has this BrickLink ID

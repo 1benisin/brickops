@@ -1,4 +1,10 @@
-import { query, internalQuery, internalMutation, action, internalAction } from "../_generated/server";
+import {
+  query,
+  internalQuery,
+  internalMutation,
+  action,
+  internalAction,
+} from "../_generated/server";
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
@@ -369,7 +375,7 @@ export const getBrickowlPartId = action({
     await requireActiveUser(ctx);
 
     const { RebrickableClient } = await import("../api/rebrickable");
-    const client = new RebrickableClient();
+    const client = new RebrickableClient(ctx);
 
     try {
       const partsMap = await client.getPartsByBricklinkIds([args.bricklinkPartId]);
@@ -421,7 +427,7 @@ export const getBrickowlPartIds = action({
     }
 
     const { RebrickableClient } = await import("../api/rebrickable");
-    const client = new RebrickableClient();
+    const client = new RebrickableClient(ctx);
 
     try {
       const partsMap = await client.getPartsByBricklinkIds(args.bricklinkPartIds);
@@ -463,13 +469,13 @@ export const getBricklinkPartIdsFromBrickowl = internalAction({
   args: {
     brickowlId: v.string(),
   },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     if (process.env.DISABLE_EXTERNAL_CALLS === "true") {
       return [];
     }
 
     const { RebrickableClient } = await import("../api/rebrickable");
-    const client = new RebrickableClient();
+    const client = new RebrickableClient(ctx);
 
     try {
       const partsMap = await client.getPartsByBrickowlIds([args.brickowlId]);

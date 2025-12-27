@@ -49,28 +49,6 @@ export const marketplaceTables = {
     .index("by_webhookToken", ["webhookToken"])
     .index("by_provider_active", ["provider", "isActive"]),
 
-  // Per-business-account rate limiting for marketplace APIs
-  marketplaceRateLimits: defineTable({
-    businessAccountId: v.id("businessAccounts"),
-    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
-    // Quota tracking
-    windowStart: v.number(), // Unix timestamp when current window started
-    requestCount: v.number(), // Requests made in current window
-    capacity: v.number(), // Max requests per window (see marketplace/rateLimitConfig.ts)
-    windowDurationMs: v.number(), // Window size in ms (see marketplace/rateLimitConfig.ts)
-    // Alerting
-    alertThreshold: v.number(), // Percentage (0-1) to trigger alert (default: 0.8)
-    alertEmitted: v.boolean(), // Whether alert has been sent for current window
-    // Circuit breaker
-    consecutiveFailures: v.number(), // Track failures for circuit breaker
-    circuitBreakerOpenUntil: v.optional(v.number()), // If set, circuit is open
-    // Metadata
-    lastRequestAt: v.number(),
-    lastResetAt: v.number(),
-    // createdAt removed - using _creationTime
-    updatedAt: v.number(),
-  }).index("by_business_provider", ["businessAccountId", "provider"]),
-
   // BrickLink push notifications (from webhooks or polling)
   bricklinkNotifications: defineTable({
     businessAccountId: v.id("businessAccounts"),

@@ -101,7 +101,6 @@ enforce provider-specific quotas.
 │   │   ├── email.ts            # Email service client
 │   │   ├── env.ts              # Environment variable helpers
 │   │   ├── httpClient.ts       # Generic HTTP client
-│   │   ├── inMemoryRateLimiter.ts # In-memory rate limiting
 │   │   ├── metrics.ts          # Metrics recording helpers
 │   │   ├── rateLimiter.ts      # Rate limiting abstractions
 │   │   ├── retry.ts            # Retry logic implementation
