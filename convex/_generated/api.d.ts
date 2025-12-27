@@ -8,11 +8,16 @@
  * @module
  */
 
-import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 import type * as api_rebrickable from "../api/rebrickable.js";
 import type * as auth from "../auth.js";
 import type * as catalog_categories from "../catalog/categories.js";
 import type * as catalog_colors from "../catalog/colors.js";
+import type * as catalog_ensure from "../catalog/ensure.js";
 import type * as catalog_helpers from "../catalog/helpers.js";
 import type * as catalog_mutations from "../catalog/mutations.js";
 import type * as catalog_outbox from "../catalog/outbox.js";
@@ -40,11 +45,9 @@ import type * as lib_dbRateLimiter from "../lib/dbRateLimiter.js";
 import type * as lib_encryption from "../lib/encryption.js";
 import type * as lib_external_brickognize from "../lib/external/brickognize.js";
 import type * as lib_external_brickowl from "../lib/external/brickowl.js";
-import type * as lib_external_circuitBreaker from "../lib/external/circuitBreaker.js";
 import type * as lib_external_email from "../lib/external/email.js";
 import type * as lib_external_env from "../lib/external/env.js";
 import type * as lib_external_httpClient from "../lib/external/httpClient.js";
-import type * as lib_external_inMemoryRateLimiter from "../lib/external/inMemoryRateLimiter.js";
 import type * as lib_external_metrics from "../lib/external/metrics.js";
 import type * as lib_external_retry from "../lib/external/retry.js";
 import type * as lib_external_types from "../lib/external/types.js";
@@ -109,9 +112,7 @@ import type * as marketplaces_shared_credentialHelpers from "../marketplaces/sha
 import type * as marketplaces_shared_credentialTypes from "../marketplaces/shared/credentialTypes.js";
 import type * as marketplaces_shared_credentials from "../marketplaces/shared/credentials.js";
 import type * as marketplaces_shared_getCredentialDoc from "../marketplaces/shared/getCredentialDoc.js";
-import type * as marketplaces_shared_rateLimitHelpers from "../marketplaces/shared/rateLimitHelpers.js";
 import type * as marketplaces_shared_rateLimitTypes from "../marketplaces/shared/rateLimitTypes.js";
-import type * as marketplaces_shared_rateLimits from "../marketplaces/shared/rateLimits.js";
 import type * as marketplaces_shared_storeTypes from "../marketplaces/shared/storeTypes.js";
 import type * as marketplaces_shared_webhookTokens from "../marketplaces/shared/webhookTokens.js";
 import type * as marketplaces_shared_webhooks from "../marketplaces/shared/webhooks.js";
@@ -148,6 +149,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   "catalog/categories": typeof catalog_categories;
   "catalog/colors": typeof catalog_colors;
+  "catalog/ensure": typeof catalog_ensure;
   "catalog/helpers": typeof catalog_helpers;
   "catalog/mutations": typeof catalog_mutations;
   "catalog/outbox": typeof catalog_outbox;
@@ -175,11 +177,9 @@ declare const fullApi: ApiFromModules<{
   "lib/encryption": typeof lib_encryption;
   "lib/external/brickognize": typeof lib_external_brickognize;
   "lib/external/brickowl": typeof lib_external_brickowl;
-  "lib/external/circuitBreaker": typeof lib_external_circuitBreaker;
   "lib/external/email": typeof lib_external_email;
   "lib/external/env": typeof lib_external_env;
   "lib/external/httpClient": typeof lib_external_httpClient;
-  "lib/external/inMemoryRateLimiter": typeof lib_external_inMemoryRateLimiter;
   "lib/external/metrics": typeof lib_external_metrics;
   "lib/external/retry": typeof lib_external_retry;
   "lib/external/types": typeof lib_external_types;
@@ -244,9 +244,7 @@ declare const fullApi: ApiFromModules<{
   "marketplaces/shared/credentialTypes": typeof marketplaces_shared_credentialTypes;
   "marketplaces/shared/credentials": typeof marketplaces_shared_credentials;
   "marketplaces/shared/getCredentialDoc": typeof marketplaces_shared_getCredentialDoc;
-  "marketplaces/shared/rateLimitHelpers": typeof marketplaces_shared_rateLimitHelpers;
   "marketplaces/shared/rateLimitTypes": typeof marketplaces_shared_rateLimitTypes;
-  "marketplaces/shared/rateLimits": typeof marketplaces_shared_rateLimits;
   "marketplaces/shared/storeTypes": typeof marketplaces_shared_storeTypes;
   "marketplaces/shared/webhookTokens": typeof marketplaces_shared_webhookTokens;
   "marketplaces/shared/webhooks": typeof marketplaces_shared_webhooks;
@@ -270,5 +268,11 @@ declare const fullApi: ApiFromModules<{
   "users/mutations": typeof users_mutations;
   "users/queries": typeof users_queries;
 }>;
-export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
-export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;

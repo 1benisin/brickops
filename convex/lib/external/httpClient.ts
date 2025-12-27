@@ -1,4 +1,3 @@
-import { CircuitBreaker } from "./circuitBreaker";
 import { RetryOptions, withRetry } from "./retry";
 import { ApiError, ExternalProvider, RequestContext, toApiError } from "./types";
 
@@ -76,7 +75,6 @@ const serializeBody = (body: unknown) => {
 };
 
 export class ExternalHttpClient {
-  private readonly circuitBreaker: CircuitBreaker;
   private readonly fetchImpl: FetchLike;
 
   constructor(
@@ -84,11 +82,9 @@ export class ExternalHttpClient {
     private readonly baseUrl: string,
     private readonly defaultHeaders: Record<string, string> = {},
     options: {
-      circuitBreaker?: CircuitBreaker;
       fetchImpl?: FetchLike;
     } = {},
   ) {
-    this.circuitBreaker = options.circuitBreaker ?? new CircuitBreaker();
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -148,9 +144,7 @@ export class ExternalHttpClient {
       } satisfies RequestResult<T>;
     };
 
-    const withCircuitBreaker = () => this.circuitBreaker.exec(execute);
-
-    return withRetry(withCircuitBreaker, retry ?? DEFAULT_RETRY);
+    return withRetry(execute, retry ?? DEFAULT_RETRY);
   }
 
   private buildHeaders(headers?: Record<string, string>, body?: unknown) {

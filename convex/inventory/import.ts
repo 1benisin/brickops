@@ -13,7 +13,7 @@
  */
 
 import { action } from "../_generated/server";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { getBLInventories } from "../marketplaces/bricklink/inventory/actions";
 import { mapBlToConvexInventory } from "../marketplaces/bricklink/inventory/transformers";
 import { importSummaryValidator, type AddInventoryItemArgs } from "./validators";
@@ -66,9 +66,9 @@ export const initialBricklinkInventoryImport = action({
         imported++;
 
         // Ensure catalog data (part, colors, prices) is complete and up-to-date
-        // This enqueues refresh for missing or stale data
+        // Uses self-scheduling pattern - will fetch data in background if needed
         try {
-          await ctx.runAction(api.catalog.parts.ensurePartCompleteness, {
+          await ctx.runAction(internal.catalog.ensure.ensureCatalogPart, {
             partNumber: blInventory.item.no,
           });
         } catch (error) {

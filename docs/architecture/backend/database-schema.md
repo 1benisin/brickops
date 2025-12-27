@@ -241,36 +241,27 @@ marketplaceCredentials: defineTable({
 .index("by_businessAccount", ["businessAccountId"]),               // All credentials per tenant
 ```
 
-### marketplaceRateLimits (Stories 3.2-3.3)
+### rateLimits
 
-**Purpose**: Per-tenant, per-provider rate limiting for marketplace APIs with circuit breaker support
+**Purpose**: Database-backed rate limiting for external APIs using token bucket algorithm
 
 ```typescript
-marketplaceRateLimits: defineTable({
-  businessAccountId: v.id("businessAccounts"),
-  provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+rateLimits: defineTable({
+  // Key fields
+  bucket: v.string(),             // e.g. "bricklink:account:{id}" or "rebrickable:global"
+  provider: providerValidator,    // "bricklink" | "brickowl" | "rebrickable"
 
-  // Quota tracking
-  windowStart: v.number(),        // Unix timestamp when current window started
-  requestCount: v.number(),       // Requests made in current window
-  capacity: v.number(),           // Max requests per window (provider-specific)
-  windowDurationMs: v.number(),   // Window size in ms (provider-specific)
-
-  // Alerting
-  alertThreshold: v.number(),     // Percentage (0-1) to trigger alert (default: 0.8)
-  alertEmitted: v.boolean(),      // Whether alert has been sent for current window
-
-  // Circuit breaker
-  consecutiveFailures: v.number(),              // Track failures for circuit breaker
-  circuitBreakerOpenUntil: v.optional(v.number()), // If set, circuit is open
+  // Quota tracking (token bucket)
+  capacity: v.number(),           // Max requests per window
+  windowMs: v.number(),           // Window size in ms
+  remaining: v.number(),          // Tokens remaining in current window
+  resetAt: v.number(),            // epoch ms when window resets
 
   // Metadata
-  lastRequestAt: v.number(),
-  lastResetAt: v.number(),
-  createdAt: v.number(),
   updatedAt: v.number(),
 })
-.index("by_business_provider", ["businessAccountId", "provider"]),  // Primary lookup
+  .index("by_bucket", ["bucket"])
+  .index("by_provider", ["provider"]),
 ```
 
 ### orders / orderItems / orderNotifications (Unified Marketplace Orders)
@@ -448,10 +439,10 @@ orderNotifications: defineTable({
 - `by_business_provider` index on `marketplaceCredentials` ensures one credential set per provider per tenant
 - Supports zero, one, or both marketplaces configured independently
 
-**Rate Limit Isolation**:
+**Rate Limiting**:
 
-- `by_business_provider` index on `marketplaceRateLimits` provides per-tenant, per-provider quota tracking
-- BrickLink and BrickOwl quotas are completely independent
+- `by_bucket` index on `rateLimits` provides per-bucket quota tracking
+- Token bucket algorithm with configurable capacity and window duration per provider
 
 ### Sync Queue Queries (Story 3.4)
 
@@ -485,10 +476,9 @@ orderNotifications: defineTable({
 
 **Story 3.2-3.3 Changes (Marketplace Clients)**:
 
-- Created `marketplaceRateLimits` table for database-backed rate limiting per tenant per provider
+- Created `rateLimits` table for database-backed rate limiting using token bucket algorithm
 - Extended `inventoryItems` with marketplace sync fields: `partNumber`, `price`, `notes`, `bricklinkLotId`, `brickowlLotId`
 - Added indexes `by_bricklinkLotId` and `by_brickowlLotId` for efficient sync lookups
-- Rate limiting supports circuit breaker pattern (opens after 5 failures) with 80% alert threshold
 
 **Story 3.4 Changes (Sync Orchestration)**:
 
