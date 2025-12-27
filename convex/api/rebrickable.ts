@@ -1,23 +1,36 @@
+/**
+ * Rebrickable API Client
+ *
+ * Uses database-backed rate limiting via upstreamRequest + consumeToken.
+ * Rate limit: 60 requests per minute (1 req/sec average)
+ */
+
+import { ConvexError } from "convex/values";
+import type { ActionCtx } from "../_generated/server";
 import { getRebrickableApiKey } from "../lib/external/env";
-import { ExternalHttpClient, RequestOptions, RequestResult } from "../lib/external/httpClient";
-import { RateLimitConfig } from "../lib/external/httpClient";
 import { recordMetric } from "../lib/external/metrics";
 import { HealthCheckResult, normalizeApiError } from "../lib/external/types";
-import { getRateLimitConfig } from "../ratelimiter/rateLimitConfig";
+import {
+  upstreamRequest,
+  type ApiKeyAuth,
+  type RateLimitOptions,
+  type RetryPolicy,
+  type UpstreamResponse,
+} from "../lib/upstreamRequest";
 
 const BASE_URL = "https://rebrickable.com/api/v3";
 const HEALTH_ENDPOINT = "/lego/colors/";
 
-// Get Rebrickable rate limit configuration
-const getRebrickableRateLimit = (): RateLimitConfig => {
-  const config = getRateLimitConfig("rebrickable");
-  return {
-    capacity: config.capacity,
-    intervalMs: config.windowDurationMs,
-  };
-};
+// Global bucket for Rebrickable - no per-tenant rate limiting needed
+// since Rebrickable uses a single API key for all requests
+const REBRICKABLE_BUCKET = "rebrickable:global";
 
-const DEFAULT_RATE_LIMIT = getRebrickableRateLimit();
+const DEFAULT_RETRY_POLICY: RetryPolicy = {
+  attempts: 3,
+  baseDelayMs: 300,
+  maxDelayMs: 5_000,
+  retryStatuses: [408, 425, 429, 500, 502, 503, 504],
+};
 
 // ============================================================================
 // Types
@@ -47,32 +60,130 @@ export interface RebrickablePartsListResponse {
   results: RebrickablePart[];
 }
 
+export interface RebrickableColor {
+  id: number;
+  name: string;
+  rgb: string;
+  is_trans: boolean;
+  external_ids: RebrickableExternalIds;
+}
+
+export interface RebrickableColorListResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: RebrickableColor[];
+}
+
 // ============================================================================
-// Client
+// Request Helpers
 // ============================================================================
 
-export class RebrickableClient {
-  private readonly apiKey: string;
-  private readonly http: ExternalHttpClient;
+export type RebrickableRequestOptions = {
+  path: string;
+  query?: Record<string, string | number | boolean | undefined>;
+  rateLimit?: RateLimitOptions;
+  retry?: RetryPolicy;
+};
 
-  constructor(options: { apiKey?: string } = {}) {
-    this.apiKey = options.apiKey ?? getRebrickableApiKey();
-    this.http = new ExternalHttpClient("rebrickable", BASE_URL, {
+export type RebrickableRequestResult<T> = {
+  data: T;
+  status: number;
+  headers: Headers;
+  durationMs: number;
+};
+
+function buildRebrickableAuth(apiKey: string): ApiKeyAuth {
+  return {
+    kind: "apiKey",
+    value: apiKey,
+    header: {
+      name: "Authorization",
+      prefix: "key ",
+    },
+  };
+}
+
+function buildDefaultRateLimit(): RateLimitOptions {
+  return {
+    provider: "rebrickable",
+    bucket: REBRICKABLE_BUCKET,
+  };
+}
+
+/**
+ * Make a request to the Rebrickable API with database-backed rate limiting.
+ */
+export async function makeRebrickableRequest<T>(
+  ctx: ActionCtx,
+  options: RebrickableRequestOptions,
+): Promise<RebrickableRequestResult<T>> {
+  const apiKey = getRebrickableApiKey();
+  const { path, query, rateLimit, retry } = options;
+
+  const response: UpstreamResponse<T> = await upstreamRequest<T>({
+    ctx,
+    baseUrl: BASE_URL,
+    path,
+    method: "GET",
+    query,
+    headers: {
       Accept: "application/json",
       "User-Agent": "BrickOps/1.0",
-      Authorization: `key ${this.apiKey}`,
+    },
+    auth: buildRebrickableAuth(apiKey),
+    rateLimit: rateLimit ?? buildDefaultRateLimit(),
+    retry: retry ?? DEFAULT_RETRY_POLICY,
+    expectJson: true,
+  });
+
+  if (!response.ok || response.data === undefined) {
+    throw new ConvexError({
+      code: "REBRICKABLE_REQUEST_FAILED",
+      message: `Rebrickable API request failed with status ${response.status}`,
+      httpStatus: response.status,
+      endpoint: path,
+      rawBody: response.rawBody,
     });
   }
 
-  async request<T>(
-    options: Omit<RequestOptions, "rateLimit"> & { rateLimit?: RateLimitConfig },
-  ): Promise<RequestResult<T>> {
-    return this.http.request<T>({
-      ...options,
-      rateLimit: options.rateLimit ?? DEFAULT_RATE_LIMIT,
-    });
+  return {
+    data: response.data,
+    status: response.status,
+    headers: response.headers,
+    durationMs: response.durationMs,
+  };
+}
+
+// ============================================================================
+// Client Class (Backwards Compatible)
+// ============================================================================
+
+/**
+ * Rebrickable API client with database-backed rate limiting.
+ *
+ * This class provides a convenient wrapper around the Rebrickable API.
+ * All methods require an ActionCtx for database-backed rate limiting.
+ */
+export class RebrickableClient {
+  private readonly ctx: ActionCtx;
+  private readonly apiKey: string;
+
+  constructor(ctx: ActionCtx, options: { apiKey?: string } = {}) {
+    this.ctx = ctx;
+    this.apiKey = options.apiKey ?? getRebrickableApiKey();
   }
 
+  /**
+   * Make a raw request to the Rebrickable API.
+   */
+  async request<T>(options: RebrickableRequestOptions): Promise<RebrickableRequestResult<T>> {
+    return makeRebrickableRequest<T>(this.ctx, options);
+  }
+
+  /**
+   * Health check endpoint - fetches colors with page_size=1
+   */
   async healthCheck(): Promise<HealthCheckResult> {
     const started = Date.now();
     try {
@@ -256,6 +367,7 @@ export class RebrickableClient {
       throw apiError;
     }
   }
+
   /**
    * Get all colors with external IDs
    * Returns a list of colors
@@ -290,19 +402,4 @@ export class RebrickableClient {
       throw apiError;
     }
   }
-}
-
-export interface RebrickableColor {
-  id: number;
-  name: string;
-  rgb: string;
-  is_trans: boolean;
-  external_ids: RebrickableExternalIds;
-}
-
-export interface RebrickableColorListResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: RebrickableColor[];
 }
