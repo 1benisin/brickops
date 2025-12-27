@@ -10,6 +10,34 @@ import {
 export type { RequireUserReturn };
 
 // ============================================================================
+// FRESHNESS CONSTANTS
+// ============================================================================
+
+/** Default freshness threshold in milliseconds (30 days) */
+export const DEFAULT_FRESHNESS_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
+
+// ============================================================================
+// FRESHNESS HELPERS
+// ============================================================================
+
+/**
+ * Check if a timestamp is within the freshness window.
+ * Returns true if data is fresh, false if stale or missing.
+ *
+ * @param lastFetched - Timestamp when data was last fetched (epoch ms)
+ * @param thresholdMs - Freshness threshold in milliseconds (default: 30 days)
+ */
+export function isFresh(
+  lastFetched: number | undefined,
+  thresholdMs: number = DEFAULT_FRESHNESS_THRESHOLD_MS,
+): boolean {
+  if (lastFetched === undefined || lastFetched === 0) {
+    return false;
+  }
+  return Date.now() - lastFetched < thresholdMs;
+}
+
+// ============================================================================
 // AUTHENTICATION HELPERS
 // ============================================================================
 

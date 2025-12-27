@@ -107,18 +107,16 @@ The following core business entities are used across the stack:
 - Indexes: by_business_provider (primary lookup), by_businessAccount (all credentials per tenant)
 - Security: All credential fields encrypted using AES-GCM; never returned in plaintext
 
-## MarketplaceRateLimits (Stories 3.2-3.3)
+## RateLimits
 
-- Purpose: Database-backed rate limiting for marketplace APIs with circuit breaker support
+- Purpose: Database-backed rate limiting for external APIs using token bucket algorithm
 - Key Attributes:
-  - References: businessAccountId, provider (bricklink/brickowl)
-  - Quota: windowStart, requestCount, capacity, windowDurationMs
-  - Alerting: alertThreshold (0.8), alertEmitted
-  - Circuit Breaker: consecutiveFailures, circuitBreakerOpenUntil
-  - Metadata: lastRequestAt, lastResetAt, createdAt, updatedAt
-- Relationships: One per provider per business account; queried/mutated by marketplace store clients
-- Indexes: by_business_provider (primary lookup)
-- Implementation: Pre-flight quota check + post-request recording; 24-hour window for BrickLink, 1-minute window for BrickOwl
+  - Key: bucket (e.g. "bricklink:account:{id}"), provider (bricklink/brickowl/rebrickable)
+  - Quota: capacity, windowMs, remaining, resetAt
+  - Metadata: updatedAt
+- Relationships: One per bucket; used by external API clients
+- Indexes: by_bucket (primary lookup), by_provider
+- Implementation: Token bucket with configurable capacity per provider; 1-hour window for BrickLink (210 req/hour), 1-minute window for BrickOwl (200 req/min) and Rebrickable (60 req/min)
 
 ## MarketplaceOrder, PickSession, TodoItem
 

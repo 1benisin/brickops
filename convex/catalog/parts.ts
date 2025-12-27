@@ -321,8 +321,11 @@ export const updatePartBrickowlId = internalMutation({
 // ============================================================================
 
 /**
- * Enqueue part refresh - adds to outbox for background processing
- * Used by reactive hooks to trigger data updates
+ * Enqueue part refresh - triggers the self-scheduling ensureCatalogPart orchestrator.
+ * Used by reactive hooks to trigger data updates.
+ *
+ * This now delegates to the new ensureCatalogPart pattern which handles
+ * rate limiting and retries internally via self-scheduling.
  */
 export const enqueueRefreshPart = action({
   args: {
@@ -331,29 +334,11 @@ export const enqueueRefreshPart = action({
   handler: async (ctx, args) => {
     await requireActiveUser(ctx);
 
-    // Check if already in outbox (pending or inflight)
-    const existing = await ctx.runQuery(internal.catalog.outbox.getOutboxMessage, {
-      tableName: "parts",
-      primaryKey: args.partNumber,
-    });
-
-    if (existing && (existing.status === "pending" || existing.status === "inflight")) {
-      // Already queued, skip silently
-      return;
-    }
-
-    // Get lastFetched from part (if exists)
-    const part = await ctx.runQuery(internal.catalog.parts.getPartInternal, {
+    // Delegate to new self-scheduling orchestrator
+    // forceRefresh: true ensures we fetch fresh data even if existing data isn't stale
+    await ctx.runAction(internal.catalog.ensure.ensureCatalogPart, {
       partNumber: args.partNumber,
-    });
-
-    // Enqueue to outbox
-    await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
-      tableName: "parts",
-      primaryKey: args.partNumber,
-      secondaryKey: undefined,
-      lastFetched: part?.lastFetched,
-      priority: 1, // HIGH priority for user-triggered refreshes
+      forceRefresh: true,
     });
   },
 });
@@ -509,8 +494,16 @@ export const getBricklinkPartIdsFromBrickowl = internalAction({
 });
 
 /**
+ * @deprecated Use `internal.catalog.ensure.ensureCatalogPart` instead.
+ *
+ * This function is kept for backward compatibility but delegates to the new
+ * self-scheduling orchestrator pattern. The new pattern:
+ * - Handles rate limiting internally via self-scheduling retries
+ * - Returns { status: "complete" } or { status: "scheduled" }
+ * - Supports continuation callbacks via onComplete parameter
+ *
  * Ensure a part exists in the catalog and is up-to-date.
- * Checks part, colors, and prices. Enqueues refreshes if missing or stale.
+ * Checks part, colors, and prices. Fetches missing or stale data.
  */
 export const ensurePartCompleteness = action({
   args: {
@@ -519,93 +512,9 @@ export const ensurePartCompleteness = action({
   handler: async (ctx, args) => {
     await requireActiveUser(ctx);
 
-    const { partNumber } = args;
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-
-    // 1. Check Part
-    const part = await ctx.runQuery(internal.catalog.parts.getPartInternal, {
-      partNumber,
+    // Delegate to new self-scheduling orchestrator
+    await ctx.runAction(internal.catalog.ensure.ensureCatalogPart, {
+      partNumber: args.partNumber,
     });
-
-    const isPartMissing = !part;
-    const isPartStale = part && part.lastFetched < thirtyDaysAgo;
-    const isBrickowlIdMissing = part && !part.brickowlId;
-
-    if (isPartMissing || isPartStale || isBrickowlIdMissing) {
-      await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
-        tableName: "parts",
-        primaryKey: partNumber,
-        lastFetched: part?.lastFetched,
-        priority: 1,
-      });
-    }
-
-    // 2. Check Part Colors
-    const partColors = await ctx.runQuery(internal.catalog.colors.getPartColorsInternal, {
-      partNumber,
-    });
-
-    const areColorsMissing = partColors.length === 0;
-    // Check if ANY color is stale (or if we have colors but they are old)
-    // Actually, usually we refresh all colors for a part at once.
-    // Let's check the oldest fetch time.
-    const oldestColorFetch =
-      partColors.length > 0 ? Math.min(...partColors.map((pc) => pc.lastFetched)) : 0;
-    const areColorsStale = partColors.length > 0 && oldestColorFetch < thirtyDaysAgo;
-
-    if (areColorsMissing || areColorsStale) {
-      await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
-        tableName: "partColors",
-        primaryKey: partNumber,
-        lastFetched: oldestColorFetch || undefined,
-        priority: 1,
-      });
-    }
-
-    // Check if referenced colors exist and have mappings
-    if (partColors.length > 0) {
-      const uniqueColorIds = Array.from(new Set(partColors.map((pc) => pc.colorId)));
-
-      for (const colorId of uniqueColorIds) {
-        if (colorId === 0) continue;
-
-        const color = await ctx.runQuery(internal.catalog.colors.getColorInternal, { colorId });
-
-        // Refresh if color is missing entirely OR if we haven't checked for BrickOwl mapping yet (undefined)
-        // null means we checked and found no mapping, so don't retry
-        if (!color || color.brickowlColorId === undefined) {
-          await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
-            tableName: "colors",
-            primaryKey: String(colorId),
-            priority: 2,
-          });
-        }
-      }
-    }
-
-    // 3. Check Prices (only if we have colors)
-    if (partColors.length > 0) {
-      for (const pc of partColors) {
-        const prices = await ctx.runQuery(internal.catalog.prices.getPriceGuideInternal, {
-          partNumber,
-          colorId: pc.colorId,
-        });
-
-        const arePricesMissing = prices.length === 0;
-        const oldestPriceFetch =
-          prices.length > 0 ? Math.min(...prices.map((p) => p.lastFetched)) : 0;
-        const arePricesStale = prices.length > 0 && oldestPriceFetch < thirtyDaysAgo;
-
-        if (arePricesMissing || arePricesStale) {
-          await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
-            tableName: "partPrices",
-            primaryKey: partNumber,
-            secondaryKey: String(pc.colorId),
-            lastFetched: oldestPriceFetch || undefined,
-            priority: 1,
-          });
-        }
-      }
-    }
   },
 });
