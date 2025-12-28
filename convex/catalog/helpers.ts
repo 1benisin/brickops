@@ -37,6 +37,31 @@ export function isFresh(
   return Date.now() - lastFetched < thresholdMs;
 }
 
+/**
+ * Check if a global color entry is complete with BrickOwl mapping.
+ * Returns true if:
+ * - Color exists in the colors table
+ * - Color data is fresh
+ * - brickowlColorId is defined (not undefined) - can be null if checked but not found
+ *
+ * @param color - The color document from the colors table (can be null if not found)
+ * @param thresholdMs - Freshness threshold in milliseconds (default: 30 days)
+ */
+export function isColorComplete(
+  color: { lastFetched: number; brickowlColorId?: number | null } | null,
+  thresholdMs: number = DEFAULT_FRESHNESS_THRESHOLD_MS,
+): boolean {
+  if (!color) {
+    return false;
+  }
+  // brickowlColorId must be defined (can be null = "checked but not found", which is complete)
+  // undefined means we haven't attempted to look it up yet
+  if (color.brickowlColorId === undefined) {
+    return false;
+  }
+  return isFresh(color.lastFetched, thresholdMs);
+}
+
 // ============================================================================
 // AUTHENTICATION HELPERS
 // ============================================================================

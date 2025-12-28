@@ -11,9 +11,10 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import { isFresh, DEFAULT_FRESHNESS_THRESHOLD_MS } from "./helpers";
+import { isFresh, isColorComplete, DEFAULT_FRESHNESS_THRESHOLD_MS } from "./helpers";
 import { fetchBlPart, fetchBlPartColors } from "../marketplaces/bricklink/catalog/parts/actions";
 import { fetchBlPriceGuide } from "../marketplaces/bricklink/catalog/priceGuides/actions";
+import { fetchBlColor } from "../marketplaces/bricklink/catalog/colors/actions";
 import { RebrickableClient } from "../api/rebrickable";
 import type { PriceGuideRecord } from "./prices";
 
@@ -23,6 +24,7 @@ import type { PriceGuideRecord } from "./prices";
 
 const MAX_RETRIES = 3;
 const PRICE_BATCH_SIZE = 5; // Process prices for N colors at a time to avoid timeout
+const GLOBAL_COLOR_BATCH_SIZE = 5; // Process global colors for N colors at a time to avoid timeout
 
 /**
  * Schedule a continuation callback by function name.
@@ -48,10 +50,12 @@ async function scheduleCallback(
 type FreshnessStatus = {
   partFresh: boolean;
   colorsFresh: boolean;
+  globalColorsFresh: boolean;
   pricesFresh: boolean;
   allFresh: boolean;
   part: Doc<"parts"> | null;
   partColors: Doc<"partColors">[];
+  colorIdsNeedingGlobalColors: number[];
   colorIdsNeedingPrices: number[];
 };
 
@@ -91,7 +95,32 @@ export const getPartFreshnessStatus = internalQuery({
       partColors.length > 0 &&
       partColors.every((pc) => isFresh(pc.lastFetched, threshold));
 
-    // 3. Check prices freshness for each color
+    // 3. Check global colors freshness (need BrickOwl color ID mappings)
+    const colorIdsNeedingGlobalColors: number[] = [];
+
+    if (partColors.length > 0) {
+      for (const pc of partColors) {
+        // Skip colorId 0 - "Not Applicable" doesn't need a global color entry
+        if (pc.colorId === 0) {
+          continue;
+        }
+
+        const globalColor = await ctx.db
+          .query("colors")
+          .withIndex("by_colorId", (q) => q.eq("colorId", pc.colorId))
+          .first();
+
+        // Need global color if: doesn't exist, is stale, or missing BrickOwl mapping
+        if (forceRefresh || !isColorComplete(globalColor, threshold)) {
+          colorIdsNeedingGlobalColors.push(pc.colorId);
+        }
+      }
+    }
+
+    const globalColorsFresh =
+      !forceRefresh && partColors.length > 0 && colorIdsNeedingGlobalColors.length === 0;
+
+    // 4. Check prices freshness for each color
     const colorIdsNeedingPrices: number[] = [];
 
     if (partColors.length > 0) {
@@ -119,10 +148,12 @@ export const getPartFreshnessStatus = internalQuery({
     return {
       partFresh,
       colorsFresh,
+      globalColorsFresh,
       pricesFresh,
-      allFresh: partFresh && colorsFresh && pricesFresh,
+      allFresh: partFresh && colorsFresh && globalColorsFresh && pricesFresh,
       part,
       partColors,
+      colorIdsNeedingGlobalColors,
       colorIdsNeedingPrices,
     };
   },
@@ -169,8 +200,15 @@ export const ensureCatalogPart = internalAction({
     ),
     // Internal state for self-scheduling (callers should not set these)
     _step: v.optional(
-      v.union(v.literal("check"), v.literal("part"), v.literal("colors"), v.literal("prices")),
+      v.union(
+        v.literal("check"),
+        v.literal("part"),
+        v.literal("colors"),
+        v.literal("global_colors"),
+        v.literal("prices"),
+      ),
     ),
+    _globalColorOffset: v.optional(v.number()),
     _priceColorOffset: v.optional(v.number()),
     _attempt: v.optional(v.number()),
   },
@@ -180,6 +218,7 @@ export const ensureCatalogPart = internalAction({
       forceRefresh = false,
       onComplete,
       _step = "check",
+      _globalColorOffset = 0,
       _priceColorOffset = 0,
       _attempt = 1,
     } = args;
@@ -227,8 +266,21 @@ export const ensureCatalogPart = internalAction({
         return { status: "scheduled" as const };
       }
 
+      if (!status.globalColorsFresh) {
+        // Part and partColors are fresh, need global color entries with BrickOwl mappings
+        await ctx.scheduler.runAfter(0, internal.catalog.ensure.ensureCatalogPart, {
+          partNumber,
+          forceRefresh,
+          onComplete,
+          _step: "global_colors",
+          _globalColorOffset: 0,
+          _attempt: 1,
+        });
+        return { status: "scheduled" as const };
+      }
+
       if (!status.pricesFresh) {
-        // Part and colors are fresh, need prices
+        // Part, partColors, and global colors are fresh, need prices
         await ctx.scheduler.runAfter(0, internal.catalog.ensure.ensureCatalogPart, {
           partNumber,
           forceRefresh,
@@ -362,7 +414,142 @@ export const ensureCatalogPart = internalAction({
         data: partColorsData,
       });
 
-      // Continue to prices step
+      // Continue to global_colors step (ensure BrickOwl color mappings exist)
+      await ctx.scheduler.runAfter(0, internal.catalog.ensure.ensureCatalogPart, {
+        partNumber,
+        forceRefresh,
+        onComplete,
+        _step: "global_colors",
+        _globalColorOffset: 0,
+        _attempt: 1,
+      });
+
+      return { status: "scheduled" as const };
+    }
+
+    // ========================================================================
+    // STEP: GLOBAL_COLORS - Fetch global color entries with BrickOwl mappings
+    // ========================================================================
+    if (_step === "global_colors") {
+      // Get current state to find which colors need global entries
+      const status = await ctx.runQuery(internal.catalog.ensure.getPartFreshnessStatus, {
+        partNumber,
+        forceRefresh,
+      });
+
+      const colorIds = status.colorIdsNeedingGlobalColors;
+
+      // No colors need global entries - continue to prices
+      if (colorIds.length === 0 || _globalColorOffset >= colorIds.length) {
+        await ctx.scheduler.runAfter(0, internal.catalog.ensure.ensureCatalogPart, {
+          partNumber,
+          forceRefresh,
+          onComplete,
+          _step: "prices",
+          _priceColorOffset: 0,
+          _attempt: 1,
+        });
+        return { status: "scheduled" as const };
+      }
+
+      // Get batch of colors to process
+      const batch = colorIds.slice(_globalColorOffset, _globalColorOffset + GLOBAL_COLOR_BATCH_SIZE);
+
+      // Process each color in the batch
+      for (const colorId of batch) {
+        // Check rate limit for BrickLink
+        const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+          bucket: "brickopsAdmin",
+          provider: "bricklink",
+        });
+
+        if (!token.ok) {
+          if (_attempt >= MAX_RETRIES) {
+            // Log warning but continue with other colors
+            console.warn(
+              `[ensureCatalogPart] Rate limit exceeded for global color ${colorId}, skipping`,
+            );
+            continue;
+          }
+          // Schedule retry for remaining colors
+          await ctx.scheduler.runAfter(
+            token.retryAfter,
+            internal.catalog.ensure.ensureCatalogPart,
+            {
+              partNumber,
+              forceRefresh,
+              onComplete,
+              _step: "global_colors",
+              _globalColorOffset,
+              _attempt: _attempt + 1,
+            },
+          );
+          return { status: "scheduled" as const };
+        }
+
+        try {
+          // Fetch color from BrickLink
+          const colorData = await fetchBlColor(ctx, { colorId });
+
+          // Fetch BrickOwl mapping from Rebrickable (best effort)
+          let brickowlColorId: number | null | undefined;
+          try {
+            const rebrickableClient = new RebrickableClient(ctx);
+            const colors = await rebrickableClient.getColors();
+
+            // Find the Rebrickable color that has this BrickLink ID
+            const matchingColor = colors.find((c) =>
+              c.external_ids.BrickLink?.some((id) => Number(id) === colorId),
+            );
+
+            if (
+              matchingColor &&
+              matchingColor.external_ids.BrickOwl &&
+              matchingColor.external_ids.BrickOwl.length > 0
+            ) {
+              brickowlColorId = Number(matchingColor.external_ids.BrickOwl[0]);
+            } else {
+              brickowlColorId = null; // Checked but not found
+            }
+          } catch (error) {
+            console.warn(
+              `[ensureCatalogPart] Failed to fetch BrickOwl color mapping for color ${colorId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            // Leave undefined to retry later
+          }
+
+          // Save color data with BrickOwl mapping
+          await ctx.runMutation(internal.catalog.colors.upsertColor, {
+            data: {
+              ...colorData,
+              brickowlColorId,
+            },
+          });
+        } catch (error) {
+          // Log error but continue with other colors
+          console.warn(
+            `[ensureCatalogPart] Failed to fetch global color ${colorId}:`,
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+      }
+
+      // More colors to process? Schedule next batch
+      const nextOffset = _globalColorOffset + GLOBAL_COLOR_BATCH_SIZE;
+      if (nextOffset < colorIds.length) {
+        await ctx.scheduler.runAfter(0, internal.catalog.ensure.ensureCatalogPart, {
+          partNumber,
+          forceRefresh,
+          onComplete,
+          _step: "global_colors",
+          _globalColorOffset: nextOffset,
+          _attempt: 1,
+        });
+        return { status: "scheduled" as const };
+      }
+
+      // All global colors processed, continue to prices
       await ctx.scheduler.runAfter(0, internal.catalog.ensure.ensureCatalogPart, {
         partNumber,
         forceRefresh,
@@ -480,5 +667,170 @@ export const ensureCatalogPart = internalAction({
 
     // Shouldn't reach here
     throw new Error(`Unknown step: ${_step}`);
+  },
+});
+
+// ============================================================================
+// SINGLE COLOR ENSURE ACTION
+// ============================================================================
+
+/**
+ * Ensure a single global color entry exists with BrickOwl mapping.
+ *
+ * Uses self-scheduling retry pattern:
+ * - Rate limit denied → schedules self for later
+ * - Returns { status: "complete" } when color data is fresh with BrickOwl mapping
+ * - Returns { status: "scheduled" } when work was scheduled
+ * - Calls onComplete continuation when color is ready
+ *
+ * @example
+ * // Simple usage - just ensure color exists
+ * await ctx.runAction(internal.catalog.ensure.ensureColor, {
+ *   colorId: 11,
+ * });
+ *
+ * @example
+ * // With continuation callback
+ * await ctx.runAction(internal.catalog.ensure.ensureColor, {
+ *   colorId: 11,
+ *   onComplete: {
+ *     action: "internal.inventory.continueWithColor",
+ *     args: { colorId: 11 },
+ *   },
+ * });
+ */
+export const ensureColor = internalAction({
+  args: {
+    colorId: v.number(),
+    forceRefresh: v.optional(v.boolean()),
+    onComplete: v.optional(
+      v.object({
+        action: v.string(),
+        args: v.any(),
+      }),
+    ),
+    // Internal state for self-scheduling (callers should not set these)
+    _attempt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { colorId, forceRefresh = false, onComplete, _attempt = 1 } = args;
+
+    // Skip colorId 0 - "Not Applicable" doesn't need a global color entry
+    if (colorId === 0) {
+      if (onComplete) {
+        await scheduleCallback(ctx, onComplete.action, onComplete.args);
+      }
+      return { status: "complete" as const };
+    }
+
+    // Check if color already exists and is complete
+    const existingColor = await ctx.runQuery(internal.catalog.ensure.getColorFreshnessStatus, {
+      colorId,
+      forceRefresh,
+    });
+
+    if (existingColor.isComplete) {
+      if (onComplete) {
+        await scheduleCallback(ctx, onComplete.action, onComplete.args);
+      }
+      return { status: "complete" as const };
+    }
+
+    // Check rate limit for BrickLink
+    const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+      bucket: "brickopsAdmin",
+      provider: "bricklink",
+    });
+
+    if (!token.ok) {
+      if (_attempt >= MAX_RETRIES) {
+        throw new Error(
+          `Failed to ensure color ${colorId}: rate limit exceeded after ${MAX_RETRIES} attempts`,
+        );
+      }
+      // Schedule retry after rate limit window
+      await ctx.scheduler.runAfter(token.retryAfter, internal.catalog.ensure.ensureColor, {
+        colorId,
+        forceRefresh,
+        onComplete,
+        _attempt: _attempt + 1,
+      });
+      return { status: "scheduled" as const };
+    }
+
+    // Fetch color from BrickLink
+    const colorData = await fetchBlColor(ctx, { colorId });
+
+    // Fetch BrickOwl mapping from Rebrickable (best effort)
+    let brickowlColorId: number | null | undefined;
+    try {
+      const rebrickableClient = new RebrickableClient(ctx);
+      const colors = await rebrickableClient.getColors();
+
+      // Find the Rebrickable color that has this BrickLink ID
+      const matchingColor = colors.find((c) =>
+        c.external_ids.BrickLink?.some((id) => Number(id) === colorId),
+      );
+
+      if (
+        matchingColor &&
+        matchingColor.external_ids.BrickOwl &&
+        matchingColor.external_ids.BrickOwl.length > 0
+      ) {
+        brickowlColorId = Number(matchingColor.external_ids.BrickOwl[0]);
+      } else {
+        brickowlColorId = null; // Checked but not found
+      }
+    } catch (error) {
+      console.warn(
+        `[ensureColor] Failed to fetch BrickOwl color mapping for color ${colorId}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      // Leave undefined to retry later
+    }
+
+    // Save color data with BrickOwl mapping
+    await ctx.runMutation(internal.catalog.colors.upsertColor, {
+      data: {
+        ...colorData,
+        brickowlColorId,
+      },
+    });
+
+    // Fire onComplete if provided
+    if (onComplete) {
+      await scheduleCallback(ctx, onComplete.action, onComplete.args);
+    }
+
+    return { status: "complete" as const };
+  },
+});
+
+/**
+ * Get freshness status for a single global color.
+ * Returns whether the color is complete (exists with BrickOwl mapping).
+ */
+export const getColorFreshnessStatus = internalQuery({
+  args: {
+    colorId: v.number(),
+    forceRefresh: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { colorId, forceRefresh = false } = args;
+    const threshold = DEFAULT_FRESHNESS_THRESHOLD_MS;
+
+    // Skip colorId 0 - "Not Applicable" is always complete
+    if (colorId === 0) {
+      return { isComplete: true, color: null };
+    }
+
+    const color = await ctx.db
+      .query("colors")
+      .withIndex("by_colorId", (q) => q.eq("colorId", colorId))
+      .first();
+
+    const isComplete = !forceRefresh && isColorComplete(color, threshold);
+
+    return { isComplete, color };
   },
 });
