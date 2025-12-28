@@ -15,6 +15,7 @@ import {
 } from "./helpers";
 import { requireUserRole } from "../users/authorization";
 import { ensurePartPlaceholder } from "../catalog/mutations";
+import { isColorComplete } from "../catalog/helpers";
 import {
   addInventoryItemArgs,
   addInventoryItemReturns,
@@ -86,6 +87,18 @@ export const addInventoryItem = mutation({
     // Ensure the catalog entry for this part exists (creates placeholder if missing)
     const part = await ensurePartPlaceholder(ctx, args.partNumber);
 
+    // Check if the global color entry exists with BrickOwl mapping for BrickOwl sync
+    // ColorId 0 means "Not Applicable" and doesn't need a global color entry
+    const colorId = Number.parseInt(args.colorId, 10);
+    let colorComplete = true;
+    if (!Number.isNaN(colorId) && colorId !== 0) {
+      const globalColor = await ctx.db
+        .query("colors")
+        .withIndex("by_colorId", (q) => q.eq("colorId", colorId))
+        .first();
+      colorComplete = isColorComplete(globalColor);
+    }
+
     // TOTO - check for duplicate item going into same drawer
     // TODO - Similarity check: verify that other parts in the same location
     //        are not too similar to the part being added, to avoid pick errors.
@@ -108,6 +121,11 @@ export const addInventoryItem = mutation({
       },
     };
 
+    // Determine lifecycle status based on part AND color completeness
+    // Both part catalog data and global color (with BrickOwl mapping) must be complete
+    const catalogComplete = part.status === "complete" && colorComplete;
+    const lifecycleStatus = catalogComplete ? "ready_to_sync" : "awaiting_catalog";
+
     const document: WithoutSystemFields<Doc<"inventoryItems">> = {
       businessAccountId,
       name: args.name,
@@ -123,7 +141,7 @@ export const addInventoryItem = mutation({
       // createdAt removed - using _creationTime
       // TODO - add tags
       marketplaceSync: marketplaceSyncData,
-      lifecycleStatus: part.status === "complete" ? "ready_to_sync" : "awaiting_catalog",
+      lifecycleStatus,
     };
 
     const id = await ctx.db.insert("inventoryItems", document);
@@ -557,7 +575,8 @@ export const deleteInventoryItem = mutation({
 
 /**
  * Promote inventory items for a specific part once catalog enrichment is complete.
- * This is called by the catalog worker.
+ * This is called by the catalog worker after ensureCatalogPart completes.
+ * Only promotes items where both part AND color data are ready.
  */
 export const promoteItemsForPart = internalMutation({
   args: {
@@ -574,9 +593,30 @@ export const promoteItemsForPart = internalMutation({
 
     if (items.length === 0) return;
 
-    console.log(`[Promotion] Promoting ${items.length} items for part ${args.partNumber}`);
+    console.log(`[Promotion] Checking ${items.length} items for part ${args.partNumber}`);
 
+    let promotedCount = 0;
     for (const item of items) {
+      // Check if the color is also complete (has BrickOwl mapping)
+      // ColorId 0 means "Not Applicable" and doesn't need a global color entry
+      const colorId = Number.parseInt(item.colorId, 10);
+      let colorComplete = true;
+      if (!Number.isNaN(colorId) && colorId !== 0) {
+        const globalColor = await ctx.db
+          .query("colors")
+          .withIndex("by_colorId", (q) => q.eq("colorId", colorId))
+          .first();
+        colorComplete = isColorComplete(globalColor);
+      }
+
+      // Skip items where color data is not yet complete
+      if (!colorComplete) {
+        console.log(
+          `[Promotion] Skipping item ${item._id} - color ${item.colorId} not complete yet`,
+        );
+        continue;
+      }
+
       const timestamp = Date.now();
       const correlationId = crypto.randomUUID();
 
@@ -585,6 +625,7 @@ export const promoteItemsForPart = internalMutation({
         lifecycleStatus: "ready_to_sync",
         updatedAt: timestamp,
       });
+      promotedCount++;
 
       // 2. Enqueue marketplace sync for enabled providers
       const providers = ["bricklink", "brickowl"] as const;
@@ -623,6 +664,12 @@ export const promoteItemsForPart = internalMutation({
               correlationId,
             });
           }),
+      );
+    }
+
+    if (promotedCount > 0) {
+      console.log(
+        `[Promotion] Promoted ${promotedCount}/${items.length} items for part ${args.partNumber}`,
       );
     }
   },
