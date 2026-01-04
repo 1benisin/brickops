@@ -1,16 +1,16 @@
 /**
- * Universal Refresh Manager for Bricklink Data
+ * Freshness Utilities and Database Update Mutations for Bricklink Data
  *
- * Consolidated refresh orchestration system that handles:
- * - Queue management (add, process, cleanup)
+ * This module provides:
  * - Freshness detection and staleness checking
- * - Rate-limited batch processing
- * - Bricklink API integration
+ * - Database upsert mutations for catalog data
+ *
+ * Note: Catalog data refreshing is now handled by the self-scheduling
+ * ensureCatalogPart pattern in convex/catalog/ensure.ts
  */
 
 import { internalMutation } from "../../../_generated/server";
 import { v } from "convex/values";
-import { isStale as isRefreshStale } from "../freshness";
 
 export { isStale } from "../freshness";
 
@@ -25,135 +25,8 @@ export const REFRESH_PRIORITY = {
   LOW: 3, // Prices, bulk updates
 } as const;
 
-// NOTE: BATCH_SIZE moved to catalog/refreshWorker.ts
-
 // ============================================================================
-// FRESHNESS UTILITIES
-// ============================================================================
-
-/**
- * Check data freshness with configurable threshold and schedule refresh if stale
- * Must be called via ctx.runMutation from mutations - ensures proper transaction handling
- *
- * Priority Logic:
- * - If priority is explicitly provided, use it (for user-triggered actions)
- * - Otherwise, auto-determine: categories = LOW, others = MEDIUM
- *
- * Key Structure:
- * - parts: primaryKey = partNo
- * - colors: primaryKey = colorId (stringified)
- * - categories: primaryKey = categoryId (stringified)
- * - partColors: primaryKey = partNo, secondaryKey = colorId (stringified)
- * - partPrices: primaryKey = partNo, secondaryKey = colorId (stringified)
- *   Note: partPrices refresh fetches all 4 variants (N/U × sold/stock)
- */
-export const checkAndScheduleRefresh = internalMutation({
-  args: {
-    tableName: v.union(
-      v.literal("parts"),
-      v.literal("categories"),
-      v.literal("partColors"),
-      v.literal("partPrices"),
-    ),
-    primaryKey: v.union(v.string(), v.number()),
-    secondaryKey: v.optional(v.union(v.string(), v.number())),
-    lastFetched: v.optional(v.number()),
-    freshnessThresholdDays: v.optional(v.number()),
-    priority: v.optional(v.number()),
-  },
-  handler: async (ctx, params) => {
-    const thresholdDays = params.freshnessThresholdDays ?? 30;
-    const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-
-    // If no lastFetched or older than threshold, it's stale
-    const stale = isRefreshStale(params.lastFetched, thresholdMs);
-
-    if (stale) {
-      // Normalize keys to strings
-      const primaryKey = String(params.primaryKey);
-      const secondaryKey = params.secondaryKey ? String(params.secondaryKey) : undefined;
-
-      // Determine priority: use explicit if provided, otherwise auto-determine
-      const priority =
-        params.priority ??
-        (params.tableName === "categories" ? REFRESH_PRIORITY.LOW : REFRESH_PRIORITY.MEDIUM);
-
-      // Check if already queued (pending or inflight)
-      const existing = await ctx.db
-        .query("catalogRefreshJobs")
-        .withIndex("by_table_primary_secondary", (q) =>
-          q
-            .eq("tableName", params.tableName)
-            .eq("primaryKey", primaryKey)
-            .eq("secondaryKey", secondaryKey),
-        )
-        .filter((q) =>
-          q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")),
-        )
-        .first();
-
-      if (!existing) {
-        // Generate display recordId for logging
-        const recordId = secondaryKey ? `${primaryKey}:${secondaryKey}` : primaryKey;
-
-        // Add to outbox - worker will process it
-        await ctx.db.insert("catalogRefreshJobs", {
-          tableName: params.tableName,
-          primaryKey,
-          secondaryKey,
-          recordId,
-          priority,
-          lastFetched: params.lastFetched,
-          status: "pending",
-          attempt: 0,
-          nextAttemptAt: now, // Immediate processing
-          // createdAt removed - using _creationTime
-        });
-      }
-    }
-  },
-});
-
-// ============================================================================
-// OUTBOX MANAGEMENT (queue processing moved to catalog/refreshWorker.ts)
-// ============================================================================
-
-/**
- * Clean up old outbox items - called by cron job daily
- * Exported as internalMutation for cron jobs to call
- */
-export const cleanupOutbox = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-    const oldItems = await ctx.db
-      .query("catalogRefreshJobs")
-      .filter((q) =>
-        q.and(
-          q.or(q.eq(q.field("status"), "succeeded"), q.eq(q.field("status"), "failed")),
-          q.lt(q.field("processedAt"), sevenDaysAgo),
-        ),
-      )
-      .collect();
-
-    for (const item of oldItems) {
-      await ctx.db.delete(item._id);
-    }
-
-    const deletedCount = oldItems.length;
-
-    if (deletedCount > 0) {
-      console.log(`[catalog] Cleaned up ${deletedCount} old outbox items`);
-    }
-
-    return { deletedCount };
-  },
-});
-
-// ============================================================================
-// DATABASE UPDATE MUTATIONS (Called by processQueue action)
+// DATABASE UPDATE MUTATIONS
 // ============================================================================
 
 /**
@@ -233,6 +106,3 @@ export const upsertPriceGuide = internalMutation({
     }
   },
 });
-
-// NOTE: Queue processing moved to catalog/refreshWorker.ts
-// This file now only contains helper functions for enqueuing and cleanup

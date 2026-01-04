@@ -13,21 +13,6 @@ export const logHeartbeat = internalAction({
 
 crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbeat);
 
-// Process catalog refresh jobs every 5 minutes (10 items per run = 120 API calls/hour max)
-// refreshes catalog data
-crons.interval(
-  "process-catalog-refresh-jobs",
-  { minutes: 1 },
-  internal.catalog.refreshWorker.processCatalogRefreshJobs,
-);
-
-// Clean up old outbox items daily at 2 AM UTC
-crons.daily(
-  "cleanup-catalog-refresh-outbox",
-  { hourUTC: 2, minuteUTC: 0 },
-  internal.marketplaces.bricklink.catalog.refresh.cleanupOutbox,
-);
-
 // Drain marketplace outbox every 5 minutes (10 items per run = 120 API calls/hour max)
 // syncs inventory to marketplaces
 crons.interval(

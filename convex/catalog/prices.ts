@@ -53,27 +53,11 @@ export const getPriceGuide = query({
       };
     };
 
-    // Check if refresh is in progress (outbox)
-    const outboxMessage = await ctx.db
-      .query("catalogRefreshJobs")
-      .withIndex("by_table_primary_secondary", (q) =>
-        q
-          .eq("tableName", "partPrices")
-          .eq("primaryKey", args.partNumber)
-          .eq("secondaryKey", String(args.colorId)),
-      )
-      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
-      .first();
-
-    const isRefreshing = !!outboxMessage;
-
-    // Determine status: refreshing > stale > fresh
+    // Determine status: stale vs fresh based on lastFetched
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const status: "refreshing" | "stale" | "fresh" = isRefreshing
-      ? "refreshing"
-      : priceRecords.some((pr) => pr.lastFetched < thirtyDaysAgo)
-        ? "stale"
-        : "fresh";
+    const status: "stale" | "fresh" = priceRecords.some((pr) => pr.lastFetched < thirtyDaysAgo)
+      ? "stale"
+      : "fresh";
 
     return {
       data: {
@@ -155,50 +139,31 @@ export const upsertPriceGuide = internalMutation({
 // ============================================================================
 
 /**
- * Enqueue price guide refresh - adds to outbox for background processing
+ * Enqueue price guide refresh - triggers the self-scheduling ensureCatalogPart orchestrator.
+ * Used by reactive hooks to trigger data updates.
+ *
+ * This delegates to the new ensureCatalogPart pattern which handles
+ * rate limiting and retries internally via self-scheduling.
+ *
+ * Note: The colorId parameter is accepted for API compatibility, but the
+ * ensureCatalogPart orchestrator refreshes prices for ALL colors of the part.
+ * This is intentional - it's more efficient to refresh all prices at once,
+ * and ensures consistent freshness across all color variants.
  */
 export const enqueueRefreshPriceGuide = action({
   args: {
     partNumber: v.string(),
-    colorId: v.number(),
+    colorId: v.number(), // Kept for API compatibility; all colors are refreshed
   },
   handler: async (ctx, args) => {
     await requireActiveUser(ctx);
 
-    const existing = await ctx.runQuery(internal.catalog.outbox.getOutboxMessage, {
-      tableName: "partPrices",
-      primaryKey: args.partNumber,
-      secondaryKey: String(args.colorId),
-    });
-
-    if (existing && (existing.status === "pending" || existing.status === "inflight")) {
-      return;
-    }
-
-    // Get lastFetched from any price record for this part+color
-    const prices = await ctx.runQuery(internal.catalog.prices.getPriceGuideInternal, {
+    // Delegate to new self-scheduling orchestrator
+    // forceRefresh: true ensures we fetch fresh data even if existing data isn't stale
+    // Note: ensureCatalogPart refreshes prices for ALL colors, not just args.colorId
+    await ctx.runAction(internal.catalog.ensure.ensureCatalogPart, {
       partNumber: args.partNumber,
-      colorId: args.colorId,
+      forceRefresh: true,
     });
-
-    const isMissing = prices.length === 0;
-    const lastFetched =
-      prices.length > 0 ? Math.min(...prices.map((p) => p.lastFetched)) : undefined;
-
-    // Enqueue to outbox
-    const messageId = await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
-      tableName: "partPrices",
-      primaryKey: args.partNumber,
-      secondaryKey: String(args.colorId),
-      lastFetched,
-      priority: 1, // HIGH priority
-    });
-
-    // If data is missing, schedule immediate processing for better UX
-    if (isMissing && messageId) {
-      await ctx.scheduler.runAfter(0, internal.catalog.refreshWorker.processSingleOutboxMessage, {
-        messageId,
-      });
-    }
   },
 });

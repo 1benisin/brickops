@@ -61,36 +61,6 @@ export const catalogTables = {
       filterFields: ["businessAccountId", "sortLocation"],
     }),
 
-  // Refresh jobs for background data updates from Bricklink
-  catalogRefreshJobs: defineTable({
-    tableName: v.union(
-      v.literal("parts"),
-      v.literal("partColors"),
-      v.literal("partPrices"),
-      v.literal("colors"),
-      v.literal("categories"),
-    ),
-    primaryKey: v.string(), // Always present: partNo, colorId, categoryId
-    secondaryKey: v.optional(v.string()), // For composite keys: colorId (for partColors, partPrices)
-    recordId: v.string(), // Display string for logging (e.g., "3001:1" or "3001")
-    priority: v.number(), // 1 (high) to 3 (low)
-    lastFetched: v.optional(v.number()), // When data was last refreshed (if known)
-    status: v.union(
-      v.literal("pending"),
-      v.literal("inflight"),
-      v.literal("succeeded"),
-      v.literal("failed"),
-    ),
-    attempt: v.number(), // Retry attempt number (starts at 0)
-    nextAttemptAt: v.number(), // Timestamp for next retry attempt
-    lastError: v.optional(v.string()), // Last error message (renamed from errorMessage)
-    processedAt: v.optional(v.number()),
-    // createdAt removed - using _creationTime
-  })
-    .index("by_status_priority_time", ["status", "priority", "nextAttemptAt"]) // For priority-aware worker queries
-    .index("by_table_primary", ["tableName", "primaryKey"])
-    .index("by_table_primary_secondary", ["tableName", "primaryKey", "secondaryKey"]),
-
   // Global LEGO part pricing data from Bricklink (cached with refresh capability)
   // Each part+color can have 4 price records: new/used × sold/stock
   partPrices: defineTable({

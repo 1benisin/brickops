@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getPart, getPartColors, getPriceGuide } from "@/convex/catalog/queries";
+import { getPart } from "@/convex/catalog/parts";
+import { getPartColors } from "@/convex/catalog/colors";
+import { getPriceGuide } from "@/convex/catalog/prices";
 import { createConvexTestContext } from "@/test-utils/convex-test-context";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -95,41 +97,6 @@ describe("catalog status queries", () => {
 
       expect(result.status).toBe("stale");
       expect(result.data?.lastFetched).toBe(staleFetchedAt);
-    });
-
-    it("prefers refreshing status when an outbox message is pending", async () => {
-      const fetchedAt = BASE_NOW - 10 * DAY_MS;
-      const seed = {
-        parts: [
-          {
-            _id: "parts:1",
-            no: "3001",
-            name: "Brick 2 x 4",
-            type: "PART" as const,
-            lastFetched: fetchedAt,
-            createdAt: fetchedAt,
-          },
-        ],
-        catalogRefreshJobs: [
-          {
-            _id: "catalogRefreshJobs:1",
-            tableName: "parts" as const,
-            primaryKey: "3001",
-            secondaryKey: null,
-            recordId: "3001",
-            priority: 1,
-            status: "pending" as const,
-            attempt: 0,
-            nextAttemptAt: BASE_NOW + DAY_MS,
-            createdAt: fetchedAt,
-          },
-        ],
-      } as any;
-      const ctx = createConvexTestContext({ seed });
-
-      const result = await (getPart as any)._handler(ctx, { partNumber: "3001" });
-
-      expect(result.status).toBe("refreshing");
     });
   });
 
@@ -247,52 +214,6 @@ describe("catalog status queries", () => {
       const result = await (getPartColors as any)._handler(ctx, { partNumber: "3001" });
 
       expect(result.status).toBe("stale");
-    });
-
-    it("returns refreshing status when a refresh outbox job exists", async () => {
-      const fetchedAt = BASE_NOW - 4 * DAY_MS;
-      const seed = {
-        partColors: [
-          {
-            _id: "partColors:1",
-            partNo: "3001",
-            colorId: 21,
-            quantity: 100,
-            lastFetched: fetchedAt,
-            createdAt: fetchedAt,
-          },
-        ],
-        colors: [
-          {
-            _id: "colors:1",
-            colorId: 21,
-            colorName: "Bright Red",
-            colorCode: "#ff0000",
-            colorType: "Solid" as const,
-            lastFetched: fetchedAt,
-            createdAt: fetchedAt,
-          },
-        ],
-        catalogRefreshJobs: [
-          {
-            _id: "catalogRefreshJobs:1",
-            tableName: "partColors" as const,
-            primaryKey: "3001",
-            secondaryKey: null,
-            recordId: "3001",
-            priority: 1,
-            status: "pending" as const,
-            attempt: 0,
-            nextAttemptAt: BASE_NOW + DAY_MS,
-            createdAt: fetchedAt,
-          },
-        ],
-      } as any;
-      const ctx = createConvexTestContext({ seed });
-
-      const result = await (getPartColors as any)._handler(ctx, { partNumber: "3001" });
-
-      expect(result.status).toBe("refreshing");
     });
   });
 
@@ -446,53 +367,6 @@ describe("catalog status queries", () => {
       });
 
       expect(result.status).toBe("stale");
-    });
-
-    it("returns refreshing status when an outbox entry exists for the price guide", async () => {
-      const fetchedAt = BASE_NOW - 6 * DAY_MS;
-      const seed = {
-        partPrices: [
-          {
-            _id: "partPrices:1",
-            partNo: "3001",
-            partType: "PART" as const,
-            colorId: 21,
-            newOrUsed: "N" as const,
-            guideType: "stock" as const,
-            currencyCode: "USD",
-            minPrice: 1.0,
-            maxPrice: 5.0,
-            avgPrice: 2.5,
-            qtyAvgPrice: 2.2,
-            unitQuantity: 10,
-            totalQuantity: 100,
-            lastFetched: fetchedAt,
-            createdAt: fetchedAt,
-          },
-        ],
-        catalogRefreshJobs: [
-          {
-            _id: "catalogRefreshJobs:1",
-            tableName: "partPrices" as const,
-            primaryKey: "3001",
-            secondaryKey: "21",
-            recordId: "3001:21",
-            priority: 1,
-            status: "pending" as const,
-            attempt: 0,
-            nextAttemptAt: BASE_NOW + DAY_MS,
-            createdAt: fetchedAt,
-          },
-        ],
-      } as any;
-      const ctx = createConvexTestContext({ seed });
-
-      const result = await (getPriceGuide as any)._handler(ctx, {
-        partNumber: "3001",
-        colorId: 21,
-      });
-
-      expect(result.status).toBe("refreshing");
     });
   });
 });
