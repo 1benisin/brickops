@@ -192,24 +192,9 @@ export const getPart = query({
       categoryName = category?.categoryName ?? null;
     }
 
-    // Check if refresh is in progress (outbox)
-    const outboxMessage = await ctx.db
-      .query("catalogRefreshJobs")
-      .withIndex("by_table_primary_secondary", (q) =>
-        q.eq("tableName", "parts").eq("primaryKey", args.partNumber),
-      )
-      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
-      .first();
-
+    // Determine status: stale vs fresh based on lastFetched
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const isStale = part.lastFetched < thirtyDaysAgo;
-
-    // Determine status: refreshing > stale > fresh
-    const status: "refreshing" | "stale" | "fresh" = outboxMessage
-      ? "refreshing"
-      : isStale
-        ? "stale"
-        : "fresh";
+    const status: "stale" | "fresh" = part.lastFetched < thirtyDaysAgo ? "stale" : "fresh";
 
     return {
       data: {

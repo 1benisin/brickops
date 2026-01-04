@@ -2,7 +2,6 @@ import { internalMutation } from "../_generated/server";
 import type { DatabaseWriter } from "../_generated/server";
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
-import type { Id } from "../_generated/dataModel";
 import {
   categoryTableFields,
   colorTableFields,
@@ -18,6 +17,9 @@ import {
 /**
  * Logic to ensure a part exists, creating a placeholder if it doesn't.
  * Can be called from any mutation.
+ *
+ * Note: This only creates the placeholder. Callers are responsible for
+ * triggering ensureCatalogPart to fetch the actual part data.
  */
 export async function ensurePartPlaceholder(ctx: { db: DatabaseWriter }, partNumber: string) {
   const existing = await ctx.db
@@ -33,88 +35,16 @@ export async function ensurePartPlaceholder(ctx: { db: DatabaseWriter }, partNum
   const partId = await ctx.db.insert("parts", {
     no: partNumber,
     name: `Placeholder for ${partNumber}`,
-    type: "PART", // Default to PART, worker will correct it
+    type: "PART", // Default to PART, ensureCatalogPart will correct it
     lastFetched: 0,
     status: "pending",
     updatedAt: Date.now(),
-  });
-
-  // Enqueue refresh job
-  const recordId = partNumber;
-  await ctx.db.insert("catalogRefreshJobs", {
-    tableName: "parts",
-    primaryKey: partNumber,
-    secondaryKey: undefined,
-    recordId,
-    priority: 1,
-    lastFetched: 0,
-    status: "pending",
-    attempt: 0,
-    nextAttemptAt: Date.now(),
   });
 
   const part = await ctx.db.get(partId);
   if (!part) throw new Error("Failed to retrieve created part");
   return part;
 }
-
-// ============================================================================
-// INTERNAL MUTATIONS (for data upserts and outbox management)
-// ============================================================================
-
-/**
- * Enqueue a catalog refresh request to the outbox
- * Idempotent - won't create duplicate if already pending/inflight
- * Returns the message ID if created, or undefined if duplicate found
- */
-export const enqueueCatalogRefresh = internalMutation({
-  args: {
-    tableName: v.union(v.literal("parts"), v.literal("partColors"), v.literal("partPrices")),
-    primaryKey: v.string(),
-    secondaryKey: v.optional(v.string()),
-    lastFetched: v.optional(v.number()),
-    priority: v.number(),
-  },
-  handler: async (ctx, args): Promise<Id<"catalogRefreshJobs"> | undefined> => {
-    // Check if already queued (pending or inflight)
-    const existing = await ctx.db
-      .query("catalogRefreshJobs")
-      .withIndex("by_table_primary_secondary", (q) =>
-        q
-          .eq("tableName", args.tableName)
-          .eq("primaryKey", args.primaryKey)
-          .eq("secondaryKey", args.secondaryKey),
-      )
-      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
-      .first();
-
-    if (existing) {
-      // Already queued, skip
-      return undefined;
-    }
-
-    // Generate display recordId
-    const recordId = args.secondaryKey
-      ? `${args.primaryKey}:${args.secondaryKey}`
-      : args.primaryKey;
-
-    // Insert to outbox and return ID
-    const messageId = await ctx.db.insert("catalogRefreshJobs", {
-      tableName: args.tableName,
-      primaryKey: args.primaryKey,
-      secondaryKey: args.secondaryKey,
-      recordId,
-      priority: args.priority,
-      lastFetched: args.lastFetched,
-      status: "pending",
-      attempt: 0,
-      nextAttemptAt: Date.now(), // Immediate processing
-      // createdAt removed - using _creationTime
-    });
-
-    return messageId;
-  },
-});
 
 // ============================================================================
 // UPSERT MUTATIONS

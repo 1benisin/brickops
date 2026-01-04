@@ -40,11 +40,13 @@ convex/
 │       ├── credentialTypes.ts      # Marketplace credential DTOs
 │       └── rateLimitTypes.ts       # Rate limit DTOs
 ├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
-│   ├── actions.ts              # External API orchestration
+│   ├── ensure.ts               # Self-scheduling catalog data orchestrator
 │   ├── helpers.ts              # Catalog business logic helpers
 │   ├── mutations.ts            # Catalog write operations
+│   ├── colors.ts               # Color queries, mutations, and refresh actions
+│   ├── parts.ts                # Part queries, mutations, and refresh actions
+│   ├── prices.ts               # Price guide queries, mutations, and refresh actions
 │   ├── queries.ts              # Catalog read operations and search
-│   ├── refreshWorker.ts        # Catalog refresh outbox processing
 │   ├── schema.ts               # Catalog table schemas
 │   └── validators.ts           # Catalog input validation
 │

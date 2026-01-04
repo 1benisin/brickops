@@ -55,17 +55,6 @@ export const getPartColors = query({
       };
     }
 
-    // Check if refresh is in progress (outbox)
-    const outboxMessage = await ctx.db
-      .query("catalogRefreshJobs")
-      .withIndex("by_table_primary_secondary", (q) =>
-        q.eq("tableName", "partColors").eq("primaryKey", args.partNumber),
-      )
-      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "inflight")))
-      .first();
-
-    const isRefreshing = !!outboxMessage;
-
     // Get color details for each
     const colorDetails = await Promise.all(
       partColors.map(async (pc) => {
@@ -83,13 +72,11 @@ export const getPartColors = query({
       }),
     );
 
-    // Determine status: refreshing > stale > fresh
+    // Determine status: stale vs fresh based on lastFetched
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const status: "refreshing" | "stale" | "fresh" = isRefreshing
-      ? "refreshing"
-      : partColors.some((pc) => pc.lastFetched < thirtyDaysAgo)
-        ? "stale"
-        : "fresh";
+    const status: "stale" | "fresh" = partColors.some((pc) => pc.lastFetched < thirtyDaysAgo)
+      ? "stale"
+      : "fresh";
 
     return {
       data: colorDetails,
@@ -208,7 +195,11 @@ export const upsertColor = internalMutation({
 // ============================================================================
 
 /**
- * Enqueue part colors refresh - adds to outbox for background processing
+ * Enqueue part colors refresh - triggers the self-scheduling ensureCatalogPart orchestrator.
+ * Used by reactive hooks to trigger data updates.
+ *
+ * This delegates to the new ensureCatalogPart pattern which handles
+ * rate limiting and retries internally via self-scheduling.
  */
 export const enqueueRefreshPartColors = action({
   args: {
@@ -217,38 +208,11 @@ export const enqueueRefreshPartColors = action({
   handler: async (ctx, args) => {
     await requireActiveUser(ctx);
 
-    const existing = await ctx.runQuery(internal.catalog.outbox.getOutboxMessage, {
-      tableName: "partColors",
-      primaryKey: args.partNumber,
-    });
-
-    if (existing && (existing.status === "pending" || existing.status === "inflight")) {
-      return;
-    }
-
-    // Get lastFetched from any partColor record for this part
-    const partColors = await ctx.runQuery(internal.catalog.colors.getPartColorsInternal, {
+    // Delegate to new self-scheduling orchestrator
+    // forceRefresh: true ensures we fetch fresh data even if existing data isn't stale
+    await ctx.runAction(internal.catalog.ensure.ensureCatalogPart, {
       partNumber: args.partNumber,
+      forceRefresh: true,
     });
-
-    const isMissing = partColors.length === 0;
-    const lastFetched =
-      partColors.length > 0 ? Math.min(...partColors.map((pc) => pc.lastFetched)) : undefined;
-
-    // Enqueue to outbox
-    const messageId = await ctx.runMutation(internal.catalog.outbox.enqueueCatalogRefresh, {
-      tableName: "partColors",
-      primaryKey: args.partNumber,
-      secondaryKey: undefined,
-      lastFetched,
-      priority: 1, // HIGH priority
-    });
-
-    // If data is missing, schedule immediate processing for better UX
-    if (isMissing && messageId) {
-      await ctx.scheduler.runAfter(0, internal.catalog.refreshWorker.processSingleOutboxMessage, {
-        messageId,
-      });
-    }
   },
 });
