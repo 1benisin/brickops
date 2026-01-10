@@ -1,5 +1,6 @@
 import { ConvexError } from "convex/values";
-import type { QueryCtx, MutationCtx, DatabaseReader, DatabaseWriter } from "../_generated/server";
+import type { QueryCtx, MutationCtx, DatabaseReader, DatabaseWriter, ActionCtx } from "../_generated/server";
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { requireActiveUser, type RequireUserReturn } from "../users/authorization";
 
@@ -244,4 +245,59 @@ export function formatApiError(error: unknown): string {
   }
 
   return String(error);
+}
+
+/**
+ * Ensure BrickOwl ID exists for a part in the catalog.
+ * Helper function - not a Convex function, can be called from action handlers.
+ * 
+ * Returns:
+ * - string: The BrickOwl ID if found/available
+ * - null: Part not found in catalog
+ * - "": Part found but BrickOwl ID not available or couldn't be fetched
+ */
+export async function ensureBrickowlIdForPartAction(
+  ctx: ActionCtx,
+  partNumber: string,
+): Promise<string | null> {
+  // Get the part from catalog
+  const part = await ctx.runQuery(internal.catalog.parts.getPartInternal, {
+    partNumber,
+  });
+
+  if (!part) {
+    // Part not found in catalog
+    return null;
+  }
+
+  // If part already has a BrickOwl ID, return it
+  if (part.brickowlId && part.brickowlId !== "") {
+    return part.brickowlId;
+  }
+
+  // Part exists but doesn't have BrickOwl ID - try to look it up
+  try {
+    const brickowlId = await ctx.runAction(internal.marketplaces.brickowl.catalog.lookupBrickowlId, {
+      bricklinkPartNo: partNumber,
+    });
+
+    // If we found a BrickOwl ID, update the part
+    if (brickowlId && brickowlId !== "") {
+      await ctx.runMutation(internal.catalog.mutations.updatePartBrickowlId, {
+        partNumber,
+        brickowlId,
+      });
+      return brickowlId;
+    }
+
+    // Couldn't find BrickOwl ID
+    return "";
+  } catch (error) {
+    // Log error but return empty string to allow graceful degradation
+    console.warn(
+      `Failed to lookup BrickOwl ID for part ${partNumber}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return "";
+  }
 }

@@ -526,153 +526,150 @@ export function DataTable<TData>({
           </div>
         )
       ) : (
+        <DndContext sensors={enableColumnOrdering ? sensors : undefined} onDragEnd={enableColumnOrdering ? handleColumnDragEnd : undefined}>
         <div className="flex-1 overflow-x-auto overflow-y-auto rounded-md border">
           <Table className="w-auto min-w-max table-fixed" role="table">
             {enableColumnOrdering ? (
-              <DndContext sensors={sensors} onDragEnd={handleColumnDragEnd}>
-                <TableHeader className="sticky top-0 bg-background z-10" role="rowgroup">
-                  {table.getHeaderGroups().map((headerGroup) => {
-                    const sortableIds = headerGroup.headers
-                      .filter(
-                        (header) =>
-                          header &&
-                          header.column &&
-                          !header.isPlaceholder &&
-                          isColumnDraggable(header.column.id),
-                      )
-                      .map((header) => header.column.id);
+              <TableHeader className="sticky top-0 bg-background z-10" role="rowgroup">
+                {table.getHeaderGroups().map((headerGroup) => {
+                  const sortableIds = headerGroup.headers
+                    .filter(
+                      (header) =>
+                        header &&
+                        header.column &&
+                        !header.isPlaceholder &&
+                        isColumnDraggable(header.column.id),
+                    )
+                    .map((header) => header.column.id);
 
-                    return (
-                      <SortableContext
-                        key={headerGroup.id}
-                        items={sortableIds}
-                        strategy={horizontalListSortingStrategy}
-                      >
-                        <TableRow role="row" key={headerGroup.id}>
-                          {headerGroup.headers.map((header) => {
-                            if (!header || !header.column) {
-                              return null;
-                            }
+                  return (
+                    <SortableContext
+                      key={headerGroup.id}
+                      items={sortableIds}
+                      strategy={horizontalListSortingStrategy}
+                    >
+                      <TableRow role="row" key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => {
+                          if (!header || !header.column) {
+                            return null;
+                          }
 
-                            const headerStyle = {
-                              width: header.getSize(),
-                              minWidth: header.column.columnDef.minSize,
-                              maxWidth: header.column.columnDef.maxSize,
-                            };
+                          const headerStyle = {
+                            width: header.getSize(),
+                            minWidth: header.column.columnDef.minSize,
+                            maxWidth: header.column.columnDef.maxSize,
+                          };
 
-                            if (header.isPlaceholder) {
-                              return (
-                                <TableHead
-                                  key={header.id}
-                                  className="whitespace-nowrap"
-                                  style={headerStyle}
-                                  aria-hidden="true"
-                                />
-                              );
-                            }
-
-                            const filterValue =
-                              columnFiltersState !== undefined
-                                ? internalColumnFilters.find((f) => f.id === header.column.id)
-                                    ?.value
-                                : columnFilters[header.column.id];
-
-                            const headerContent = (
-                              <DataTableHeader
-                                header={header}
-                                table={table}
-                                enableSorting={enableSorting}
-                                enableFiltering={enableFiltering}
-                                onSort={handleSort}
-                                onFilterChange={onColumnFilterChange}
-                                filterValue={filterValue}
-                              />
-                            );
-
-                            const canResize = enableColumnSizing && header.column.getCanResize();
-                            const resizeHandler = header.getResizeHandler();
-
-                            const renderHeaderInner = (dragHandle?: SortableDragHandle) => {
-                              return (
-                                <div
-                                  className={cn(
-                                    "relative flex h-full w-full items-center",
-                                    canResize ? "pr-3" : undefined,
-                                  )}
-                                >
-                                  <div
-                                    className={cn(
-                                      "flex-1",
-                                      dragHandle &&
-                                        "cursor-grab select-none active:cursor-grabbing",
-                                    )}
-                                    {...(dragHandle?.attributes ?? {})}
-                                    {...(dragHandle?.listeners ?? {})}
-                                  >
-                                    {headerContent}
-                                  </div>
-                                  {canResize && (
-                                    <div
-                                      role="separator"
-                                      aria-orientation="vertical"
-                                      className="absolute top-0 right-0 flex h-full w-3 cursor-col-resize select-none items-center justify-center transition-colors"
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        resizeHandler(event);
-                                      }}
-                                      onTouchStart={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        resizeHandler(event);
-                                      }}
-                                      onDoubleClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        header.column.resetSize();
-                                      }}
-                                    >
-                                      <span className="h-1/2 w-px bg-border group-hover:bg-foreground" />
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            };
-
-                            return isColumnDraggable(header.column.id) ? (
-                              <DraggableHeaderCell
-                                key={header.id}
-                                header={header}
-                                style={headerStyle}
-                                enableSorting={enableSorting}
-                              >
-                                {(dragHandle) => renderHeaderInner(dragHandle)}
-                              </DraggableHeaderCell>
-                            ) : (
+                          if (header.isPlaceholder) {
+                            return (
                               <TableHead
                                 key={header.id}
-                                className="relative whitespace-nowrap group"
-                                aria-sort={
-                                  enableSorting && header.column.getCanSort()
-                                    ? header.column.getIsSorted() === "asc"
-                                      ? "ascending"
-                                      : header.column.getIsSorted() === "desc"
-                                        ? "descending"
-                                        : "none"
-                                    : undefined
-                                }
+                                className="whitespace-nowrap"
                                 style={headerStyle}
-                              >
-                                {renderHeaderInner()}
-                              </TableHead>
+                                aria-hidden="true"
+                              />
                             );
-                          })}
-                        </TableRow>
-                      </SortableContext>
-                    );
-                  })}
-                </TableHeader>
-              </DndContext>
+                          }
+
+                          const filterValue =
+                            columnFiltersState !== undefined
+                              ? internalColumnFilters.find((f) => f.id === header.column.id)?.value
+                              : columnFilters[header.column.id];
+
+                          const headerContent = (
+                            <DataTableHeader
+                              header={header}
+                              table={table}
+                              enableSorting={enableSorting}
+                              enableFiltering={enableFiltering}
+                              onSort={handleSort}
+                              onFilterChange={onColumnFilterChange}
+                              filterValue={filterValue}
+                            />
+                          );
+
+                          const canResize = enableColumnSizing && header.column.getCanResize();
+                          const resizeHandler = header.getResizeHandler();
+
+                          const renderHeaderInner = (dragHandle?: SortableDragHandle) => {
+                            return (
+                              <div
+                                className={cn(
+                                  "relative flex h-full w-full items-center",
+                                  canResize ? "pr-3" : undefined,
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    "flex-1",
+                                    dragHandle && "cursor-grab select-none active:cursor-grabbing",
+                                  )}
+                                  {...(dragHandle?.attributes ?? {})}
+                                  {...(dragHandle?.listeners ?? {})}
+                                >
+                                  {headerContent}
+                                </div>
+                                {canResize && (
+                                  <div
+                                    role="separator"
+                                    aria-orientation="vertical"
+                                    className="absolute top-0 right-0 flex h-full w-3 cursor-col-resize select-none items-center justify-center transition-colors"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      resizeHandler(event);
+                                    }}
+                                    onTouchStart={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      resizeHandler(event);
+                                    }}
+                                    onDoubleClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      header.column.resetSize();
+                                    }}
+                                  >
+                                    <span className="h-1/2 w-px bg-border group-hover:bg-foreground" />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          };
+
+                          return isColumnDraggable(header.column.id) ? (
+                            <DraggableHeaderCell
+                              key={header.id}
+                              header={header}
+                              style={headerStyle}
+                              enableSorting={enableSorting}
+                            >
+                              {(dragHandle) => renderHeaderInner(dragHandle)}
+                            </DraggableHeaderCell>
+                          ) : (
+                            <TableHead
+                              key={header.id}
+                              className="relative whitespace-nowrap group"
+                              aria-sort={
+                                enableSorting && header.column.getCanSort()
+                                  ? header.column.getIsSorted() === "asc"
+                                    ? "ascending"
+                                    : header.column.getIsSorted() === "desc"
+                                      ? "descending"
+                                      : "none"
+                                  : undefined
+                              }
+                              style={headerStyle}
+                            >
+                              {renderHeaderInner()}
+                            </TableHead>
+                          );
+                        })}
+                      </TableRow>
+                    </SortableContext>
+                  );
+                })}
+              </TableHeader>
             ) : (
               <TableHeader className="sticky top-0 bg-background z-10" role="rowgroup">
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -790,6 +787,7 @@ export function DataTable<TData>({
             </TableBody>
           </Table>
         </div>
+      </DndContext>
       )}
     </div>
   );

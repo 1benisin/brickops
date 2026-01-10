@@ -10,7 +10,7 @@ import { mutation, query, type MutationCtx } from "../_generated/server";
 import type { Id, Doc } from "../_generated/dataModel";
 import type { WithoutSystemFields } from "convex/server";
 import { requireUser } from "./helpers";
-import { now, getNextSeqForItem, enqueueMarketplaceSync, ensureBrickowlIdForPart } from "./helpers";
+import { now, getNextSeqForItem, enqueueMarketplaceSync } from "./helpers";
 
 /**
  * Check if we're in development mode
@@ -61,7 +61,10 @@ async function createInventoryItemWithLedger(
     throw new ConvexError("Quantity available cannot be negative");
   }
 
-  await ensureBrickowlIdForPart(ctx, itemData.partNumber);
+  // Note: BrickOwl ID check is not performed here because:
+  // 1. This is called from a mutation context which cannot call actions
+  // 2. The generateMockInventoryItems function filters to only use parts with brickowlId
+  // 3. Parts without brickowlId are filtered out before creating inventory items
 
   const timestamp = now();
   const document: WithoutSystemFields<Doc<"inventoryItems">> = {
