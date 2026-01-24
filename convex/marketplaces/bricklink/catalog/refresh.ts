@@ -7,6 +7,18 @@
  *
  * Note: Catalog data refreshing is now handled by the self-scheduling
  * ensureCatalogPart pattern in convex/catalog/ensure.ts
+ *
+ * ⚠️ MODULE ISOLATION VIOLATION:
+ * The mutations in this file (`upsertColor`, `upsertPriceGuide`) write directly
+ * to tables owned by the `catalog/` module (`colors`, `partPrices`). Per the
+ * modular architecture, marketplace modules should only handle API communication
+ * and response transformation. Persistence to core module tables should go
+ * through the `sync/` orchestration layer.
+ *
+ * TODO: Migrate these mutations to `sync/catalog/` when that orchestration
+ * layer is created. The BrickLink module should only fetch and transform
+ * catalog data; the sync layer should handle persistence.
+ * See: _notes/modular-architecture-refactor-plan.md
  */
 
 import { internalMutation } from "../../../_generated/server";
@@ -31,6 +43,9 @@ export const REFRESH_PRIORITY = {
 
 /**
  * Upsert color data into database
+ *
+ * ⚠️ ISOLATION VIOLATION: Writes to `colors` table owned by catalog/ module.
+ * Should migrate to sync/catalog/ orchestration layer.
  */
 export const upsertColor = internalMutation({
   args: {
@@ -63,6 +78,9 @@ export const upsertColor = internalMutation({
 
 /**
  * Upsert price guide data into database
+ *
+ * ⚠️ ISOLATION VIOLATION: Writes to `partPrices` table owned by catalog/ module.
+ * Should migrate to sync/catalog/ orchestration layer.
  */
 export const upsertPriceGuide = internalMutation({
   args: {
