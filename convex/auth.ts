@@ -6,7 +6,7 @@ import { ConvexError } from "convex/values";
 import { checkAndConsumeRateLimitDirect } from "./shared/ratelimit/dbRateLimiter";
 import type { DataModel, Id } from "./_generated/dataModel";
 
-import { sendPasswordResetEmail } from "./lib/external/email";
+import { sendPasswordResetEmail } from "./shared/email/index";
 
 type Role = "owner" | "manager" | "picker" | "viewer";
 type UserStatus = "active" | "invited";

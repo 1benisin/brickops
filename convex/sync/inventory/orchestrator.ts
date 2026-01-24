@@ -152,7 +152,7 @@ export const syncInventoryChange = internalAction({
     }));
 
     // Update inventory item sync status
-    await ctx.runMutation(internal.sync.inventory.updateSyncStatuses, {
+    await ctx.runMutation(internal.sync.inventory.orchestrator.updateSyncStatuses, {
       inventoryItemId: args.inventoryItemId,
       results,
     });
@@ -335,7 +335,7 @@ async function syncUpdate(
   idempotencyKey: string,
 ) {
   // Get lotId from inventorySyncState table
-  const marketplaceIdRaw = await ctx.runQuery(internal.sync.inventory.getLotIdForItem, {
+  const marketplaceIdRaw = await ctx.runQuery(internal.sync.inventory.orchestrator.getLotIdForItem, {
     itemId: args.inventoryItemId,
     provider: marketplace,
   });
@@ -405,7 +405,7 @@ async function syncDelete(
   let marketplaceIdRaw: string | number | undefined;
 
   if (args.inventoryItemId) {
-    marketplaceIdRaw = await ctx.runQuery(internal.sync.inventory.getLotIdForItem, {
+    marketplaceIdRaw = await ctx.runQuery(internal.sync.inventory.orchestrator.getLotIdForItem, {
       itemId: args.inventoryItemId,
       provider: marketplace,
     }) ?? undefined;
@@ -502,7 +502,7 @@ export const retryFailedSync = internalAction({
 
         if (result.success) {
           // Update sync status to success
-          await ctx.runMutation(internal.sync.inventory.updateSyncStatuses, {
+          await ctx.runMutation(internal.sync.inventory.orchestrator.updateSyncStatuses, {
             inventoryItemId: args.inventoryItemId,
             results: [{ provider: args.marketplace, success: true }],
           });
