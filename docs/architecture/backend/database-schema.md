@@ -42,39 +42,25 @@ legoPartCatalog: defineTable({
   });
 ```
 
-### bricklinkColorReference / bricklinkCategoryReference / bricklinkElementReference
+### bricklinkElementReference (Catalog Module)
 
-**Purpose**: Reference datasets seeded from `colors.xml`, `categories.xml`, and `codes.xml`, refreshed weekly via Bricklink API jobs
+**Purpose**: Element ID to part number mapping, seeded from `codes.xml`. Located in `convex/catalog/schema.ts` as this is catalog reference data.
 
 ```typescript
-bricklinkColorReference: defineTable({
-  colorId: v.string(),
-  name: v.string(),
-  rgbHex: v.optional(v.string()),
-  type: v.optional(v.string()),
-  introducedYear: v.optional(v.number()),
-  retiredYear: v.optional(v.number()),
-  lastSyncedAt: v.number(),
-}).index("by_colorId", ["colorId"]);
-
-bricklinkCategoryReference: defineTable({
-  categoryId: v.string(),
-  name: v.string(),
-  parentCategoryId: v.optional(v.string()),
-  path: v.array(v.string()),
-  lastSyncedAt: v.number(),
-}).index("by_categoryId", ["categoryId"]);
-
 bricklinkElementReference: defineTable({
-  partNumber: v.string(),
-  colorId: v.string(),
   elementId: v.string(),
-  isActive: v.optional(v.boolean()),
-  lastSyncedAt: v.number(),
+  partNumber: v.string(),
+  colorId: v.number(),
+  bricklinkPartId: v.optional(v.string()),
+  designId: v.optional(v.string()),
+  syncedAt: v.number(),
 })
-  .index("by_part_color", ["partNumber", "colorId"])
-  .index("by_elementId", ["elementId"]);
+  .index("by_element", ["elementId"])
+  .index("by_part", ["partNumber"])
+  .index("by_color", ["colorId"]);
 ```
+
+> **Note**: Color and category reference data is now in the `colors` and `categories` tables within the catalog module. See `convex/catalog/schema.ts` for current definitions.
 
 ### bricklinkPartColorAvailability
 
