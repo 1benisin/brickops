@@ -1,15 +1,15 @@
 import {
-  normalizeBrickOwlOrder,
-  normalizeBrickOwlOrderItems,
-} from "../../marketplaces/brickowl/orders/transformers";
+  normalizeBrickLinkOrder,
+  normalizeBrickLinkOrderItems,
+} from "../../../marketplaces/bricklink/orders/transformers";
 import type { NormalizedOrder, NormalizedOrderItem, ProviderNormalizer } from "./types";
 
 export const provider: ProviderNormalizer = {
   normalizeOrder(orderData: unknown): NormalizedOrder {
-    return normalizeBrickOwlOrder(orderData);
+    return normalizeBrickLinkOrder(orderData);
   },
 
   normalizeItems(orderId: string, orderItemsData: unknown): NormalizedOrderItem[] {
-    return normalizeBrickOwlOrderItems(orderId, orderItemsData);
+    return normalizeBrickLinkOrderItems(orderId, orderItemsData);
   },
 };

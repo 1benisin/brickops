@@ -14,7 +14,7 @@ import bricklinkOrderSnapshot from "@/convex/orders/refactor_baseline/snapshots/
 import {
   NORMALIZATION_ERROR_CODES,
   isNormalizationError,
-} from "@/convex/orders/normalizers/shared/errors";
+} from "@/convex/sync/orders/normalizers/shared/errors";
 
 describe("BrickLink normalization transformers", () => {
   it("matches the baseline snapshot for orders", () => {

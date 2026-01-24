@@ -1,4 +1,4 @@
-import type { OrderItemStatus, OrderStatus } from "../schema";
+import type { OrderItemStatus, OrderStatus } from "../../../orders/schema";
 
 export type ProviderId = "bricklink" | "brickowl";
 
@@ -71,8 +71,8 @@ export interface ProviderNormalizer {
 export type {
   NormalizedBrickLinkOrder,
   NormalizedBrickLinkOrderItem,
-} from "../../marketplaces/bricklink/orders/transformers/transform";
+} from "../../../marketplaces/bricklink/orders/transformers/transform";
 export type {
   NormalizedBrickOwlOrder,
   NormalizedBrickOwlOrderItem,
-} from "../../marketplaces/brickowl/orders/transformers/transform";
+} from "../../../marketplaces/brickowl/orders/transformers/transform";
