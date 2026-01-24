@@ -1,4 +1,4 @@
-import { internalAction, internalMutation } from "../_generated/server";
+import { internalAction, internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { v, ConvexError } from "convex/values";
 import type { Id, Doc } from "../_generated/dataModel";
@@ -24,11 +24,30 @@ import {
   updateInventory as updateBrickOwlInventory,
   deleteInventory as deleteBrickOwlInventory,
 } from "../marketplaces/brickowl/inventory/actions";
+import {
+  upsertSyncState,
+  getSyncStateForItem,
+} from "../sync/inventory/helpers";
 
-type InventoryItemDoc = Doc;
+type InventoryItemDoc = Doc<"inventoryItems">;
+
+/**
+ * Internal query to get lot ID for an item/provider from inventorySyncState
+ */
+export const getLotIdForItem = internalQuery({
+  args: {
+    itemId: v.id("inventoryItems"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  },
+  handler: async (ctx, args) => {
+    const syncState = await getSyncStateForItem(ctx.db, args.itemId, args.provider);
+    return syncState?.lotId ?? null;
+  },
+});
 
 /**
  * Update sync status after immediate sync attempt
+ * Now uses inventorySyncState table instead of embedded marketplaceSync field
  */
 export const updateSyncStatuses = internalMutation({
   args: {
@@ -46,39 +65,27 @@ export const updateSyncStatuses = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    // Get current item to preserve existing marketplace sync data
+    // Verify item exists
     const item = await ctx.db.get(args.inventoryItemId);
     if (!item) return null;
 
     if (!args.results) return null;
 
-    // Start with existing marketplaceSync data to preserve lotId and other fields
-    const currentSync = item.marketplaceSync ?? {};
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const syncUpdates: any = { ...currentSync };
-
-    args.results.forEach((result) => {
-      // Get existing data for this provider to preserve lotId
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existingData = (currentSync as any)[result.provider] ?? {};
-
-      const syncUpdate = {
-        ...existingData, // Preserve existing fields like lotId
-        status: result.success ? ("synced" as const) : ("failed" as const),
+    // Update inventorySyncState for each provider result
+    for (const result of args.results) {
+      await upsertSyncState(ctx.db, args.inventoryItemId, result.provider, {
+        status: result.success ? "synced" : "failed",
         lastSyncAttempt: Date.now(),
-        ...(result.success && result.marketplaceId && { lotId: result.marketplaceId }),
-        ...(result.error && { error: result.error }),
-        // Phase 3: Advance cursor on success
-        ...(result.success && result.lastSyncedSeq && { lastSyncedSeq: result.lastSyncedSeq }),
-        ...(result.success &&
-          result.lastSyncedAvailable && { lastSyncedAvailable: result.lastSyncedAvailable }),
-      };
-
-      syncUpdates[result.provider] = syncUpdate;
-    });
-
-    // Wrap in marketplaceSync object and update
-    await ctx.db.patch(args.inventoryItemId, { marketplaceSync: syncUpdates });
+        ...(result.success && result.marketplaceId !== undefined && { lotId: result.marketplaceId }),
+        ...(result.error && { error: String(result.error) }),
+        ...(result.success && result.lastSyncedSeq !== undefined && {
+          lastSyncedSeq: result.lastSyncedSeq,
+        }),
+        ...(result.success && result.lastSyncedAvailable !== undefined && {
+          lastSyncedAvailable: result.lastSyncedAvailable,
+        }),
+      });
+    }
   },
 });
 
@@ -327,14 +334,11 @@ async function syncUpdate(
   },
   idempotencyKey: string,
 ) {
-  const inventoryItem = await ctx.runQuery(internal.inventory.mutations.getInventoryItem, {
+  // Get lotId from inventorySyncState table
+  const marketplaceIdRaw = await ctx.runQuery(internal.inventory.sync.getLotIdForItem, {
     itemId: args.inventoryItemId,
+    provider: marketplace,
   });
-
-  const marketplaceIdRaw =
-    marketplace === "bricklink"
-      ? inventoryItem?.marketplaceSync?.bricklink?.lotId
-      : inventoryItem?.marketplaceSync?.brickowl?.lotId;
 
   if (!marketplaceIdRaw) {
     return await syncCreate(ctx, marketplace, args, idempotencyKey);
@@ -391,14 +395,36 @@ async function syncDelete(
   marketplace: "bricklink" | "brickowl",
   args: {
     businessAccountId: Id<"businessAccounts">;
+    inventoryItemId?: Id<"inventoryItems">;
     previousData: Partial<InventoryItemDoc>;
   },
   idempotencyKey: string,
 ) {
-  const marketplaceIdRaw =
-    marketplace === "bricklink"
-      ? args.previousData?.marketplaceSync?.bricklink?.lotId
-      : args.previousData?.marketplaceSync?.brickowl?.lotId;
+  // For delete, we need to get the lotId from previousData since item may be deleted
+  // Try to get from inventorySyncState first if itemId is available
+  let marketplaceIdRaw: string | number | undefined;
+
+  if (args.inventoryItemId) {
+    marketplaceIdRaw = await ctx.runQuery(internal.inventory.sync.getLotIdForItem, {
+      itemId: args.inventoryItemId,
+      provider: marketplace,
+    }) ?? undefined;
+  }
+
+  // Fallback to previousData for legacy support during migration
+  if (!marketplaceIdRaw) {
+    // Type assertion for legacy field access during migration
+    const previousWithSync = args.previousData as Partial<InventoryItemDoc> & {
+      marketplaceSync?: {
+        bricklink?: { lotId?: number };
+        brickowl?: { lotId?: string };
+      };
+    };
+    marketplaceIdRaw =
+      marketplace === "bricklink"
+        ? previousWithSync?.marketplaceSync?.bricklink?.lotId
+        : previousWithSync?.marketplaceSync?.brickowl?.lotId;
+  }
 
   if (!marketplaceIdRaw) {
     return { success: true, marketplaceId: undefined, error: undefined };

@@ -53,18 +53,26 @@ describe("inventory marketplace sync status", () => {
         notes: "Initial sync complete",
         createdBy: ownerUserId,
         createdAt: 1,
-        marketplaceSync: {
-          bricklink: {
-            status: "synced",
-            lastSyncAttempt: 100,
-            lotId: 1234,
-          },
-          brickowl: {
-            status: "synced",
-            lastSyncAttempt: 200,
-            lotId: "abc-123",
-          },
-        },
+        lifecycleStatus: "ready_to_sync",
+      },
+    ],
+    // Sync state is now in inventorySyncState table
+    inventorySyncState: [
+      {
+        _id: "inventorySyncState:1",
+        itemId,
+        provider: "bricklink" as const,
+        status: "synced" as const,
+        lastSyncAttempt: 100,
+        lotId: 1234,
+      },
+      {
+        _id: "inventorySyncState:2",
+        itemId,
+        provider: "brickowl" as const,
+        status: "synced" as const,
+        lastSyncAttempt: 200,
+        lotId: "abc-123",
       },
     ],
     marketplaceCredentials: [
@@ -117,12 +125,26 @@ describe("inventory marketplace sync status", () => {
       price: 13.75,
     });
 
-    const updatedItem = (await ctx.db.get(itemId)) as any;
+    // Check inventorySyncState table for updated status
+    const bricklinkState = await ctx.db
+      .query("inventorySyncState")
+      .withIndex("by_item_provider", (q) =>
+        q.eq("itemId", itemId).eq("provider", "bricklink"),
+      )
+      .first();
 
-    expect(updatedItem.marketplaceSync.bricklink.status).toBe("pending");
-    expect(updatedItem.marketplaceSync.brickowl.status).toBe("pending");
-    expect(updatedItem.marketplaceSync.bricklink.lotId).toBe(1234);
-    expect(updatedItem.marketplaceSync.brickowl.lotId).toBe("abc-123");
+    const brickowlState = await ctx.db
+      .query("inventorySyncState")
+      .withIndex("by_item_provider", (q) =>
+        q.eq("itemId", itemId).eq("provider", "brickowl"),
+      )
+      .first();
+
+    expect(bricklinkState?.status).toBe("pending");
+    expect(brickowlState?.status).toBe("pending");
+    // lotId should be preserved
+    expect(bricklinkState?.lotId).toBe(1234);
+    expect(brickowlState?.lotId).toBe("abc-123");
     expect(enqueueSpy).toHaveBeenCalledTimes(2);
   });
 });

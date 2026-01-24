@@ -11,6 +11,7 @@ import {
   getItemSyncStatusReturns,
 } from "./validators";
 import { querySpecValidator } from "./types";
+import { buildLegacyMarketplaceSync } from "../sync/inventory/helpers";
 
 export const listInventoryItems = query({
   args: listInventoryItemsArgs,
@@ -66,7 +67,7 @@ export const getInventoryTotals = query({
 
 /**
  * Get sync status for a specific inventory item
- * Returns sync status from marketplaceSync field and outbox status
+ * Returns sync status from inventorySyncState table and outbox status
  */
 export const getItemSyncStatus = query({
   args: getItemSyncStatusArgs,
@@ -80,6 +81,9 @@ export const getItemSyncStatus = query({
     }
 
     assertBusinessMembership(user, item.businessAccountId);
+
+    // Get sync state from inventorySyncState table and transform to legacy format
+    const marketplaceSync = await buildLegacyMarketplaceSync(ctx.db, args.itemId);
 
     // Phase 3: Count pending/inflight outbox messages
     const pendingMessages = await ctx.db
@@ -97,7 +101,7 @@ export const getItemSyncStatus = query({
 
     return {
       itemId: args.itemId,
-      marketplaceSync: item.marketplaceSync,
+      marketplaceSync,
       pendingChangesCount: pendingMessages.length,
       nextRetryAt: nextRetryAt === Infinity ? undefined : nextRetryAt,
     };

@@ -108,10 +108,24 @@ describe("inventory: lifecycle status with color checking", () => {
             condition: "new",
             createdBy: userId,
             lifecycleStatus: "awaiting_catalog",
-            marketplaceSync: {
-              bricklink: { status: "pending", lastSyncAttempt: Date.now() },
-              brickowl: { status: "pending", lastSyncAttempt: Date.now() },
-            },
+            // marketplaceSync removed - sync state is now in inventorySyncState table
+          },
+        ],
+        // Sync state is now in inventorySyncState table
+        inventorySyncState: [
+          {
+            _id: "inventorySyncState:1",
+            itemId: "inventoryItems:1",
+            provider: "bricklink" as const,
+            status: "pending" as const,
+            lastSyncAttempt: Date.now(),
+          },
+          {
+            _id: "inventorySyncState:2",
+            itemId: "inventoryItems:1",
+            provider: "brickowl" as const,
+            status: "pending" as const,
+            lastSyncAttempt: Date.now(),
           },
         ],
         colors: [
@@ -179,10 +193,24 @@ describe("inventory: lifecycle status with color checking", () => {
             condition: "new",
             createdBy: userId,
             lifecycleStatus: "awaiting_catalog",
-            marketplaceSync: {
-              bricklink: { status: "pending", lastSyncAttempt: Date.now() },
-              brickowl: { status: "pending", lastSyncAttempt: Date.now() },
-            },
+            // marketplaceSync removed - sync state is now in inventorySyncState table
+          },
+        ],
+        // Sync state is now in inventorySyncState table
+        inventorySyncState: [
+          {
+            _id: "inventorySyncState:1",
+            itemId: "inventoryItems:1",
+            provider: "bricklink" as const,
+            status: "pending" as const,
+            lastSyncAttempt: Date.now(),
+          },
+          {
+            _id: "inventorySyncState:2",
+            itemId: "inventoryItems:1",
+            provider: "brickowl" as const,
+            status: "pending" as const,
+            lastSyncAttempt: Date.now(),
           },
         ],
         colors: [], // No colors in table

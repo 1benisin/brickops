@@ -26,6 +26,17 @@ export const syncStatus = v.union(
 
 export const marketplaceProvider = v.union(v.literal("bricklink"), v.literal("brickowl"));
 
+/**
+ * Legacy marketplaceSync validator for API compatibility.
+ * 
+ * The actual sync state is now stored in the `inventorySyncState` table.
+ * This validator is used for:
+ * - addInventoryItemArgs: Accepts sync data during imports (stored in inventorySyncState)
+ * - getItemSyncStatusReturns: Returns sync state in legacy format (built from inventorySyncState)
+ * - partialInventoryItemData: For sync operations during migration
+ * 
+ * @see sync/validators.ts for the new inventorySyncState validators
+ */
 export const marketplaceSync = v.optional(
   v.object({
     bricklink: v.optional(
@@ -143,6 +154,8 @@ export const deleteInventoryItemReturns = v.object({
 });
 
 // Queries
+// Note: marketplaceSync removed - sync state is now in inventorySyncState table
+// Use getItemSyncStatus query to get sync status for individual items
 export const listInventoryItemsReturns = v.array(
   v.object({
     _id: inventoryItemId,
@@ -162,7 +175,6 @@ export const listInventoryItemsReturns = v.array(
     updatedAt: v.optional(v.number()),
     isArchived: v.optional(v.boolean()), // Matches schema - optional field
     deletedAt: v.optional(v.number()),
-    marketplaceSync: marketplaceSync,
     lifecycleStatus: v.union(
       v.literal("awaiting_catalog"),
       v.literal("ready_to_sync"),

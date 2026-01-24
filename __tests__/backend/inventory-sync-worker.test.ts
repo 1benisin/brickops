@@ -89,7 +89,8 @@ describe("inventory sync worker mutations", () => {
       nextAttemptAt: now - 1,
       fromSeqExclusive: 1,
       toSeqInclusive: 2,
-      createdAt: now,
+      idempotencyKey: "key-1",
+      businessAccountId: "businessAccounts:1",
     });
 
     await ctx.db.insert("marketplaceOutbox", {
@@ -101,7 +102,8 @@ describe("inventory sync worker mutations", () => {
       nextAttemptAt: now + 60_000,
       fromSeqExclusive: 0,
       toSeqInclusive: 1,
-      createdAt: now,
+      idempotencyKey: "key-2",
+      businessAccountId: "businessAccounts:1",
     });
 
     const ready = await (getPendingOutboxMessages as any)._handler(ctx, {
@@ -123,7 +125,8 @@ describe("inventory sync worker mutations", () => {
       nextAttemptAt: Date.now(),
       fromSeqExclusive: 1,
       toSeqInclusive: 2,
-      createdAt: Date.now(),
+      idempotencyKey: "key-1",
+      businessAccountId: "businessAccounts:1",
     });
 
     const firstAttempt = await (markOutboxInflight as any)._handler(ctx, {
@@ -151,7 +154,8 @@ describe("inventory sync worker mutations", () => {
       nextAttemptAt: Date.now(),
       fromSeqExclusive: 5,
       toSeqInclusive: 6,
-      createdAt: Date.now(),
+      idempotencyKey: "key-1",
+      businessAccountId: "businessAccounts:1",
     });
 
     const nextAttemptAt = Date.now() + 30_000;
@@ -180,7 +184,8 @@ describe("inventory sync worker mutations", () => {
       nextAttemptAt: Date.now(),
       fromSeqExclusive: 0,
       toSeqInclusive: 0,
-      createdAt: Date.now(),
+      idempotencyKey: "key-1",
+      businessAccountId: "businessAccounts:1",
     });
 
     await (markOutboxFailedPermanently as any)._handler(ctx, {
@@ -204,7 +209,8 @@ describe("inventory sync worker mutations", () => {
       nextAttemptAt: Date.now(),
       fromSeqExclusive: 2,
       toSeqInclusive: 3,
-      createdAt: Date.now(),
+      idempotencyKey: "key-1",
+      businessAccountId: "businessAccounts:1",
     });
 
     await (markOutboxSucceeded as any)._handler(ctx, { messageId });
@@ -255,12 +261,15 @@ describe("drainMarketplaceOutbox action", () => {
       businessAccountId: "businessAccounts:1" as Id<"businessAccounts">,
       quantityAvailable: 14,
       partNumber: "3001",
-      marketplaceSync: {
-        bricklink: {
-          lotId: 987,
-          lastSyncedAvailable: 8,
-        },
-      },
+    };
+    // Sync state is now from inventorySyncState table
+    const syncState = {
+      _id: "inventorySyncState:1" as Id<"inventorySyncState">,
+      itemId: message.itemId,
+      provider: "bricklink" as const,
+      lotId: 987,
+      lastSyncedAvailable: 8,
+      status: "synced" as const,
     };
 
     const ledgerEntry = { postAvailable: 15 };
@@ -284,6 +293,10 @@ describe("drainMarketplaceOutbox action", () => {
       if (Object.keys(args).length === 1 && "itemId" in args) {
         expect(args).toEqual({ itemId: message.itemId });
         return item;
+      }
+      // getSyncState query
+      if ("provider" in args && "itemId" in args) {
+        return syncState;
       }
       if ("seq" in args) {
         expect(args).toEqual({ itemId: message.itemId, seq: message.toSeqInclusive });
@@ -323,12 +336,12 @@ describe("drainMarketplaceOutbox action", () => {
       expect.any(Object),
     );
     expect(unexpectedQueries).toEqual([]);
-    expect(mapConvexToBlUpdateMock).toHaveBeenCalledWith(item, 8);
+    expect(mapConvexToBlUpdateMock).toHaveBeenCalledWith(item, syncState.lastSyncedAvailable);
     expect(updateBLInventoryMock).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
         businessAccountId: item.businessAccountId,
-        inventoryId: 987,
+        inventoryId: syncState.lotId,
         payload: { payload: "update" },
       }),
     );
@@ -340,7 +353,7 @@ describe("drainMarketplaceOutbox action", () => {
         {
           provider: "bricklink",
           success: true,
-          marketplaceId: 987,
+          marketplaceId: syncState.lotId,
           lastSyncedSeq: message.toSeqInclusive,
           lastSyncedAvailable: ledgerEntry.postAvailable,
         },
@@ -364,7 +377,6 @@ describe("drainMarketplaceOutbox action", () => {
       businessAccountId: "businessAccounts:1" as Id<"businessAccounts">,
       quantityAvailable: 9,
       partNumber: "3002",
-      marketplaceSync: {},
     };
 
     mapConvexToBlCreateMock.mockReturnValueOnce({ payload: "create" });
@@ -380,6 +392,10 @@ describe("drainMarketplaceOutbox action", () => {
       }
       if (Object.keys(args).length === 1 && "itemId" in args) {
         return item;
+      }
+      // getSyncState returns null (no sync state yet)
+      if ("provider" in args && "itemId" in args) {
+        return null;
       }
       if ("seq" in args) {
         return null;
@@ -409,7 +425,6 @@ describe("drainMarketplaceOutbox action", () => {
         return undefined;
       }
       if ("error" in args && !("attempt" in args)) {
-        mutationCalls.push({ mutation: "markOutboxFailedPermanently", args });
         return undefined;
       }
       throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
@@ -451,11 +466,13 @@ describe("drainMarketplaceOutbox action", () => {
       quantityAvailable: 4,
       partNumber: "3003",
       colorId: "21",
-      marketplaceSync: {
-        brickowl: {
-          status: "pending" as const,
-        },
-      },
+    };
+    // Sync state with pending status
+    const syncState = {
+      _id: "inventorySyncState:3" as Id<"inventorySyncState">,
+      itemId: message.itemId,
+      provider: "brickowl" as const,
+      status: "pending" as const,
     };
 
     ensureBrickowlIdForPartActionMock.mockResolvedValue("");
@@ -468,11 +485,19 @@ describe("drainMarketplaceOutbox action", () => {
       if ("fromSeqExclusive" in args && "toSeqInclusive" in args) {
         return 0;
       }
+      // getSyncState query - needs to check provider first since it also has itemId
+      if ("provider" in args && "itemId" in args) {
+        return syncState;
+      }
       if (Object.keys(args).length === 1 && "itemId" in args) {
         return item;
       }
       if ("seq" in args) {
         return null;
+      }
+      // getPartInternal query for BrickOwl create
+      if ("partNumber" in args) {
+        return { no: args.partNumber, brickowlId: "" }; // Empty brickowlId to trigger error
       }
       const key =
         typeof query === "object" && query !== null && "_path" in query

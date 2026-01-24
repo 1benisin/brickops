@@ -22,6 +22,9 @@ import {
   deleteInventory as deleteBrickOwlInventory,
 } from "../marketplaces/brickowl/inventory/actions";
 import { formatApiError } from "./helpers";
+import {
+  getSyncStateForItem,
+} from "../sync/inventory/helpers";
 
 type InventoryItemDoc = Doc<"inventoryItems">;
 
@@ -42,6 +45,19 @@ export const getPendingOutboxMessages = internalQuery({
         q.eq("status", "pending").lte("nextAttemptAt", args.maxNextAttemptAt),
       )
       .collect();
+  },
+});
+
+/**
+ * Internal query to get sync state for marketplace API calls
+ */
+export const getSyncState = internalQuery({
+  args: {
+    itemId: v.id("inventoryItems"),
+    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
+  },
+  handler: async (ctx, args) => {
+    return await getSyncStateForItem(ctx.db, args.itemId, args.provider);
   },
 });
 
@@ -233,11 +249,11 @@ async function processOutboxMessage(
       throw new Error(`Item not found: ${message.itemId}`);
     }
 
-    // Call actual marketplace API
-    const marketplaceSyncState =
-      message.provider === "bricklink"
-        ? item.marketplaceSync?.bricklink
-        : item.marketplaceSync?.brickowl;
+    // Get sync state from inventorySyncState table
+    const syncState = await ctx.runQuery(internal.inventory.syncWorker.getSyncState, {
+      itemId: message.itemId,
+      provider: message.provider,
+    });
 
     console.log("[MarketplaceSync] Processing message", {
       messageId: message._id,
@@ -248,12 +264,14 @@ async function processOutboxMessage(
       toSeqInclusive: message.toSeqInclusive,
       attempt: message.attempt,
       delta,
-      existingMarketplaceState: marketplaceSyncState,
+      existingMarketplaceState: syncState,
     });
+
     const result = await callMarketplaceAPI(ctx, {
       message,
       item,
       delta,
+      syncState,
     });
 
     if (result.success) {
@@ -361,6 +379,7 @@ async function processOutboxMessage(
 
 /**
  * Call actual marketplace API based on provider and operation kind
+ * Now uses syncState parameter instead of reading from item.marketplaceSync
  */
 async function callMarketplaceAPI(
   ctx: ActionCtx,
@@ -373,6 +392,7 @@ async function callMarketplaceAPI(
     };
     item: InventoryItemDoc;
     delta: number;
+    syncState: Doc<"inventorySyncState"> | null;
   },
 ): Promise<{
   success: boolean;
@@ -490,11 +510,8 @@ async function callMarketplaceAPI(
       }
 
       case "update": {
-        // Get marketplace ID from item's sync status
-        const marketplaceIdRaw =
-          args.message.provider === "bricklink"
-            ? args.item.marketplaceSync?.bricklink?.lotId
-            : args.item.marketplaceSync?.brickowl?.lotId;
+        // Get marketplace ID from inventorySyncState
+        const marketplaceIdRaw = args.syncState?.lotId;
 
         if (!marketplaceIdRaw) {
           // No lot yet - treat as create
@@ -504,10 +521,7 @@ async function callMarketplaceAPI(
           });
         }
 
-        const anchorAvailable =
-          args.message.provider === "bricklink"
-            ? args.item.marketplaceSync?.bricklink?.lastSyncedAvailable ?? 0
-            : args.item.marketplaceSync?.brickowl?.lastSyncedAvailable ?? 0;
+        const anchorAvailable = args.syncState?.lastSyncedAvailable ?? 0;
 
         if (args.message.provider === "bricklink") {
           const payload = mapConvexToBlUpdate(args.item, anchorAvailable);
@@ -556,10 +570,8 @@ async function callMarketplaceAPI(
       }
 
       case "delete": {
-        const marketplaceIdRaw =
-          args.message.provider === "bricklink"
-            ? args.item.marketplaceSync?.bricklink?.lotId
-            : args.item.marketplaceSync?.brickowl?.lotId;
+        // Get marketplace ID from inventorySyncState
+        const marketplaceIdRaw = args.syncState?.lotId;
 
         if (!marketplaceIdRaw) {
           return { success: true, marketplaceId: undefined, error: undefined };
