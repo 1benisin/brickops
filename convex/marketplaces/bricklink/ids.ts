@@ -1,6 +1,6 @@
 // Utilities to generate ids used when talking to the BrickLink API.
 // Utilities to generate ids used when talking to the BrickLink API.
-import { randomHex } from "../../lib/webcrypto";
+import { randomHex } from "../../shared/encryption/webcrypto";
 
 // Create a correlation id so we can trace a BrickLink request across logs and retries.
 export function generateCorrelationId(): string {

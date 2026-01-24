@@ -7,11 +7,11 @@ import {
   getBlCredentials,
   normalizeBlCredentials,
 } from "@/convex/marketplaces/bricklink/credentials";
-import { decryptCredential } from "@/convex/lib/encryption";
+import { decryptCredential } from "@/convex/shared/encryption";
 import { requireActiveUser } from "@/convex/users/authorization";
 import { internal } from "@/convex/_generated/api";
 
-vi.mock("@/convex/lib/encryption", () => ({
+vi.mock("@/convex/shared/encryption", () => ({
   decryptCredential: vi.fn(),
 }));
 

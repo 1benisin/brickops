@@ -2,8 +2,8 @@
 
 import { ConvexError, v } from "convex/values";
 import { action } from "../_generated/server";
-import { BrickognizeClient } from "../lib/external/brickognize";
-import { normalizeApiError } from "../lib/external/types";
+import { BrickognizeClient } from "./client";
+import { normalizeApiError } from "../shared/http/types";
 import {
   CONFIDENCE_THRESHOLD,
   type BrickognizePredictResponse,

@@ -6,7 +6,7 @@ import {
   getSyncSettings,
   saveCredentials,
 } from "@/convex/marketplaces/shared/credentials";
-import * as encryption from "@/convex/lib/encryption";
+import * as encryption from "@/convex/shared/encryption";
 import {
   buildSeedData,
   createConvexTestContext,

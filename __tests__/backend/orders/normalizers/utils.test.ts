@@ -6,7 +6,7 @@ import {
   pickFirstString,
   requireOrderId,
   stringifyAddress,
-} from "@/convex/lib/normalization";
+} from "@/convex/orders/normalizers/shared/normalization";
 import { NORMALIZATION_ERROR_CODES, isNormalizationError } from "@/convex/orders/normalizers/shared/errors";
 import { ConvexError } from "convex/values";
 

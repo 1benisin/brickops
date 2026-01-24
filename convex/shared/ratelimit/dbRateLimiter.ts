@@ -1,6 +1,6 @@
 import type { GenericMutationCtx } from "convex/server";
-import type { DataModel } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
+import type { DataModel } from "../../_generated/dataModel";
+import type { MutationCtx } from "../../_generated/server";
 
 export type RateLimitArgs = {
   key: string; // e.g., ba:{id}:invite_create, email:{addr}:invite_create, token:{token}:invite_redeem

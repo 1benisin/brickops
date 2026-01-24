@@ -3,7 +3,7 @@ import { internal } from "../_generated/api";
 import { v, ConvexError } from "convex/values";
 import type { Id, Doc } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
-import { recordMetric } from "../lib/external/metrics";
+import { recordMetric } from "../shared/metrics";
 import {
   mapConvexToBlCreate,
   mapConvexToBlUpdate,

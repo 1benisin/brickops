@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
 
-import { getAuthEmailFromAddress, getResendApiKey } from "./env";
+import { getAuthEmailFromAddress, getResendApiKey } from "../env";
 
 type ResetEmailPayload = {
   identifier: string;

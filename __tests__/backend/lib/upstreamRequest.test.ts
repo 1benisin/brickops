@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ActionCtx } from "@/convex/_generated/server";
-import { upstreamRequest } from "@/convex/lib/upstreamRequest";
+import { upstreamRequest } from "@/convex/shared/http/upstreamRequest";
 
 const { consumeTokenMock } = vi.hoisted(() => ({
   consumeTokenMock: vi.fn(),
@@ -9,8 +9,12 @@ const { consumeTokenMock } = vi.hoisted(() => ({
 
 vi.mock("@/convex/_generated/api", () => ({
   internal: {
-    ratelimiter: {
-      consumeToken: consumeTokenMock,
+    shared: {
+      ratelimit: {
+        consume: {
+          consumeToken: consumeTokenMock,
+        },
+      },
     },
   },
 }));

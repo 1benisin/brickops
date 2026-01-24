@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sendPasswordResetEmail } from "@/convex/lib/external/email";
+import { sendPasswordResetEmail } from "@/convex/shared/email";
 
 const mockFetch = vi.fn();
 const originalFetch = globalThis.fetch;

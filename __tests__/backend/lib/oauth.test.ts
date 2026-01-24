@@ -4,14 +4,14 @@ import {
   buildOAuthHeader,
   createSignatureBaseString,
   type OAuthHeaderResult,
-} from "@/convex/lib/oauth";
+} from "@/convex/shared/auth/oauth";
 
 const { randomHexMock, hmacSha1Base64Mock } = vi.hoisted(() => ({
   randomHexMock: vi.fn(() => "cafefeed"),
   hmacSha1Base64Mock: vi.fn(async () => "signed-value"),
 }));
 
-vi.mock("@/convex/lib/webcrypto", () => ({
+vi.mock("@/convex/shared/encryption/webcrypto", () => ({
   randomHex: randomHexMock,
   hmacSha1Base64: hmacSha1Base64Mock,
 }));

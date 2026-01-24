@@ -15,7 +15,7 @@ import {
   partTableFields,
 } from "./validators";
 import { requireActiveUser, normalizeImageUrl } from "./helpers";
-import { recordMetric } from "../lib/external/metrics";
+import { recordMetric } from "../shared/metrics";
 
 // ============================================================================
 // QUERIES
@@ -344,7 +344,7 @@ export const getBrickowlPartId = action({
 
     await requireActiveUser(ctx);
 
-    const { RebrickableClient } = await import("../api/rebrickable");
+    const { RebrickableClient } = await import("./rebrickable");
     const client = new RebrickableClient(ctx);
 
     try {
@@ -396,7 +396,7 @@ export const getBrickowlPartIds = action({
       return {};
     }
 
-    const { RebrickableClient } = await import("../api/rebrickable");
+    const { RebrickableClient } = await import("./rebrickable");
     const client = new RebrickableClient(ctx);
 
     try {
@@ -444,7 +444,7 @@ export const getBricklinkPartIdsFromBrickowl = internalAction({
       return [];
     }
 
-    const { RebrickableClient } = await import("../api/rebrickable");
+    const { RebrickableClient } = await import("./rebrickable");
     const client = new RebrickableClient(ctx);
 
     try {

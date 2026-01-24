@@ -4,14 +4,14 @@ import { ConvexError } from "convex/values";
 import type { ActionCtx } from "@/convex/_generated/server";
 import type { Id } from "@/convex/_generated/dataModel";
 import { getBrickOwlCredentials } from "@/convex/marketplaces/brickowl/credentials";
-import { decryptCredential } from "@/convex/lib/encryption";
+import { decryptCredential } from "@/convex/shared/encryption";
 import { requireActiveUser } from "@/convex/users/authorization";
 
 vi.mock("@/convex/users/authorization", () => ({
   requireActiveUser: vi.fn(),
 }));
 
-vi.mock("@/convex/lib/encryption", () => ({
+vi.mock("@/convex/shared/encryption", () => ({
   decryptCredential: vi.fn(),
 }));
 

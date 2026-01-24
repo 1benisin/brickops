@@ -6,8 +6,8 @@ import { makeBlCatalogRequest } from "@/convex/marketplaces/bricklink/transport"
 import { fetchBlColor } from "@/convex/marketplaces/bricklink/catalog/colors/actions";
 import { fetchBlPriceGuide } from "@/convex/marketplaces/bricklink/catalog/priceGuides/actions";
 import { checkBlCatalogHealth } from "@/convex/marketplaces/bricklink/catalog/shared/health";
-import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
-import * as env from "@/convex/lib/external/env";
+import { addMetricListener, clearMetricListeners } from "@/convex/shared/metrics";
+import * as env from "@/convex/shared/env";
 
 type FetchMock = ReturnType<typeof vi.fn>;
 

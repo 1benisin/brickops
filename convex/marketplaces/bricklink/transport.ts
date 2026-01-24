@@ -1,17 +1,17 @@
 import { ConvexError } from "convex/values";
 import type { ActionCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
-import { getBlCredentials as getEnvBlCredentials } from "../../lib/external/env";
-import { recordMetric } from "../../lib/external/metrics";
-import { normalizeApiError, type HealthCheckResult } from "../../lib/external/types";
+import { getBlCredentials as getEnvBlCredentials } from "../../shared/env";
+import { recordMetric } from "../../shared/metrics";
+import { normalizeApiError, type HealthCheckResult } from "../../shared/http/types";
 import type {
   AttemptTelemetry,
   RateLimitOptions,
   RetryPolicy,
   UpstreamResponse,
-} from "../../lib/upstreamRequest";
-import type { OAuthHeaderResult } from "../../lib/oauth";
-import type { Provider } from "../../ratelimiter/schema";
+} from "../../shared/http/upstreamRequest";
+import type { OAuthHeaderResult } from "../../shared/auth/oauth";
+import type { Provider } from "../../shared/ratelimit/schema";
 import { requireActiveUser, type RequireUserReturn } from "@/convex/users/authorization";
 import { parseBlEnvelope } from "./envelope";
 import { blAccountBucket } from "./rateLimit";

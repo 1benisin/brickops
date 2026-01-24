@@ -1,6 +1,6 @@
 // Helper functions for validating and encrypting marketplace API credentials.
 import { ConvexError } from "convex/values";
-import { encryptCredential } from "../../lib/encryption";
+import { encryptCredential } from "../../shared/encryption";
 
 export type CredentialProvider = "bricklink" | "brickowl";
 

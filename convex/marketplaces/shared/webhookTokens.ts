@@ -1,5 +1,5 @@
 // Helpers for creating and keeping webhook tokens used in BrickLink callbacks.
-import { randomHex } from "../../lib/webcrypto";
+import { randomHex } from "../../shared/encryption/webcrypto";
 
 export function generateWebhookToken(bytes = 32): string {
   // Produce a random hex string with enough entropy for a secret token.

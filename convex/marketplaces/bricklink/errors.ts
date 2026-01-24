@@ -2,7 +2,7 @@
 import { ConvexError } from "convex/values";
 import { z } from "zod";
 import { blResponseMetaSchema } from "./schema";
-import { normalizeApiError } from "../../lib/external/types";
+import { normalizeApiError } from "../../shared/http/types";
 import type { StoreErrorCode, StoreOperationError } from "../shared/storeTypes";
 
 // The raw BL response envelope has { meta: { code, message, description }, data: ... }

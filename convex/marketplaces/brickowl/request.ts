@@ -1,5 +1,5 @@
 import type { Id } from "../../_generated/dataModel";
-import type { RateLimitOptions } from "../../lib/upstreamRequest";
+import type { RateLimitOptions } from "../../shared/http/upstreamRequest";
 import type { BrickOwlCredentials } from "./credentials";
 import { boAccountBucket } from "./rateLimit";
 

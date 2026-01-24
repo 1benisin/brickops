@@ -6,9 +6,9 @@ import {
   validateBrickowl,
   validateExternalApis,
 } from "@/convex/lib/external/validate";
-import { addMetricListener, clearMetricListeners } from "@/convex/lib/external/metrics";
+import { addMetricListener, clearMetricListeners } from "@/convex/shared/metrics";
 import * as bricklinkHealth from "@/convex/marketplaces/bricklink/catalog/shared/health";
-import { BrickowlClient } from "@/convex/lib/external/brickowl";
+import { BrickowlClient } from "@/convex/marketplaces/brickowl/httpClient";
 
 const successResponse = (data: unknown, status = 200) => ({
   ok: status >= 200 && status < 300,

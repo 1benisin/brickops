@@ -13,9 +13,9 @@ import { executeBlRequest } from "@/convex/marketplaces/bricklink/request";
 import { getBlCredentials } from "@/convex/marketplaces/bricklink/credentials";
 import { normalizeBlCredentials } from "@/convex/marketplaces/bricklink/credentials";
 import { requireActiveUser } from "@/convex/users/authorization";
-import { recordMetric } from "@/convex/lib/external/metrics";
-import { normalizeApiError } from "@/convex/lib/external/types";
-import { getBlCredentials as getEnvBlCredentials } from "@/convex/lib/external/env";
+import { recordMetric } from "@/convex/shared/metrics";
+import { normalizeApiError } from "@/convex/shared/http/types";
+import { getBlCredentials as getEnvBlCredentials } from "@/convex/shared/env";
 import { blAccountBucket } from "@/convex/marketplaces/bricklink/rateLimit";
 import { parseBlEnvelope } from "@/convex/marketplaces/bricklink/envelope";
 import { generateCorrelationId } from "@/convex/marketplaces/bricklink/ids";
@@ -55,15 +55,15 @@ vi.mock("@/convex/users/authorization", () => ({
   requireActiveUser: vi.fn(),
 }));
 
-vi.mock("@/convex/lib/external/metrics", () => ({
+vi.mock("@/convex/shared/metrics", () => ({
   recordMetric: vi.fn(),
 }));
 
-vi.mock("@/convex/lib/external/types", () => ({
+vi.mock("@/convex/shared/http/types", () => ({
   normalizeApiError: vi.fn(),
 }));
 
-vi.mock("@/convex/lib/external/env", () => ({
+vi.mock("@/convex/shared/env", () => ({
   getBlCredentials: vi.fn(),
 }));
 

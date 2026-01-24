@@ -3,7 +3,7 @@ import { Email } from "@convex-dev/auth/providers/Email";
 import { Password } from "@convex-dev/auth/providers/Password";
 import type { GenericMutationCtx } from "convex/server";
 import { ConvexError } from "convex/values";
-import { checkAndConsumeRateLimitDirect } from "./lib/dbRateLimiter";
+import { checkAndConsumeRateLimitDirect } from "./shared/ratelimit/dbRateLimiter";
 import type { DataModel, Id } from "./_generated/dataModel";
 
 import { sendPasswordResetEmail } from "./lib/external/email";

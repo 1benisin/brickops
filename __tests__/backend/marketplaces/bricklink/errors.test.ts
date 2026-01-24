@@ -12,8 +12,8 @@ const { normalizeApiErrorMock } = vi.hoisted(() => ({
   normalizeApiErrorMock: vi.fn(),
 }));
 
-vi.mock("@/convex/lib/external/types", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/convex/lib/external/types")>();
+vi.mock("@/convex/shared/http/types", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/convex/shared/http/types")>();
   return {
     ...actual,
     normalizeApiError: normalizeApiErrorMock,

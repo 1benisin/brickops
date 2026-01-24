@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { consumeToken } from "@/convex/ratelimiter/consume";
-import { getRateLimitConfig } from "@/convex/ratelimiter/rateLimitConfig";
-import type { RateLimitConfig, Provider } from "@/convex/ratelimiter/schema";
-import { providerValidator } from "@/convex/ratelimiter/schema";
+import { consumeToken } from "@/convex/shared/ratelimit/consume";
+import { getRateLimitConfig } from "@/convex/shared/ratelimit/config";
+import type { RateLimitConfig, Provider } from "@/convex/shared/ratelimit/schema";
+import { providerValidator } from "@/convex/shared/ratelimit/schema";
 import { createConvexTestContext } from "@/test-utils/convex-test-context";
 
 // Helper to create a complete rate limit record with all required fields

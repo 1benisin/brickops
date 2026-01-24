@@ -5,7 +5,7 @@ import type { ActionCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { internal } from "../../_generated/api";
-import { decryptCredential } from "../../lib/encryption";
+import { decryptCredential } from "../../shared/encryption";
 import { requireActiveUser } from "@/convex/users/authorization";
 import { makeBoRequest } from "./client";
 

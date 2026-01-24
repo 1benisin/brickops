@@ -1,5 +1,5 @@
 import { recordMetric } from "../../../../lib/external/metrics";
-import { normalizeApiError, type HealthCheckResult } from "../../../../lib/external/types";
+import { normalizeApiError, type HealthCheckResult } from "../../../../shared/http/types";
 import { makeBlCatalogRequest, type BLCatalogCtx } from "../../transport";
 
 const HEALTH_ENDPOINT = "/orders";

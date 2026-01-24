@@ -1,5 +1,5 @@
-// convex/lib/oauth.ts
-import { hmacSha1Base64, randomHex } from "./webcrypto";
+// convex/shared/auth/oauth.ts
+import { hmacSha1Base64, randomHex } from "../encryption/webcrypto";
 
 const DEFAULT_NONCE_BYTES = 16;
 

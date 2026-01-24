@@ -1,4 +1,4 @@
-import { normalizeApiError } from "../../../../lib/external/types";
+import { normalizeApiError } from "../../../../shared/http/types";
 import type {
   BLCatalogCtx,
   BLCatalogRequestOptions,
