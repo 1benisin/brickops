@@ -1,16 +1,5 @@
-import { defineTable } from "convex/server";
-import { v } from "convex/values";
+// Schema for identify module
+// Note: bricklinkElementReference table was moved to catalog/schema.ts
+// as it contains catalog reference data (element ID to part number mapping)
 
-export const identifyTables = {
-  bricklinkElementReference: defineTable({
-    elementId: v.string(),
-    partNumber: v.string(),
-    colorId: v.number(),
-    bricklinkPartId: v.optional(v.string()),
-    designId: v.optional(v.string()),
-    syncedAt: v.number(),
-  })
-    .index("by_element", ["elementId"])
-    .index("by_part", ["partNumber"])
-    .index("by_color", ["colorId"]),
-};
+export const identifyTables = {};
