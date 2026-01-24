@@ -1,4 +1,4 @@
-import { randomHex } from "../../lib/webcrypto";
+import { randomHex } from "../../shared/encryption/webcrypto";
 
 export function generateCorrelationId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {

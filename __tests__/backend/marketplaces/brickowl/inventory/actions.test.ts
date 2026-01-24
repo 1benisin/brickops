@@ -15,7 +15,7 @@ vi.mock("@/convex/marketplaces/brickowl/ids", () => ({
   generateCorrelationId: vi.fn(() => "corr-123"),
 }));
 
-vi.mock("@/convex/lib/external/metrics", () => ({
+vi.mock("@/convex/shared/metrics", () => ({
   recordMetric: vi.fn(),
 }));
 
@@ -46,7 +46,7 @@ import {
   type BOClient,
 } from "@/convex/marketplaces/brickowl/client";
 import { generateCorrelationId } from "@/convex/marketplaces/brickowl/ids";
-import { recordMetric } from "@/convex/lib/external/metrics";
+import { recordMetric } from "@/convex/shared/metrics";
 import { normalizeBoStoreError } from "@/convex/marketplaces/brickowl/errors";
 import { executeBulkRequests } from "@/convex/marketplaces/brickowl/inventory/bulk";
 

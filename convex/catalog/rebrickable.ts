@@ -7,16 +7,16 @@
 
 import { ConvexError } from "convex/values";
 import type { ActionCtx } from "../_generated/server";
-import { getRebrickableApiKey } from "../lib/external/env";
-import { recordMetric } from "../lib/external/metrics";
-import { HealthCheckResult, normalizeApiError } from "../lib/external/types";
+import { getRebrickableApiKey } from "../shared/env";
+import { recordMetric } from "../shared/metrics";
+import { HealthCheckResult, normalizeApiError } from "../shared/http/types";
 import {
   upstreamRequest,
   type ApiKeyAuth,
   type RateLimitOptions,
   type RetryPolicy,
   type UpstreamResponse,
-} from "../lib/upstreamRequest";
+} from "../shared/http/upstreamRequest";
 
 const BASE_URL = "https://rebrickable.com/api/v3";
 const HEALTH_ENDPOINT = "/lego/colors/";

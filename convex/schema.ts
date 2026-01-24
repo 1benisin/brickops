@@ -6,7 +6,7 @@ import { ordersTables } from "./orders/schema";
 import { marketplaceTables } from "./marketplaces/shared/schema";
 import { catalogTables } from "./catalog/schema";
 import { identifyTables } from "./identify/schema";
-import { ratelimitTables } from "./ratelimiter/schema";
+import { ratelimitTables } from "./shared/ratelimit/schema";
 
 export default defineSchema({
   ...authTables,

@@ -1,7 +1,7 @@
-import { ExternalHttpClient, type RequestOptions, type RequestResult } from "./httpClient";
-import { recordMetric } from "./metrics";
-import { getBrickowlApiKey } from "./env";
-import { normalizeApiError, type HealthCheckResult } from "./types";
+import { ExternalHttpClient, type RequestOptions, type RequestResult } from "../../shared/http/client";
+import { recordMetric } from "../../shared/metrics";
+import { getBrickowlApiKey } from "../../shared/env";
+import { normalizeApiError, type HealthCheckResult } from "../../shared/http/types";
 
 const BASE_URL = "https://api.brickowl.com/v1";
 const VERIFY_KEY_ENDPOINT = "/verify_key";

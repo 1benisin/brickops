@@ -26,7 +26,7 @@ class MockFormData {
 }
 (globalThis as any).FormData = MockFormData;
 
-vi.mock("@/convex/lib/external/brickognize", () => ({
+vi.mock("@/convex/identify/client", () => ({
   BrickognizeClient: vi.fn().mockImplementation(() => ({
     request: mockRequest,
   })),

@@ -1,10 +1,10 @@
-// convex/lib/upstreamRequest.ts
+// convex/shared/http/upstreamRequest.ts
 
 import { ConvexError, type Value } from "convex/values";
-import { internal } from "../_generated/api";
-import type { ActionCtx } from "../_generated/server";
-import type { Provider } from "../ratelimiter/schema";
-import { buildOAuthHeader, type OAuthHeaderResult, type OAuthMethod } from "./oauth";
+import { internal } from "../../_generated/api";
+import type { ActionCtx } from "../../_generated/server";
+import type { Provider } from "../ratelimit/schema";
+import { buildOAuthHeader, type OAuthHeaderResult, type OAuthMethod } from "../auth/oauth";
 
 type HttpMethod = OAuthMethod;
 
@@ -246,7 +246,7 @@ async function consumeRateLimit(
   url: string,
   onAttempt?: (info: AttemptTelemetry) => void,
 ): Promise<ConsumeResult> {
-  const consumeTokenMutation = internal.ratelimiter?.consume?.consumeToken;
+  const consumeTokenMutation = internal.shared?.ratelimit?.consume?.consumeToken;
 
   if (!consumeTokenMutation) {
     throw new ConvexError({

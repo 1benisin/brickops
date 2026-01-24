@@ -1,7 +1,7 @@
 import { internalAction } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { v } from "convex/values";
-import { getBrickowlApiKey } from "../../lib/external/env";
+import { getBrickowlApiKey } from "../../shared/env";
 
 /**
  * Response from BrickOwl /catalog/id_lookup endpoint
@@ -38,7 +38,7 @@ export const lookupBrickowlId = internalAction({
     }
 
     // Rate limiting - use global bucket for catalog refresh
-    const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+    const token = await ctx.runMutation(internal.shared.ratelimit.consume.consumeToken, {
       bucket: "brickops:catalog:brickowl",
       provider: "brickowl",
     });

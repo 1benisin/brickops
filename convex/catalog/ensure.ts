@@ -15,7 +15,7 @@ import { isFresh, isColorComplete, DEFAULT_FRESHNESS_THRESHOLD_MS } from "./help
 import { fetchBlPart, fetchBlPartColors } from "../marketplaces/bricklink/catalog/parts/actions";
 import { fetchBlPriceGuide } from "../marketplaces/bricklink/catalog/priceGuides/actions";
 import { fetchBlColor } from "../marketplaces/bricklink/catalog/colors/actions";
-import { RebrickableClient } from "../api/rebrickable";
+import { RebrickableClient } from "./rebrickable";
 import type { PriceGuideRecord } from "./prices";
 
 // ============================================================================
@@ -301,7 +301,7 @@ export const ensureCatalogPart = internalAction({
     // ========================================================================
     if (_step === "part") {
       // Check rate limit for BrickLink
-      const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+      const token = await ctx.runMutation(internal.shared.ratelimit.consume.consumeToken, {
         bucket: "brickopsAdmin",
         provider: "bricklink",
       });
@@ -385,7 +385,7 @@ export const ensureCatalogPart = internalAction({
     // ========================================================================
     if (_step === "colors") {
       // Check rate limit for BrickLink
-      const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+      const token = await ctx.runMutation(internal.shared.ratelimit.consume.consumeToken, {
         bucket: "brickopsAdmin",
         provider: "bricklink",
       });
@@ -458,7 +458,7 @@ export const ensureCatalogPart = internalAction({
       // Process each color in the batch
       for (const colorId of batch) {
         // Check rate limit for BrickLink
-        const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+        const token = await ctx.runMutation(internal.shared.ratelimit.consume.consumeToken, {
           bucket: "brickopsAdmin",
           provider: "bricklink",
         });
@@ -589,7 +589,7 @@ export const ensureCatalogPart = internalAction({
       // Process each color in the batch
       for (const colorId of batch) {
         // Check rate limit for each price fetch
-        const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+        const token = await ctx.runMutation(internal.shared.ratelimit.consume.consumeToken, {
           bucket: "brickopsAdmin",
           provider: "bricklink",
         });
@@ -737,7 +737,7 @@ export const ensureColor = internalAction({
     }
 
     // Check rate limit for BrickLink
-    const token = await ctx.runMutation(internal.ratelimiter.consume.consumeToken, {
+    const token = await ctx.runMutation(internal.shared.ratelimit.consume.consumeToken, {
       bucket: "brickopsAdmin",
       provider: "bricklink",
     });

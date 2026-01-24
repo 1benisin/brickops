@@ -29,7 +29,7 @@ vi.mock("@/convex/marketplaces/brickowl/inventory/actions", () => ({
   deleteInventory: vi.fn(async () => ({ success: true })),
 }));
 
-vi.mock("@/convex/lib/external/metrics", () => ({
+vi.mock("@/convex/shared/metrics", () => ({
   recordMetric: vi.fn(),
 }));
 
@@ -57,7 +57,7 @@ import {
 import {
   createInventory as createBrickOwlInventory,
 } from "@/convex/marketplaces/brickowl/inventory/actions";
-import { recordMetric } from "@/convex/lib/external/metrics";
+import { recordMetric } from "@/convex/shared/metrics";
 
 const ensureBrickowlIdForPartActionMock = vi.mocked(ensureBrickowlIdForPartAction);
 const formatApiErrorMock = vi.mocked(formatApiError);

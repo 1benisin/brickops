@@ -1,5 +1,5 @@
-import { createNormalizationError, NORMALIZATION_ERROR_CODES } from "../orders/normalizers/shared/errors";
-import type { ProviderId } from "../orders/normalizers/types";
+import { createNormalizationError, NORMALIZATION_ERROR_CODES } from "./errors";
+import type { ProviderId } from "../types";
 
 const UNIX_SECOND_THRESHOLD = 1e11;
 

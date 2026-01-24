@@ -6,7 +6,7 @@ import {
   withDefaultHeaders,
 } from "@/convex/marketplaces/bricklink/request";
 import type { BLOAuthCredentials } from "@/convex/marketplaces/bricklink/credentials";
-import { upstreamRequest } from "@/convex/lib/upstreamRequest";
+import { upstreamRequest } from "@/convex/shared/http/upstreamRequest";
 import {
   buildAuthorizationHeader,
   generateOAuthParams,
@@ -14,7 +14,7 @@ import {
 } from "@/convex/marketplaces/bricklink/oauth";
 import { generateCorrelationId } from "@/convex/marketplaces/bricklink/ids";
 
-vi.mock("@/convex/lib/upstreamRequest", () => ({
+vi.mock("@/convex/shared/http/upstreamRequest", () => ({
   upstreamRequest: vi.fn(),
 }));
 

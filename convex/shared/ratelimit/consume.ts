@@ -4,9 +4,9 @@
  * Provides database-backed rate limiting with token bucket algorithm.
  */
 
-import { internalMutation } from "../_generated/server";
+import { internalMutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { getRateLimitConfig } from "./rateLimitConfig";
+import { getRateLimitConfig } from "./config";
 import { providerValidator } from "./schema";
 
 // ============================================================================

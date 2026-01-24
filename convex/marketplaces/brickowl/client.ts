@@ -6,7 +6,7 @@ import {
   type AttemptTelemetry,
   type RetryPolicy,
   type UpstreamResponse,
-} from "../../lib/upstreamRequest";
+} from "../../shared/http/upstreamRequest";
 import { getBrickOwlCredentials } from "./credentials";
 import { generateCorrelationId } from "./ids";
 import {

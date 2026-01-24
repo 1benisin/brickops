@@ -12,8 +12,8 @@ import {
 import { getBrickOwlCredentials } from "@/convex/marketplaces/brickowl/credentials";
 import { generateCorrelationId } from "@/convex/marketplaces/brickowl/ids";
 import * as requestModule from "@/convex/marketplaces/brickowl/request";
-import { upstreamRequest } from "@/convex/lib/upstreamRequest";
-import type { UpstreamResponse } from "@/convex/lib/upstreamRequest";
+import { upstreamRequest } from "@/convex/shared/http/upstreamRequest";
+import type { UpstreamResponse } from "@/convex/shared/http/upstreamRequest";
 
 vi.mock("@/convex/marketplaces/brickowl/credentials", () => ({
   getBrickOwlCredentials: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock("@/convex/marketplaces/brickowl/ids", () => ({
   generateCorrelationId: vi.fn(),
 }));
 
-vi.mock("@/convex/lib/upstreamRequest", () => ({
+vi.mock("@/convex/shared/http/upstreamRequest", () => ({
   upstreamRequest: vi.fn(),
 }));
 

@@ -1,7 +1,11 @@
-import { ExternalHttpClient, RequestOptions, RequestResult } from "./httpClient";
-import { RateLimitConfig } from "./httpClient";
-import { recordMetric } from "./metrics";
-import { HealthCheckResult, normalizeApiError } from "./types";
+import {
+  ExternalHttpClient,
+  type RequestOptions,
+  type RequestResult,
+  type RateLimitConfig,
+} from "../shared/http/client";
+import { recordMetric } from "../shared/metrics";
+import { type HealthCheckResult, normalizeApiError } from "../shared/http/types";
 
 const BASE_URL = "https://api.brickognize.com";
 const HEALTH_ENDPOINT = "/health";

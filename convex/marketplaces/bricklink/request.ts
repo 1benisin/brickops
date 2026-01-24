@@ -6,8 +6,8 @@ import {
   type RateLimitOptions,
   type RetryPolicy,
   type UpstreamResponse,
-} from "../../lib/upstreamRequest";
-import type { OAuthHeaderResult } from "../../lib/oauth";
+} from "../../shared/http/upstreamRequest";
+import type { OAuthHeaderResult } from "../../shared/auth/oauth";
 import {
   buildAuthorizationHeader,
   generateOAuthParams,

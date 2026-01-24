@@ -3,7 +3,7 @@
  * Used by both catalog client and store client
  */
 
-import { hmacSha1Base64, randomHex } from "../../lib/webcrypto";
+import { hmacSha1Base64, randomHex } from "../../shared/encryption/webcrypto";
 
 /**
  * Percent-encode per RFC 3986 (OAuth 1.0a spec)

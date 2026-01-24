@@ -1,8 +1,8 @@
 import { mutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { randomHex } from "../lib/webcrypto";
+import { randomHex } from "../shared/encryption/webcrypto";
 import { ConvexError, v } from "convex/values";
-import { checkAndConsumeRateLimitDirect } from "../lib/dbRateLimiter";
+import { checkAndConsumeRateLimitDirect } from "../shared/ratelimit/dbRateLimiter";
 import { api } from "../_generated/api";
 import { requireActiveUser } from "./authorization";
 

@@ -13,7 +13,7 @@ const { randomHexMock, hmacSha1Base64Mock } = vi.hoisted(() => ({
   hmacSha1Base64Mock: vi.fn(async () => "signed-digest"),
 }));
 
-vi.mock("@/convex/lib/webcrypto", () => ({
+vi.mock("@/convex/shared/encryption/webcrypto", () => ({
   randomHex: randomHexMock,
   hmacSha1Base64: hmacSha1Base64Mock,
 }));
