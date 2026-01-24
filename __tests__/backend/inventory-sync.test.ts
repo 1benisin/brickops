@@ -75,26 +75,36 @@ describe("updateSyncStatuses", () => {
     vi.clearAllMocks();
   });
 
-  it("merges provider updates while preserving existing metadata", async () => {
+  it("upserts inventorySyncState records for each provider result", async () => {
     const ctx = createConvexTestContext();
     const inventoryItemId = await ctx.db.insert("inventoryItems", {
       businessAccountId: "businessAccounts:1",
       quantityAvailable: 10,
       quantityReserved: 0,
       condition: "new",
-      marketplaceSync: {
-        bricklink: {
-          status: "synced",
-          lotId: 12345,
-          lastSyncAttempt: Date.now() - 1_000,
-          lastSyncedAvailable: 6,
-        },
-        brickowl: {
-          status: "synced",
-          lotId: "bo-123",
-          lastSyncAttempt: Date.now() - 2_000,
-        },
-      },
+      name: "Test Item",
+      partNumber: "3001",
+      colorId: "5",
+      location: "A1",
+      createdBy: "users:1",
+      lifecycleStatus: "ready_to_sync",
+    });
+
+    // Create initial sync state records
+    await ctx.db.insert("inventorySyncState", {
+      itemId: inventoryItemId,
+      provider: "bricklink",
+      status: "synced",
+      lotId: 12345,
+      lastSyncAttempt: Date.now() - 1_000,
+      lastSyncedAvailable: 6,
+    });
+    await ctx.db.insert("inventorySyncState", {
+      itemId: inventoryItemId,
+      provider: "brickowl",
+      status: "synced",
+      lotId: "bo-123",
+      lastSyncAttempt: Date.now() - 2_000,
     });
 
     const start = Date.now();
@@ -117,17 +127,31 @@ describe("updateSyncStatuses", () => {
       ],
     });
 
-    const updated = (await ctx.db.get(inventoryItemId))!;
-    expect(updated.marketplaceSync.bricklink).toMatchObject({
+    // Check inventorySyncState records
+    const bricklinkState = await ctx.db
+      .query("inventorySyncState")
+      .withIndex("by_item_provider", (q) =>
+        q.eq("itemId", inventoryItemId).eq("provider", "bricklink"),
+      )
+      .first();
+
+    const brickowlState = await ctx.db
+      .query("inventorySyncState")
+      .withIndex("by_item_provider", (q) =>
+        q.eq("itemId", inventoryItemId).eq("provider", "brickowl"),
+      )
+      .first();
+
+    expect(bricklinkState).toMatchObject({
       status: "synced",
       lotId: 777,
       lastSyncedSeq: 42,
       lastSyncedAvailable: 15,
     });
-    expect(updated.marketplaceSync.bricklink.lastSyncAttempt).toBeGreaterThanOrEqual(start);
-    expect(updated.marketplaceSync.brickowl).toMatchObject({
+    expect(bricklinkState!.lastSyncAttempt).toBeGreaterThanOrEqual(start);
+
+    expect(brickowlState).toMatchObject({
       status: "failed",
-      lotId: "bo-123",
       error: "rate limited",
     });
   });
@@ -171,7 +195,6 @@ describe("syncInventoryChange action", () => {
       condition: "new" as const,
       partNumber: "3001",
       colorId: "5",
-      marketplaceSync: {},
     };
 
     ensureBrickowlIdForPartActionMock.mockResolvedValue("BO-3001");
@@ -179,7 +202,7 @@ describe("syncInventoryChange action", () => {
     mapConvexToBrickOwlCreateMock.mockReturnValue({ payload: "bo-create" });
 
     const unexpectedQueries: Array<{ query: unknown; args: Record<string, unknown> }> = [];
-    const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
+    const runQuery = vi.fn(async (query: unknown, args: Record<string, unknown>) => {
       if (Object.keys(args).length === 1 && "itemId" in args) {
         expect(args).toEqual({ itemId });
         return inventoryItem;
@@ -190,6 +213,10 @@ describe("syncInventoryChange action", () => {
       }
       if ("colorId" in args) {
         return { brickowlColorId: 501 };
+      }
+      // getLotIdForItem query - return null for create scenario
+      if ("provider" in args && "itemId" in args) {
+        return null;
       }
       const key =
         typeof query === "object" && query !== null && "_path" in query

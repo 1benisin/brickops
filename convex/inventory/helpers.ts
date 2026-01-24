@@ -74,17 +74,22 @@ export async function getCurrentAvailableFromLedger(
 
 /**
  * Get the lastSyncedSeq for a provider (defaults to 0 if never synced)
+ * Now queries from inventorySyncState table instead of embedded field.
+ * 
+ * @deprecated Use getLastSyncedSeq from ../sync/inventory/helpers instead
  */
 export async function getLastSyncedSeq(
   db: DatabaseReader,
   itemId: Id<"inventoryItems">,
   provider: "bricklink" | "brickowl",
 ): Promise<number> {
-  const item = await db.get(itemId);
-  if (!item) throw new Error("Item not found");
+  // Query from inventorySyncState table
+  const syncState = await db
+    .query("inventorySyncState")
+    .withIndex("by_item_provider", (q) => q.eq("itemId", itemId).eq("provider", provider))
+    .first();
 
-  const cursor = item.marketplaceSync?.[provider]?.lastSyncedSeq;
-  return cursor ?? 0;
+  return syncState?.lastSyncedSeq ?? 0;
 }
 
 /**

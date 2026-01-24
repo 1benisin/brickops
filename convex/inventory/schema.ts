@@ -1,44 +1,18 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
-const marketplaceSync = v.optional(
-  v.object({
-    bricklink: v.optional(
-      v.object({
-        lotId: v.optional(v.number()),
-        status: v.union(
-          v.literal("pending"),
-          v.literal("syncing"),
-          v.literal("synced"),
-          v.literal("failed"),
-          v.literal("disabled"),
-        ),
-        lastSyncAttempt: v.optional(v.number()),
-        error: v.optional(v.string()),
-        // Phase 2: Cursor tracking for retry logic
-        lastSyncedSeq: v.optional(v.number()), // Last ledger sequence applied to marketplace
-        lastSyncedAvailable: v.optional(v.number()), // Denormalized available quantity at last sync
-      }),
-    ),
-    brickowl: v.optional(
-      v.object({
-        lotId: v.optional(v.string()),
-        status: v.union(
-          v.literal("pending"),
-          v.literal("syncing"),
-          v.literal("synced"),
-          v.literal("failed"),
-          v.literal("disabled"),
-        ),
-        lastSyncAttempt: v.optional(v.number()),
-        error: v.optional(v.string()),
-        // Phase 2: Cursor tracking for retry logic
-        lastSyncedSeq: v.optional(v.number()),
-        lastSyncedAvailable: v.optional(v.number()),
-      }),
-    ),
-  }),
-);
+/**
+ * Inventory Module Schema
+ *
+ * Tables for inventory management:
+ * - inventoryItems: Core inventory records
+ * - inventoryQuantityLedger: Event-sourced quantity changes
+ * - inventoryLocationLedger: Event-sourced location changes
+ *
+ * Note: Marketplace sync state is now in the sync/ module:
+ * - inventorySyncState: Per-item, per-provider sync status (sync/schema.ts)
+ * - marketplaceOutbox: Transactional outbox for sync operations (sync/schema.ts)
+ */
 
 export const inventoryTables = {
   inventoryItems: defineTable({
@@ -59,8 +33,6 @@ export const inventoryTables = {
     // Soft delete support
     isArchived: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
-    // Consolidated marketplace sync tracking (refactored from individual fields)
-    marketplaceSync: marketplaceSync,
     // Unified lifecycle status for the item
     lifecycleStatus: v.union(
       v.literal("awaiting_catalog"),
@@ -68,6 +40,7 @@ export const inventoryTables = {
       v.literal("synced"),
       v.literal("error"),
     ),
+    // Note: marketplaceSync field removed - sync state is now in inventorySyncState table
   })
     // Existing indexes (keep these)
     .index("by_businessAccount", ["businessAccountId"])
@@ -175,33 +148,5 @@ export const inventoryTables = {
     .index("by_location", ["businessAccountId", "toLocation"])
     .index("by_correlation", ["correlationId"]),
 
-  // Phase 2: Transactional outbox for marketplace sync operations
-  marketplaceOutbox: defineTable({
-    businessAccountId: v.id("businessAccounts"),
-    itemId: v.id("inventoryItems"),
-    provider: v.union(v.literal("bricklink"), v.literal("brickowl")),
-    kind: v.union(v.literal("create"), v.literal("update"), v.literal("delete")),
-
-    // Delta window (what this sync covers)
-    fromSeqExclusive: v.number(),
-    toSeqInclusive: v.number(),
-
-    // Idempotency
-    idempotencyKey: v.string(),
-
-    // Lifecycle
-    status: v.union(
-      v.literal("pending"),
-      v.literal("inflight"),
-      v.literal("succeeded"),
-      v.literal("failed"),
-    ),
-    attempt: v.number(),
-    nextAttemptAt: v.number(),
-    lastError: v.optional(v.string()),
-    // createdAt removed - using _creationTime
-    correlationId: v.optional(v.string()),
-  })
-    .index("by_status_time", ["status", "nextAttemptAt"])
-    .index("by_item_provider", ["itemId", "provider"]),
+  // Note: marketplaceOutbox moved to sync/schema.ts
 };

@@ -7,6 +7,7 @@ import { marketplaceTables } from "./marketplaces/shared/schema";
 import { catalogTables } from "./catalog/schema";
 import { identifyTables } from "./identify/schema";
 import { ratelimitTables } from "./shared/ratelimit/schema";
+import { syncTables } from "./sync/schema";
 
 export default defineSchema({
   ...authTables,
@@ -17,4 +18,5 @@ export default defineSchema({
   ...catalogTables,
   ...identifyTables,
   ...ratelimitTables,
+  ...syncTables,
 });
