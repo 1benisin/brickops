@@ -1586,3 +1586,50 @@ convex/schema.ts         # Root schema aggregator
 convex/crons.ts          # Cron job definitions
 convex/http.ts           # HTTP route definitions
 ```
+
+---
+
+## Follow-up Tasks (Discovered During Verification)
+
+### Task F1: Create Catalog Sync Orchestration Layer
+
+**Discovered During:** Task 7.1 (BrickLink Module Isolation Verification)
+
+**Problem:**
+The BrickLink module (`marketplaces/bricklink/catalog/refresh.ts`) contains mutations that write directly to tables owned by the `catalog/` module:
+- `upsertColor` writes to `colors` table
+- `upsertPriceGuide` writes to `partPrices` table
+
+This violates the module isolation principle where marketplace modules should only handle API communication and response transformation.
+
+**Proposed Solution:**
+Create a `sync/catalog/` orchestration layer (similar to `sync/inventory/` and `sync/orders/`) that handles persistence of catalog data fetched from external APIs.
+
+**Steps:**
+
+1. Create `sync/catalog/` directory structure:
+   ```
+   sync/catalog/
+   ├── actions.ts      # Catalog sync orchestration
+   └── mutations.ts    # Catalog persistence mutations (moved from bricklink)
+   ```
+
+2. Move `upsertColor` and `upsertPriceGuide` from `marketplaces/bricklink/catalog/refresh.ts` to `sync/catalog/mutations.ts`
+
+3. Update BrickLink catalog actions to:
+   - Fetch data from BrickLink API
+   - Transform responses
+   - Call `sync/catalog/` mutations for persistence
+
+4. Apply same pattern to BrickOwl if it has similar catalog writes
+
+5. Update module READMEs to reflect new dependency structure
+
+**Acceptance Criteria:**
+
+- [ ] `sync/catalog/` directory exists with appropriate structure
+- [ ] Catalog persistence mutations moved from marketplace modules to sync layer
+- [ ] BrickLink module only fetches and transforms catalog data
+- [ ] BrickOwl module follows same pattern
+- [ ] All tests pass
+- [ ] Module READMEs updated

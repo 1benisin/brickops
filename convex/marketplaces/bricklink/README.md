@@ -9,6 +9,30 @@ The BrickLink service owns every Convex integration with BrickLink’s REST APIs
 - Use `withBlClient` (via `transport.ts`) for every upstream call so retries, metrics, OAuth signing, and rate limits stay consistent.
 - Validate inbound and outbound payloads with the closest `schema.ts`, surface errors with `StoreOperationResult`, and record `external.bricklink.*` metrics including correlation ids.
 
+## Tables Owned
+
+| Table | Description |
+| ----- | ----------- |
+| `marketplaceCredentials` | Encrypted OAuth credentials (shared table with BrickOwl) |
+| `bricklinkNotifications` | Notification processing state and deduplication |
+
+## Dependencies
+
+| Module | Usage |
+| ------ | ----- |
+| `catalog/` | Writes color and price data (isolation violation - should migrate to sync/catalog/) |
+| `orders/` | Calls `orders.ingestion.upsertOrder` for order persistence |
+| `marketplaces/shared/` | Credentials, rate limiting, store types, webhook tokens |
+| `users/authorization` | Auth checks and environment assertions |
+
+## Used By
+
+| Consumer | Usage |
+| -------- | ----- |
+| `sync/inventory/` | Inventory sync to BrickLink marketplace |
+| `sync/orders/` | Order normalization from BrickLink |
+| Webhooks/Schedulers | Notification polling and processing |
+
 ## Developer Onboarding Checklist
 
 - Read `docs/architecture/backend/architecture.md` and `docs/architecture/development/development-workflow.md` to align with Convex patterns and workflows.
