@@ -5,7 +5,7 @@ import {
   validateBrickognize,
   validateBrickowl,
   validateExternalApis,
-} from "@/convex/lib/external/validate";
+} from "@/convex/shared/validation";
 import { addMetricListener, clearMetricListeners } from "@/convex/shared/metrics";
 import * as bricklinkHealth from "@/convex/marketplaces/bricklink/catalog/shared/health";
 import { BrickowlClient } from "@/convex/marketplaces/brickowl/httpClient";

@@ -158,7 +158,7 @@ export const triggerMockOrder = mutation({
         i,
       );
 
-      await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
+      await ctx.runMutation(internal.sync.orders.ingestion.upsertOrder, {
         businessAccountId,
         provider: "brickowl",
         orderData,

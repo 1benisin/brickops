@@ -1,7 +1,7 @@
 import type { ActionCtx } from "../../../_generated/server";
 import type { Id } from "../../../_generated/dataModel";
 import { ConvexError } from "convex/values";
-import { recordMetric } from "../../../lib/external/metrics";
+import { recordMetric } from "../../../shared/metrics";
 import type { StoreOperationError, StoreOperationResult } from "../../shared/storeTypes";
 import {
   blInventoryCreatePayloadSchema,

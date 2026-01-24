@@ -96,7 +96,6 @@ describe("BrickLink catalog client", () => {
       colorCode: "BR",
       colorType: "SOLID",
       lastFetched: now.valueOf(),
-      createdAt: now.valueOf(),
     });
     expect(events).toContain("external.bricklink.catalog.request");
 
@@ -156,7 +155,6 @@ describe("BrickLink catalog client", () => {
       newOrUsed: "U",
       avgPrice: 1.11,
       lastFetched: now.valueOf(),
-      createdAt: now.valueOf(),
     });
     expect(result.newStock).toMatchObject({
       guideType: "stock",

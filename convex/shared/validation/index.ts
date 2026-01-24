@@ -1,7 +1,7 @@
 import { checkBlCatalogHealth } from "../../marketplaces/bricklink/catalog/shared/health";
 import { BrickognizeClient } from "../../identify/client";
 import { BrickowlClient } from "../../marketplaces/brickowl/httpClient";
-import type { HealthCheckResult } from "../../shared/http/types";
+import type { HealthCheckResult } from "../http/types";
 
 export const validateBrickognize = async () => new BrickognizeClient().healthCheck();
 

@@ -6,14 +6,11 @@ import {
   bricklinkOrderItemsFixture,
   brickowlOrderFixture,
   brickowlOrderItemsFixture,
-} from "../../convex/orders/refactor_baseline/fixtures";
-import {
-  normalizeOrder,
-  normalizeOrderItems,
-} from "../../convex/sync/orders/normalizers";
+} from "../../__tests__/backend/orders/fixtures/fixtures";
+import { normalizeOrder, normalizeOrderItems } from "../../convex/sync/orders/normalizers";
 
 const projectRoot = path.resolve(process.cwd());
-const baselineRoot = path.resolve(projectRoot, "convex/orders/refactor_baseline");
+const baselineRoot = path.resolve(projectRoot, "__tests__/backend/orders/fixtures");
 const rawDir = path.join(baselineRoot, "raw-fixtures");
 const snapshotDir = path.join(baselineRoot, "snapshots");
 

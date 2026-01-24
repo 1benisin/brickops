@@ -11,27 +11,27 @@ BrickOwl integrations live under this module. Follow these conventions to keep p
 
 ## Tables Owned
 
-| Table | Description |
-| ----- | ----------- |
+| Table                    | Description                                             |
+| ------------------------ | ------------------------------------------------------- |
 | `marketplaceCredentials` | Encrypted API credentials (shared table with BrickLink) |
 
 > Note: This module does not own any BrickOwl-specific tables. Notification state (if needed) would use the shared `marketplaceCredentials` webhook status fields.
 
 ## Dependencies
 
-| Module | Usage |
-| ------ | ----- |
-| `orders/` | Calls `orders.ingestion.upsertOrder` for order persistence (via mockOrders.ts) |
-| `marketplaces/shared/` | Credentials, rate limiting, store types, webhook tokens |
-| `users/authorization` | Auth checks and environment assertions |
+| Module                 | Usage                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `sync/orders/`         | Calls `sync.orders.ingestion.upsertOrder` for order persistence (via mockOrders.ts) |
+| `marketplaces/shared/` | Credentials, rate limiting, store types, webhook tokens                             |
+| `users/authorization`  | Auth checks and environment assertions                                              |
 
 ## Used By
 
-| Consumer | Usage |
-| -------- | ----- |
-| `sync/inventory/` | Inventory sync to BrickOwl marketplace |
-| `sync/orders/` | Order normalization from BrickOwl |
-| Webhooks/Schedulers | Notification polling and processing |
+| Consumer            | Usage                                  |
+| ------------------- | -------------------------------------- |
+| `sync/inventory/`   | Inventory sync to BrickOwl marketplace |
+| `sync/orders/`      | Order normalization from BrickOwl      |
+| Webhooks/Schedulers | Notification polling and processing    |
 
 ## Developer Onboarding Checklist
 

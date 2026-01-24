@@ -1,10 +1,27 @@
-import { internalMutation } from "../_generated/server";
-import type { MutationCtx } from "../_generated/server";
+/**
+ * Order Ingestion Orchestration
+ *
+ * This module handles ingesting orders from marketplace providers (BrickLink, BrickOwl)
+ * and coordinates between the orders and inventory domains.
+ *
+ * Located in sync/ because it:
+ * - Normalizes provider-specific order formats to a unified schema
+ * - Writes to both orders/ and inventory/ domains
+ * - Coordinates inventory reservation when orders arrive
+ *
+ * This is inherently an orchestration concern that bridges multiple domains.
+ */
+
+import { internalMutation } from "../../_generated/server";
+import type { MutationCtx } from "../../_generated/server";
 import { v } from "convex/values";
-import type { BLOrderItemResponse, BLOrderResponse } from "../marketplaces/bricklink/orders/schema";
-import type { BOOrderItemResponse, BOOrderResponse } from "../marketplaces/brickowl/schema";
-import type { Id } from "../_generated/dataModel";
-import { getCurrentAvailableFromLedger, getNextSeqForItem } from "../inventory/helpers";
+import type {
+  BLOrderItemResponse,
+  BLOrderResponse,
+} from "../../marketplaces/bricklink/orders/schema";
+import type { BOOrderItemResponse, BOOrderResponse } from "../../marketplaces/brickowl/schema";
+import type { Id } from "../../_generated/dataModel";
+import { getCurrentAvailableFromLedger, getNextSeqForItem } from "../../inventory/helpers";
 
 type OrderItemStatus = "picked" | "unpicked" | "skipped" | "issue";
 

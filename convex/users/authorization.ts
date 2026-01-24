@@ -68,3 +68,17 @@ export async function requireUserRole(
 
   return context;
 }
+
+/**
+ * Assert that user belongs to the specified business account.
+ * Throws a ConvexError if the user's businessAccountId doesn't match.
+ *
+ * @param user - The authenticated user document
+ * @param businessAccountId - The business account ID to check against
+ * @throws ConvexError if user cannot modify the specified business account
+ */
+export function assertBusinessMembership(user: Doc<"users">, businessAccountId: string) {
+  if (user.businessAccountId !== businessAccountId) {
+    throw new ConvexError("User cannot modify another business account");
+  }
+}

@@ -187,7 +187,7 @@ export async function processMockOrderNotification(
     throw new Error("Mock webhook notifications can only be processed in development environments");
   }
 
-  await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
+  await ctx.runMutation(internal.sync.orders.ingestion.upsertOrder, {
     businessAccountId: args.businessAccountId,
     provider: args.provider,
     orderData: args.orderData,

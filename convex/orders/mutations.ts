@@ -1,7 +1,7 @@
 import { mutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { ConvexError, v } from "convex/values";
-import { requireUser, assertBusinessMembership } from "../inventory/helpers";
+import { requireActiveUser, assertBusinessMembership } from "../users/authorization";
 
 /**
  * Mark an order item as picked and update inventory reserved quantity
@@ -13,7 +13,7 @@ export const markOrderItemAsPicked = mutation({
     inventoryItemId: v.id("inventoryItems"),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
+    const { user } = await requireActiveUser(ctx);
 
     // Get order item
     const orderItem = await ctx.db.get(args.orderItemId);
@@ -40,10 +40,7 @@ export const markOrderItemAsPicked = mutation({
       throw new ConvexError("Inventory item does not match order item");
     }
 
-    if (
-      orderItem.colorId !== undefined &&
-      inventoryItem.colorId !== orderItem.colorId.toString()
-    ) {
+    if (orderItem.colorId !== undefined && inventoryItem.colorId !== orderItem.colorId.toString()) {
       throw new ConvexError("Inventory item does not match order item");
     }
 
@@ -90,7 +87,7 @@ export const updateOrderStatusIfFullyPicked = mutation({
     orderId: v.string(),
   },
   handler: async (ctx, args) => {
-    const { user, businessAccountId } = await requireUser(ctx);
+    const { user, businessAccountId } = await requireActiveUser(ctx);
 
     // Get order
     const order = await ctx.db
@@ -139,7 +136,7 @@ export const markOrdersAsPicked = mutation({
     forceUpdate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { user, businessAccountId } = await requireUser(ctx);
+    const { user, businessAccountId } = await requireActiveUser(ctx);
 
     const updatedOrderIds: string[] = [];
     const skippedOrderIds: string[] = [];
@@ -217,7 +214,7 @@ export const markOrderItemAsIssue = mutation({
     inventoryItemId: v.id("inventoryItems"),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
+    const { user } = await requireActiveUser(ctx);
 
     // Get order item
     const orderItem = await ctx.db.get(args.orderItemId);
@@ -244,10 +241,7 @@ export const markOrderItemAsIssue = mutation({
       throw new ConvexError("Inventory item does not match order item");
     }
 
-    if (
-      orderItem.colorId !== undefined &&
-      inventoryItem.colorId !== orderItem.colorId.toString()
-    ) {
+    if (orderItem.colorId !== undefined && inventoryItem.colorId !== orderItem.colorId.toString()) {
       throw new ConvexError("Inventory item does not match order item");
     }
 
@@ -293,7 +287,7 @@ export const markOrderItemAsSkipped = mutation({
     orderItemId: v.id("orderItems"),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireUser(ctx);
+    const { user } = await requireActiveUser(ctx);
 
     // Get order item
     const orderItem = await ctx.db.get(args.orderItemId);
@@ -330,7 +324,7 @@ export const markOrderItemAsUnpicked = mutation({
     inventoryItemId: v.optional(v.id("inventoryItems")),
   },
   handler: async (ctx, args) => {
-    const { user, businessAccountId } = await requireUser(ctx);
+    const { user, businessAccountId } = await requireActiveUser(ctx);
 
     // Get order item
     const orderItem = await ctx.db.get(args.orderItemId);

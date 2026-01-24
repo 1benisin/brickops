@@ -47,7 +47,7 @@ export async function processOrderNotification(
   const orderData = await getOrder(ctx, { businessAccountId, orderId });
   const orderItemsData = await getOrderItems(ctx, { businessAccountId, orderId });
 
-  await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
+  await ctx.runMutation(internal.sync.orders.ingestion.upsertOrder, {
     businessAccountId,
     provider: "bricklink",
     orderData,

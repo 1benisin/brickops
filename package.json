@@ -33,7 +33,8 @@
     "import:parts": "npx convex import --table parts --replace docs/external-documentation/api-bricklink/seed-data/parts.jsonl",
     "import:parts-sample": "npx convex import --table parts --replace docs/external-documentation/api-bricklink/seed-data/parts-sample.jsonl",
     "import:all": "pnpm import:colors && pnpm import:categories && pnpm import:elements && pnpm import:parts",
-    "import:sample": "pnpm import:colors && pnpm import:categories && pnpm import:elements && pnpm import:parts-sample"
+    "import:sample": "pnpm import:colors && pnpm import:categories && pnpm import:elements && pnpm import:parts-sample",
+    "check:module-deps": "bash scripts/check-module-deps.sh"
   },
   "dependencies": {
     "@auth/core": "0.37.0",

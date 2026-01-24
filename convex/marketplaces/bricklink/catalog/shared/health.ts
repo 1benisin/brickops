@@ -1,4 +1,4 @@
-import { recordMetric } from "../../../../lib/external/metrics";
+import { recordMetric } from "../../../../shared/metrics";
 import { normalizeApiError, type HealthCheckResult } from "../../../../shared/http/types";
 import { makeBlCatalogRequest, type BLCatalogCtx } from "../../transport";
 
@@ -49,5 +49,3 @@ export async function checkBlCatalogHealth(ctx?: BLCatalogCtx): Promise<HealthCh
     };
   }
 }
-
-

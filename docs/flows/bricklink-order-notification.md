@@ -76,7 +76,7 @@ Bricklink sends a notification when a new order is created. The system receives 
 
 **Convex** - Fetches order items: `client.getOrderItems(orderId)`
 
-**Convex** - Calls `api.orders.ingestion.upsertOrder` mutation
+**Convex** - Calls `api.sync.orders.ingestion.upsertOrder` mutation
 
 **Convex** - Upserts unified `orders` document (with `provider: "bricklink"`)
 
