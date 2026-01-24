@@ -5,8 +5,8 @@ import {
   parseTimestampLike,
   requireOrderId,
   stringifyAddress,
-} from "../../../../lib/normalization";
-import type { NormalizedOrder, NormalizedOrderItem } from "../../../../orders/normalizers/types";
+} from "../../../../sync/orders/normalizers/shared/normalization";
+import type { NormalizedOrder, NormalizedOrderItem } from "../../../../sync/orders/normalizers/types";
 import {
   boOrderItemResponseSchema,
   boOrderItemsResponseSchema,

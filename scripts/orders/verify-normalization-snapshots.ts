@@ -8,7 +8,7 @@ import {
   brickowlOrderFixture,
   brickowlOrderItemsFixture,
 } from "../../convex/orders/refactor_baseline/fixtures";
-import { normalizeOrder, normalizeOrderItems } from "../../convex/orders/normalizers";
+import { normalizeOrder, normalizeOrderItems } from "../../convex/sync/orders/normalizers";
 
 async function readSnapshot(fileName: string) {
   const snapshotPath = path.resolve(

@@ -6,8 +6,8 @@ import {
   pickFirstString,
   requireOrderId,
   stringifyAddress,
-} from "@/convex/orders/normalizers/shared/normalization";
-import { NORMALIZATION_ERROR_CODES, isNormalizationError } from "@/convex/orders/normalizers/shared/errors";
+} from "@/convex/sync/orders/normalizers/shared/normalization";
+import { NORMALIZATION_ERROR_CODES, isNormalizationError } from "@/convex/sync/orders/normalizers/shared/errors";
 import { ConvexError } from "convex/values";
 
 describe("normalize helpers", () => {

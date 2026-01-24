@@ -4,12 +4,12 @@ import {
   parseNumberLike,
   parseTimestampLike,
   stringifyAddress,
-} from "../../../../lib/normalization";
+} from "../../../../sync/orders/normalizers/shared/normalization";
 import {
   createNormalizationError,
   NORMALIZATION_ERROR_CODES,
-} from "../../../../orders/normalizers/shared/errors";
-import type { NormalizedOrder, NormalizedOrderItem } from "../../../../orders/normalizers/types";
+} from "../../../../sync/orders/normalizers/shared/errors";
+import type { NormalizedOrder, NormalizedOrderItem } from "../../../../sync/orders/normalizers/types";
 import { ORDER_STATUS_VALUES, type OrderStatus } from "../../../../orders/schema";
 import {
   blOrderItemResponseSchema,

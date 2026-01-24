@@ -14,7 +14,7 @@ import brickowlOrderSnapshot from "@/convex/orders/refactor_baseline/snapshots/b
 import {
   NORMALIZATION_ERROR_CODES,
   isNormalizationError,
-} from "@/convex/orders/normalizers/shared/errors";
+} from "@/convex/sync/orders/normalizers/shared/errors";
 
 describe("BrickOwl normalization transformers", () => {
   it("matches the baseline snapshot for orders", () => {

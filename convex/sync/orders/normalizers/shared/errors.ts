@@ -85,4 +85,3 @@ export function isNormalizationError(error: unknown): error is NormalizationErro
     typeof (payload as NormalizationErrorPayload).message === "string"
   );
 }
-

@@ -10,7 +10,7 @@ import {
 import {
   normalizeOrder,
   normalizeOrderItems,
-} from "../../convex/orders/normalizers";
+} from "../../convex/sync/orders/normalizers";
 
 const projectRoot = path.resolve(process.cwd());
 const baselineRoot = path.resolve(projectRoot, "convex/orders/refactor_baseline");
