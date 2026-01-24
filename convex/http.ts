@@ -1,7 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 
-import { validateBricklink, validateBrickognize, validateBrickowl } from "./lib/external/validate";
+import { validateBricklink, validateBrickognize, validateBrickowl } from "./shared/validation/index";
 import { auth } from "./auth";
 import { bricklinkWebhook } from "./marketplaces/bricklink/notifications/actions";
 

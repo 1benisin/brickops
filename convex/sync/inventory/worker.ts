@@ -163,7 +163,7 @@ export const drainMarketplaceOutbox = internalAction({
 
     // Find pending messages ready for processing
     const pendingMessages = await ctx.runQuery(
-      internal.sync.inventory.getPendingOutboxMessages,
+      internal.sync.inventory.worker.getPendingOutboxMessages,
       { maxNextAttemptAt: now },
     );
 
@@ -202,12 +202,12 @@ async function processOutboxMessage(
   if (message.attempt >= 5) {
     const errorMessage = message.lastError || "Max retries exceeded";
 
-    await ctx.runMutation(internal.sync.inventory.markOutboxFailedPermanently, {
+    await ctx.runMutation(internal.sync.inventory.worker.markOutboxFailedPermanently, {
       messageId: message._id,
       error: errorMessage,
     });
 
-    await ctx.runMutation(internal.sync.inventory.updateSyncStatuses, {
+    await ctx.runMutation(internal.sync.inventory.orchestrator.updateSyncStatuses, {
       inventoryItemId: message.itemId,
       results: [
         {
@@ -223,7 +223,7 @@ async function processOutboxMessage(
 
   try {
     // Mark as inflight (CAS to avoid double processing)
-    const marked = await ctx.runMutation(internal.sync.inventory.markOutboxInflight, {
+    const marked = await ctx.runMutation(internal.sync.inventory.worker.markOutboxInflight, {
       messageId: message._id,
       currentAttempt: message.attempt,
     });
@@ -250,7 +250,7 @@ async function processOutboxMessage(
     }
 
     // Get sync state from inventorySyncState table
-    const syncState = await ctx.runQuery(internal.sync.inventory.getSyncState, {
+    const syncState = await ctx.runQuery(internal.sync.inventory.worker.getSyncState, {
       itemId: message.itemId,
       provider: message.provider,
     });
@@ -282,7 +282,7 @@ async function processOutboxMessage(
       });
 
       // Advance cursor on success
-      await ctx.runMutation(internal.sync.inventory.updateSyncStatuses, {
+      await ctx.runMutation(internal.sync.inventory.orchestrator.updateSyncStatuses, {
         inventoryItemId: message.itemId,
         results: [
           {
@@ -296,7 +296,7 @@ async function processOutboxMessage(
       });
 
       // Mark outbox message as succeeded
-      await ctx.runMutation(internal.sync.inventory.markOutboxSucceeded, {
+      await ctx.runMutation(internal.sync.inventory.worker.markOutboxSucceeded, {
         messageId: message._id,
       });
     } else {
@@ -314,12 +314,12 @@ async function processOutboxMessage(
               ? `Part ${item.partNumber} not found in catalog`
               : `BrickOwl color ID not available for BrickLink color ${item.colorId} on part ${item.partNumber}`);
 
-        await ctx.runMutation(internal.sync.inventory.markOutboxFailedPermanently, {
+        await ctx.runMutation(internal.sync.inventory.worker.markOutboxFailedPermanently, {
           messageId: message._id,
           error: errorMessage,
         });
 
-        await ctx.runMutation(internal.sync.inventory.updateSyncStatuses, {
+        await ctx.runMutation(internal.sync.inventory.orchestrator.updateSyncStatuses, {
           inventoryItemId: message.itemId,
           results: [
             {
@@ -338,7 +338,7 @@ async function processOutboxMessage(
         console.error(
           `Max retries exceeded for message ${message._id}, item ${message.itemId}, provider ${message.provider}`,
         );
-        await ctx.runMutation(internal.sync.inventory.markOutboxFailedPermanently, {
+        await ctx.runMutation(internal.sync.inventory.worker.markOutboxFailedPermanently, {
           messageId: message._id,
           error: errorMessage,
         });
@@ -346,7 +346,7 @@ async function processOutboxMessage(
         // Schedule retry with backoff
         const nextAttempt = computeNextAttempt(message.attempt);
 
-        await ctx.runMutation(internal.sync.inventory.markOutboxFailed, {
+        await ctx.runMutation(internal.sync.inventory.worker.markOutboxFailed, {
           messageId: message._id,
           attempt: message.attempt + 1,
           nextAttemptAt: nextAttempt,
@@ -361,14 +361,14 @@ async function processOutboxMessage(
     if (message.attempt >= 4) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       // Mark as failed permanently
-      await ctx.runMutation(internal.sync.inventory.markOutboxFailedPermanently, {
+      await ctx.runMutation(internal.sync.inventory.worker.markOutboxFailedPermanently, {
         messageId: message._id,
         error: errorMessage,
       });
     } else {
       // Schedule retry
       const nextAttempt = computeNextAttempt(message.attempt);
-      await ctx.runMutation(internal.sync.inventory.markOutboxFailed, {
+      await ctx.runMutation(internal.sync.inventory.worker.markOutboxFailed, {
         messageId: message._id,
         attempt: message.attempt + 1,
         nextAttemptAt: nextAttempt,

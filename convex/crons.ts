@@ -18,7 +18,7 @@ crons.interval("log-heartbeat", { seconds: 60 * 60 }, internal.crons.logHeartbea
 crons.interval(
   "drain-marketplace-outbox",
   { minutes: 10 },
-  internal.sync.inventory.drainMarketplaceOutbox,
+  internal.sync.inventory.worker.drainMarketplaceOutbox,
 );
 
 // Poll BrickLink notifications for all active stores every 3 minutes (safety net)
