@@ -8,9 +8,9 @@ import {
 import {
   bricklinkOrderFixture,
   bricklinkOrderItemsFixture,
-} from "@/convex/orders/refactor_baseline/fixtures";
-import bricklinkItemsSnapshot from "@/convex/orders/refactor_baseline/snapshots/bricklink.items.normalized.json";
-import bricklinkOrderSnapshot from "@/convex/orders/refactor_baseline/snapshots/bricklink.order.normalized.json";
+} from "../fixtures/fixtures";
+import bricklinkItemsSnapshot from "../fixtures/snapshots/bricklink.items.normalized.json";
+import bricklinkOrderSnapshot from "../fixtures/snapshots/bricklink.order.normalized.json";
 import {
   NORMALIZATION_ERROR_CODES,
   isNormalizationError,

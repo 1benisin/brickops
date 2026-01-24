@@ -33,7 +33,7 @@ describe("BrickOwl inventory transformers", () => {
       quantityAvailable: 15,
       condition: "used",
       price: 0.25,
-      notes: "Nice lot",
+      note: "Nice lot",
     });
   });
 
@@ -45,7 +45,7 @@ describe("BrickOwl inventory transformers", () => {
       quantityAvailable: 8,
       price: 1.5,
       location: "A-01",
-      notes: "Mint",
+      note: "Mint",
     } as unknown as Parameters<typeof mapConvexToBrickOwlCreate>[0];
 
     const createPayload = mapConvexToBrickOwlCreate(convexInventory, "3001-1", 5);

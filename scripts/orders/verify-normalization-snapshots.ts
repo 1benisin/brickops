@@ -7,13 +7,13 @@ import {
   bricklinkOrderItemsFixture,
   brickowlOrderFixture,
   brickowlOrderItemsFixture,
-} from "../../convex/orders/refactor_baseline/fixtures";
+} from "../../__tests__/backend/orders/fixtures/fixtures";
 import { normalizeOrder, normalizeOrderItems } from "../../convex/sync/orders/normalizers";
 
 async function readSnapshot(fileName: string) {
   const snapshotPath = path.resolve(
     process.cwd(),
-    "convex/orders/refactor_baseline/snapshots",
+    "__tests__/backend/orders/fixtures/snapshots",
     fileName,
   );
   const data = await fs.readFile(snapshotPath, "utf8");
@@ -42,7 +42,11 @@ async function main() {
   const normalizedBrickowlOrder = JSON.parse(JSON.stringify(normalizedBrickowlOrderRaw));
   const normalizedBrickowlItems = JSON.parse(
     JSON.stringify(
-      normalizeOrderItems("brickowl", normalizedBrickowlOrderRaw.orderId, brickowlOrderItemsFixture),
+      normalizeOrderItems(
+        "brickowl",
+        normalizedBrickowlOrderRaw.orderId,
+        brickowlOrderItemsFixture,
+      ),
     ),
   );
 

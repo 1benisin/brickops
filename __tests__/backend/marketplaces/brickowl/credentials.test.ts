@@ -43,7 +43,7 @@ beforeEach(() => {
 
 describe("getBrickOwlCredentials", () => {
   it("returns decrypted and validated credentials when user owns the business account", async () => {
-    const { ctx, runQuery, getUserIdentity } = createCtx();
+    const { ctx, runQuery } = createCtx();
     runQuery.mockResolvedValue({
       brickowlApiKey: "encrypted-key",
     });
@@ -51,7 +51,6 @@ describe("getBrickOwlCredentials", () => {
 
     const result = await getBrickOwlCredentials(ctx, businessAccountId);
 
-    expect(getUserIdentity).toHaveBeenCalled();
     expect(requireActiveUserMock).toHaveBeenCalledWith(ctx);
     expect(runQuery).toHaveBeenCalledTimes(1);
     const [, args] = runQuery.mock.calls[0] ?? [];
@@ -103,16 +102,18 @@ describe("getBrickOwlCredentials", () => {
   });
 
   it("allows system contexts to retrieve credentials without requiring an active user", async () => {
-    const { ctx, runQuery, getUserIdentity } = createCtx(null);
+    const { ctx, runQuery } = createCtx(null);
     runQuery.mockResolvedValue({
       brickowlApiKey: "encrypted-key",
     });
     decryptCredentialMock.mockResolvedValueOnce("valid-api-key-system");
+    // When there's no identity, requireActiveUser throws "Authentication required"
+    // which the implementation catches and allows system access
+    requireActiveUserMock.mockRejectedValueOnce(new ConvexError("Authentication required"));
 
     const result = await getBrickOwlCredentials(ctx, businessAccountId);
 
-    expect(getUserIdentity).toHaveBeenCalled();
-    expect(requireActiveUserMock).not.toHaveBeenCalled();
+    expect(requireActiveUserMock).toHaveBeenCalledWith(ctx);
     expect(result).toEqual({ apiKey: "valid-api-key-system" });
   });
 
@@ -130,4 +131,3 @@ describe("getBrickOwlCredentials", () => {
     expect(result).toEqual({ apiKey: "system-access-key-1234567" });
   });
 });
-

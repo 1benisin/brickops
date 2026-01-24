@@ -11,27 +11,27 @@ The BrickLink service owns every Convex integration with BrickLink’s REST APIs
 
 ## Tables Owned
 
-| Table | Description |
-| ----- | ----------- |
+| Table                    | Description                                              |
+| ------------------------ | -------------------------------------------------------- |
 | `marketplaceCredentials` | Encrypted OAuth credentials (shared table with BrickOwl) |
-| `bricklinkNotifications` | Notification processing state and deduplication |
+| `bricklinkNotifications` | Notification processing state and deduplication          |
 
 ## Dependencies
 
-| Module | Usage |
-| ------ | ----- |
-| `catalog/` | Writes color and price data (isolation violation - should migrate to sync/catalog/) |
-| `orders/` | Calls `orders.ingestion.upsertOrder` for order persistence |
-| `marketplaces/shared/` | Credentials, rate limiting, store types, webhook tokens |
-| `users/authorization` | Auth checks and environment assertions |
+| Module                 | Usage                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `catalog/`             | Writes color and price data (isolation violation - should migrate to sync/catalog/) |
+| `sync/orders/`         | Calls `sync.orders.ingestion.upsertOrder` for order persistence                     |
+| `marketplaces/shared/` | Credentials, rate limiting, store types, webhook tokens                             |
+| `users/authorization`  | Auth checks and environment assertions                                              |
 
 ## Used By
 
-| Consumer | Usage |
-| -------- | ----- |
-| `sync/inventory/` | Inventory sync to BrickLink marketplace |
-| `sync/orders/` | Order normalization from BrickLink |
-| Webhooks/Schedulers | Notification polling and processing |
+| Consumer            | Usage                                   |
+| ------------------- | --------------------------------------- |
+| `sync/inventory/`   | Inventory sync to BrickLink marketplace |
+| `sync/orders/`      | Order normalization from BrickLink      |
+| Webhooks/Schedulers | Notification polling and processing     |
 
 ## Developer Onboarding Checklist
 

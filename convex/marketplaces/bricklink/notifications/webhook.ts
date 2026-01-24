@@ -2,7 +2,7 @@ import { ConvexError } from "convex/values";
 import { internal } from "../../../_generated/api";
 import type { ActionCtx } from "../../../_generated/server";
 import type { Id } from "../../../_generated/dataModel";
-import { recordMetric } from "../../../lib/external/metrics";
+import { recordMetric } from "../../../shared/metrics";
 import { requireUserRole } from "../../../users/authorization";
 import { withBlClient, type BLApiResponse } from "../transport";
 import { buildNotificationDedupeKey, isNotificationReplay } from "./utilities";

@@ -1,7 +1,7 @@
 import { action, internalAction } from "../../../_generated/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "../../../_generated/api";
-import { recordMetric } from "../../../lib/external/metrics";
+import { recordMetric } from "../../../shared/metrics";
 import type { ActionCtx } from "../../../_generated/server";
 import type { Id } from "../../../_generated/dataModel";
 import { requireUserRole } from "../../../users/authorization";

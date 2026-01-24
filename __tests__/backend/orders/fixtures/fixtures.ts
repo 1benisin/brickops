@@ -1,11 +1,11 @@
 import type {
   BLOrderItemResponse,
   BLOrderResponse,
-} from "../../marketplaces/bricklink/orders/schema";
+} from "@/convex/marketplaces/bricklink/orders/schema";
 import type {
   BOOrderItemsResponse,
   BOOrderResponse,
-} from "../../marketplaces/brickowl/orders/schema";
+} from "@/convex/marketplaces/brickowl/orders/schema";
 
 export const bricklinkOrderFixture: BLOrderResponse = {
   order_id: "1234567",

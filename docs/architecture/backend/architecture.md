@@ -2,132 +2,271 @@
 
 ## Service Architecture (Serverless)
 
-BrickOps uses Convex serverless functions organized by business domain with specialized marketplace clients and HTTP actions for webhooks:
+BrickOps uses Convex serverless functions organized by business domain following a modular architecture pattern. Each domain is self-contained with clear inputs/outputs and minimal coupling. The architecture enforces unidirectional dependencies through a dedicated orchestration layer.
+
+### Module READMEs
+
+Each domain module contains a `README.md` documenting its purpose, public API, and integration patterns:
+
+- [`convex/catalog/README.md`](../../../convex/catalog/README.md) - Global LEGO parts catalog
+- [`convex/identify/README.md`](../../../convex/identify/README.md) - Part identification service
+- [`convex/inventory/README.md`](../../../convex/inventory/README.md) - Inventory management
+- [`convex/orders/README.md`](../../../convex/orders/README.md) - Order management
+- [`convex/users/README.md`](../../../convex/users/README.md) - User and business account management
+- [`convex/sync/README.md`](../../../convex/sync/README.md) - Marketplace synchronization orchestration
+- [`convex/marketplaces/README.md`](../../../convex/marketplaces/README.md) - External marketplace API integrations
+- [`convex/shared/README.md`](../../../convex/shared/README.md) - Cross-cutting infrastructure
+
+### Directory Structure
 
 ```text
 convex/
-├── marketplaces/                  # Marketplace integrations (Stories 2.3, 3.1-3.3)
-│   ├── bricklink/                  # BrickLink marketplace integration
-│   │   ├── catalog/                # BrickLink catalog domain helpers
-│   │   │   ├── actions.ts          # BrickLink catalog API actions
-│   │   │   ├── client.ts           # Stateless BrickLink catalog helpers (BrickOps credentials)
-│   │   │   ├── refresh/            # Catalog refresh mutations/background jobs
-│   │   │   │   └── index.ts        # Queue scheduling and cleanup mutations
-│   │   │   ├── schema.ts           # Catalog validators and response types
-│   │   │   └── transformers.ts     # Catalog data mappers
-│   │   ├── notifications.ts        # BrickLink push notifications processing
-│   │   ├── oauth.ts                # Shared OAuth 1.0a signing helpers
-│   │   ├── storeClient.ts          # User store client (inventory + orders, BYOK credentials)
-│   │   ├── inventory/transformers.ts # BrickLink inventory data mappers
-│   │   └── webhook.ts              # Webhook endpoint handlers
-│   │
-│   ├── brickowl/                   # BrickOwl marketplace integration
-│   │   ├── auth.ts                 # API key authentication helpers
-│   │   ├── storeClient.ts          # User store client (inventory + orders, BYOK credentials)
-│   │   └── storeMappers.ts         # Store data mappers (inventory + orders)
-│   │
-│   └── shared/                     # Shared marketplace orchestration
-│       ├── auth.ts                 # Owner guard shared by queries/mutations/actions
-│       ├── credentials.ts          # Credential queries + mutations
-│       ├── credentialHelpers.ts    # Provider-specific validation/encryption utilities
-│       ├── getCredentialDoc.ts     # Indexed credential lookup helper
-│       ├── rateLimits.ts           # Rate limit queries + mutations
-│       ├── rateLimitHelpers.ts     # Pure helpers for rate-limit calculations
-│       ├── webhooks.ts             # Webhook status mutations
-│       ├── webhookTokens.ts        # Webhook token utilities
-│       ├── schema.ts               # Marketplace table schemas
-│       ├── storeTypes.ts           # Shared StoreOperationResult + helpers
-│       ├── credentialTypes.ts      # Marketplace credential DTOs
-│       └── rateLimitTypes.ts       # Rate limit DTOs
-├── catalog/                    # Catalog domain functions (Story 2.2-2.3)
-│   ├── ensure.ts               # Self-scheduling catalog data orchestrator
-│   ├── helpers.ts              # Catalog business logic helpers
-│   ├── mutations.ts            # Catalog write operations
-│   ├── colors.ts               # Color queries, mutations, and refresh actions
-│   ├── parts.ts                # Part queries, mutations, and refresh actions
-│   ├── prices.ts               # Price guide queries, mutations, and refresh actions
-│   ├── queries.ts              # Catalog read operations and search
+├── shared/                     # Cross-cutting infrastructure (no business logic)
+│   ├── auth/                   # Authentication helpers
+│   │   └── oauth.ts            # OAuth 1.0a signing utilities
+│   ├── email/                  # Email service client
+│   │   └── index.ts
+│   ├── encryption/             # Credential encryption (AES-GCM)
+│   │   ├── index.ts
+│   │   └── webcrypto.ts
+│   ├── env.ts                  # Environment variable helpers
+│   ├── http/                   # Generic HTTP client and retry logic
+│   │   ├── client.ts
+│   │   ├── retry.ts
+│   │   ├── types.ts
+│   │   └── upstreamRequest.ts
+│   ├── metrics/                # Metrics recording helpers
+│   │   └── index.ts
+│   ├── ratelimit/              # Database-backed rate limiting
+│   │   ├── config.ts           # Provider rate limit configuration
+│   │   ├── consume.ts          # Token consumption helpers
+│   │   ├── dbRateLimiter.ts    # Rate limiter implementation
+│   │   └── schema.ts           # Rate limit table schema
+│   └── README.md
+│
+├── catalog/                    # Global LEGO Parts Catalog (Core Domain)
+│   ├── README.md               # Module documentation
 │   ├── schema.ts               # Catalog table schemas
-│   └── validators.ts           # Catalog input validation
+│   ├── validators.ts           # Input validation
+│   ├── ensure.ts               # Self-scheduling catalog orchestrator
+│   ├── helpers.ts              # Business logic helpers
+│   ├── mutations.ts            # Write operations
+│   ├── categories.ts           # Category queries and refresh
+│   ├── colors.ts               # Color queries and refresh
+│   ├── parts.ts                # Part queries and refresh
+│   ├── prices.ts               # Price guide queries and refresh
+│   └── rebrickable.ts          # Rebrickable ID mapping
 │
-├── identify/                   # Part identification domain (Story 2.1)
-│   ├── actions.ts              # Brickognize API integration actions
-│   ├── helpers.ts              # Identification business logic
-│   ├── mutations.ts            # Identification write operations
-│   └── schema.ts               # Identification table schemas
+├── identify/                   # Part Identification Service (Core Domain)
+│   ├── README.md               # Module documentation
+│   ├── schema.ts               # (Empty - stateless module)
+│   ├── actions.ts              # Brickognize API integration
+│   ├── client.ts               # API client wrapper
+│   ├── helpers.ts              # Business logic helpers
+│   └── mutations.ts            # Write operations
 │
-├── inventory/                  # Inventory domain functions (Story 3.4)
-│   ├── helpers.ts              # Inventory business logic helpers
-│   ├── mutations.ts            # Inventory CRUD operations
-│   ├── queries.ts              # Inventory read operations
-│   ├── schema.ts               # Inventory table schemas
-│   ├── sync.ts                 # Marketplace sync orchestration
-│   ├── syncWorker.ts           # Background sync processing
-│   ├── types.ts                # Inventory types
-│   ├── mocks.ts                # Inventory test utilities
-│   └── validators.ts           # Inventory input validation
+├── inventory/                  # Inventory Management (Core Domain)
+│   ├── README.md               # Module documentation
+│   ├── schema.ts               # Inventory table schemas (items, ledgers)
+│   ├── validators.ts           # Input validation
+│   ├── actions.ts              # Inventory actions
+│   ├── helpers.ts              # Business logic helpers
+│   ├── mutations.ts            # CRUD operations
+│   ├── queries.ts              # Read operations
+│   ├── import.ts               # Marketplace import validation
+│   ├── types.ts                # Type definitions
+│   └── mocks.ts                # Test utilities
 │
-├── orders/                     # Orders domain functions
-│   ├── ingestion.ts           # Order ingestion from marketplaces
-│   ├── mutations.ts            # Order write operations
-│   ├── queries.ts              # Order read operations
+├── orders/                     # Order Management (Core Domain)
+│   ├── README.md               # Module documentation
 │   ├── schema.ts               # Order table schemas
-│   └── mocks.ts                # Order test mocks
+│   ├── ingestion.ts            # Order ingestion from marketplaces
+│   ├── mutations.ts            # Write operations
+│   ├── queries.ts              # Read operations
+│   ├── mocks.ts                # Test utilities
+│   └── mockHelpers.ts          # Mock generation helpers
 │
-├── users/                      # User management domain (Story 1.3)
-│   ├── actions.ts              # User-related actions (email, invitations)
-│   ├── helpers.ts              # User business logic and RBAC
-│   ├── mutations.ts            # User write operations
-│   ├── queries.ts              # User read operations
-│   └── schema.ts               # User table schemas
+├── users/                      # User & Business Account Management (Core Domain)
+│   ├── README.md               # Module documentation
+│   ├── schema.ts               # User table schemas
+│   ├── authorization.ts        # RBAC enforcement
+│   ├── actions.ts              # User-related actions (invitations)
+│   ├── mutations.ts            # Write operations
+│   └── queries.ts              # Read operations
 │
-├── ratelimit/                  # Rate limiting domain
-│   ├── helpers.ts              # Public helper for consuming shared rate limit tokens
-│   ├── mutations.ts            # Rate limit write operations
-│   ├── rateLimitConfig.ts      # Provider validators and configuration values
-│   └── schema.ts               # Rate limit table schemas
-
-Rate limit buckets map directly to business account identifiers. Reserve the
-`brickopsAdmin` bucket for BrickOps-owned global workloads (for example,
-catalog refresh tasks). Callers should use `takeRateLimitToken(ctx, { bucket,
-provider })` from `convex/ratelimit/helpers.ts` to consume shared tokens and
-enforce provider-specific quotas.
+├── sync/                       # Marketplace Sync Orchestration Layer
+│   ├── README.md               # Module documentation
+│   ├── schema.ts               # Sync state tables (inventorySyncState, marketplaceOutbox)
+│   ├── validators.ts           # Sync validators
+│   ├── inventory/              # Inventory → Marketplace sync
+│   │   ├── helpers.ts          # Sync business logic
+│   │   ├── orchestrator.ts     # Sync coordination
+│   │   └── worker.ts           # Background sync processing
+│   ├── orders/                 # Marketplace → Orders ingestion
+│   │   ├── actions.ts          # Order sync actions
+│   │   └── normalizers/        # Provider-specific normalization
+│   │       ├── index.ts
+│   │       ├── bricklink.ts
+│   │       ├── brickowl.ts
+│   │       ├── types.ts
+│   │       └── shared/
+│   │           ├── errors.ts
+│   │           ├── normalization.ts
+│   │           └── types.ts
+│   └── migrations/             # Data migration utilities
+│       └── migrateInventorySyncState.ts
 │
-├── lib/                        # Shared utilities
-│   ├── dbRateLimiter.ts        # Database-backed rate limiting helpers
-│   ├── encryption.ts           # AES-GCM encryption for credentials (Story 3.1)
-│   ├── external/               # External API utilities
-│   │   ├── brickognize.ts      # Brickognize API client
-│   │   ├── brickowl.ts         # BrickOwl API client
-│   │   ├── circuitBreaker.ts   # Circuit breaker pattern implementation
-│   │   ├── email.ts            # Email service client
-│   │   ├── env.ts              # Environment variable helpers
-│   │   ├── httpClient.ts       # Generic HTTP client
-│   │   ├── metrics.ts          # Metrics recording helpers
-│   │   ├── rateLimiter.ts      # Rate limiting abstractions
-│   │   ├── retry.ts            # Retry logic implementation
-│   │   ├── types.ts            # Shared external API types
-│   │   └── validate.ts         # API response validation
-│   ├── rateLimiterAdapter.ts   # Rate limiter adapter
-│   └── webcrypto.ts            # Web Crypto API helpers
+├── marketplaces/               # External Marketplace API Integrations
+│   ├── README.md               # Module documentation
+│   ├── shared/                 # Shared marketplace infrastructure
+│   │   ├── schema.ts           # Credential and notification schemas
+│   │   ├── auth.ts             # Owner guard utilities
+│   │   ├── credentials.ts      # Credential CRUD operations
+│   │   ├── credentialHelpers.ts
+│   │   ├── credentialTypes.ts
+│   │   ├── getCredentialDoc.ts
+│   │   ├── rateLimitTypes.ts
+│   │   ├── storeTypes.ts
+│   │   ├── webhooks.ts
+│   │   └── webhookTokens.ts
+│   │
+│   ├── bricklink/              # BrickLink API integration
+│   │   ├── README.md
+│   │   ├── catalog/            # Catalog API operations
+│   │   │   ├── categories/
+│   │   │   ├── colors/
+│   │   │   ├── parts/
+│   │   │   ├── priceGuides/
+│   │   │   ├── shared/
+│   │   │   └── refresh.ts
+│   │   ├── inventory/          # Inventory API operations
+│   │   ├── orders/             # Order API operations
+│   │   ├── notifications/      # Push notification handling
+│   │   ├── credentials.ts
+│   │   ├── oauth.ts
+│   │   ├── rateLimit.ts
+│   │   ├── request.ts
+│   │   └── transport.ts
+│   │
+│   └── brickowl/               # BrickOwl API integration
+│       ├── README.md
+│       ├── inventory/          # Inventory API operations
+│       ├── orders/             # Order API operations
+│       ├── notifications/      # Notification handling
+│       ├── credentials.ts
+│       ├── client.ts
+│       ├── httpClient.ts
+│       ├── rateLimit.ts
+│       └── request.ts
 │
-├── auth.config.ts              # Convex Auth configuration
-├── auth.ts                     # Auth functions
-├── crons.ts                    # Scheduled functions (catalog refresh, inventory sync)
-├── hello.ts                    # Example public functions
-├── hello_impl.ts               # Example implementation helpers
+├── auth.config.ts              # Convex Auth configuration (MUST stay at root)
+├── auth.ts                     # Auth functions (MUST stay at root)
+├── crons.ts                    # Scheduled functions
 ├── http.ts                     # HTTP endpoints for webhooks
 └── schema.ts                   # Root database schema (aggregates domain schemas)
 ```
 
+### Dependency Hierarchy
+
+The architecture enforces strict unidirectional dependencies to prevent circular imports and maintain clear module boundaries:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    UI / Frontend                         │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│              sync/ (Orchestration Layer)                 │
+│   Coordinates inventory ↔ marketplaces ↔ orders         │
+│   ONLY place where cross-module coordination happens    │
+└─────────────────────────────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          ▼               ▼               ▼
+    ┌──────────┐    ┌──────────┐    ┌──────────┐
+    │ inventory │    │  orders  │    │ catalog  │
+    │  (core)   │    │  (core)  │    │ (global) │
+    └──────────┘    └──────────┘    └──────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│              marketplaces/ (External APIs)               │
+│         bricklink/  |  brickowl/  |  shared/            │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│               shared/ (Infrastructure)                   │
+│      auth  |  ratelimit  |  encryption  |  http         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Dependency Rules:**
+
+| Module         | Can Import                                                   | Cannot Import                                            |
+| -------------- | ------------------------------------------------------------ | -------------------------------------------------------- |
+| `shared/*`     | Nothing                                                      | All domains                                              |
+| `catalog`      | `shared/*`                                                   | inventory, orders, sync, marketplaces                    |
+| `identify`     | `shared/*`                                                   | catalog, inventory, orders, sync, marketplaces           |
+| `inventory`    | `shared/*`, `catalog`                                        | orders, sync, marketplaces                               |
+| `orders`       | `shared/*`, `catalog`                                        | inventory, sync, marketplaces                            |
+| `sync`         | `shared/*`, `catalog`, `inventory`, `orders`, `marketplaces` | -                                                        |
+| `marketplaces` | `shared/*`                                                   | catalog, inventory, orders, sync                         |
+| `users`        | `shared/*`                                                   | catalog, identify, inventory, orders, sync, marketplaces |
+
+**Key Principles:**
+
+- Core modules (`inventory`, `orders`, `catalog`) do NOT import from each other
+- `sync/` orchestrates between modules - it's the only place cross-module coordination happens
+- `marketplaces/` is a pure API wrapper with no business logic
+- `shared/` has no business domain knowledge
+
+See [`docs/architecture/backend/module-dependencies.md`](./module-dependencies.md) for the complete dependency visualization.
+
+### Sync Layer Architecture
+
+The `sync/` module is the orchestration layer that coordinates between core domains and external marketplaces. It owns all synchronization state and is the only place where cross-module coordination happens.
+
+**Key Components:**
+
+- **`sync/schema.ts`** - Defines `inventorySyncState` (per-item, per-provider sync status) and `marketplaceOutbox` (transactional outbox for sync operations)
+- **`sync/inventory/`** - Handles inventory → marketplace synchronization
+- **`sync/orders/`** - Handles marketplace → orders ingestion with provider-specific normalizers
+
+**Sync State Tables:**
+
+```typescript
+// inventorySyncState: Tracks per-item, per-provider sync status
+{
+  itemId: Id<"inventoryItems">,
+  provider: "bricklink" | "brickowl",
+  lotId: string | number,           // Marketplace identifier
+  status: "pending" | "syncing" | "synced" | "failed" | "disabled",
+  lastSyncAttempt: number,
+  lastSyncedSeq: number,            // Cursor for retry logic
+  error: string | undefined,
+}
+
+// marketplaceOutbox: Transactional outbox for marketplace operations
+{
+  businessAccountId: Id<"businessAccounts">,
+  itemId: Id<"inventoryItems">,
+  provider: "bricklink" | "brickowl",
+  kind: "create" | "update" | "delete",
+  status: "pending" | "inflight" | "succeeded" | "failed",
+  // ... additional fields for idempotency and retry
+}
+```
+
 ### Marketplace Integration Architecture
 
-**Dual Client Pattern (Stories 3.2-3.3)**:
+**Dual Client Pattern**:
 
 BrickOps uses separate specialized clients for different marketplace operations:
 
-1. **Catalog Clients** - Query global parts catalog using BrickOps credentials (Story 2.3)
-2. **Store Clients** - Manage user marketplace stores using user credentials/BYOK model (Stories 3.2-3.3)
+1. **Catalog Clients** - Query global parts catalog using BrickOps credentials
+2. **Store Clients** - Manage user marketplace stores using user credentials (BYOK model)
 
 **Example: BrickLink Integration**
 
@@ -153,37 +292,23 @@ const inventory = await getBLInventories(ctx, {
 | Scope         | Global catalog data                     | User's marketplace store                |
 | Methods       | Parts, colors, categories, price guides | Inventory, orders, notifications        |
 
-**Database-Backed Rate Limiting (Stories 3.2-3.3)**:
+**Database-Backed Rate Limiting**:
 
-All user store operations use persistent rate limiting via the `marketplaceRateLimits` table:
+All user store operations use persistent rate limiting via the `rateLimits` table in `shared/ratelimit/`:
 
 ```typescript
-// Pre-flight quota check before API request
-const rateLimit = await ctx.runQuery(
-  internal.marketplaces.shared.rateLimits.getRateLimitState,
-  {
-    businessAccountId,
-    provider: "bricklink",
-  },
-);
-  businessAccountId,
+// Rate limit token consumption (from shared/ratelimit/consume.ts)
+import { consumeRateLimitToken } from "../shared/ratelimit/consume";
+
+await consumeRateLimitToken(ctx, {
+  bucket: `bricklink:account:${businessAccountId}`,
   provider: "bricklink",
 });
 
 // Make API request...
-
-// Post-request quota recording
-await ctx.runMutation(
-  internal.marketplaces.shared.rateLimits.incrementRateLimitUsage,
-  {
-    businessAccountId,
-    provider: "bricklink",
-  },
-);
-  businessAccountId,
-  provider: "bricklink",
-});
 ```
+
+Rate limit buckets map directly to business account identifiers. Reserve the `brickopsAdmin` bucket for BrickOps-owned global workloads (e.g., catalog refresh tasks).
 
 Benefits:
 
@@ -391,8 +516,9 @@ export const getPart = query({
     const part = await ctx.db.query("parts")...;
 
     // ❌ ERROR: Queries cannot schedule or write!
-    await ctx.scheduler.runAfter(0, internal.catalog.refreshWorker.processSingleOutboxMessage, {
-      ...,
+    await ctx.scheduler.runAfter(0, internal.catalog.ensure.enqueueCatalogRefresh, {
+      tableName: "parts",
+      primaryKey: partNumber,
     });
 
     return part;
@@ -418,7 +544,7 @@ export async function getPart(ctx: MutationCtx, partNumber: string): Promise<Doc
 
   if (!part) {
     // Schedule high-priority refresh for missing part
-    await ctx.runMutation(internal.marketplaces.bricklink.catalog.refresh.checkAndScheduleRefresh, {
+    await ctx.scheduler.runAfter(0, internal.catalog.ensure.enqueueCatalogRefresh, {
       tableName: "parts",
       primaryKey: partNumber,
       priority: 1,
@@ -426,13 +552,14 @@ export async function getPart(ctx: MutationCtx, partNumber: string): Promise<Doc
     throw new ConvexError(`Part ${partNumber} not found, refresh scheduled`);
   }
 
-  // Schedule standard freshness check
-  await ctx.runMutation(internal.marketplaces.bricklink.catalog.refresh.checkAndScheduleRefresh, {
-    tableName: "parts",
-    primaryKey: partNumber,
-    lastFetched: part.lastFetched,
-    freshnessThresholdDays: 30,
-  });
+  // Schedule standard freshness check if stale
+  const isStale = Date.now() - part.lastFetched > 30 * 24 * 60 * 60 * 1000;
+  if (isStale) {
+    await ctx.scheduler.runAfter(0, internal.catalog.ensure.enqueueCatalogRefresh, {
+      tableName: "parts",
+      primaryKey: partNumber,
+    });
+  }
 
   return part;
 }
@@ -464,8 +591,8 @@ export const updatePart = mutation({
     // ❌ Not awaited - may fail silently!
     ctx.scheduler.runAfter(
       0,
-      internal.catalog.refreshWorker.processSingleOutboxMessage,
-      { ... },
+      internal.catalog.ensure.enqueueCatalogRefresh,
+      { tableName: "parts", primaryKey: data.no },
     );
   },
 });
@@ -482,8 +609,8 @@ export const updatePart = mutation({
     // ✅ Properly awaited
     await ctx.scheduler.runAfter(
       0,
-      internal.catalog.refreshWorker.processSingleOutboxMessage,
-      { ... },
+      internal.catalog.ensure.enqueueCatalogRefresh,
+      { tableName: "parts", primaryKey: data.no },
     );
   },
 });
@@ -494,57 +621,53 @@ export const updatePart = mutation({
 **✅ CORRECT - Proper separation:**
 
 ```typescript
-// convex/catalog/refreshWorker.ts
-import { internalAction } from "../_generated/server";
-import { internal } from "../_generated/api";
+// convex/sync/inventory/worker.ts
+import { internalAction } from "../../_generated/server";
+import { internal } from "../../_generated/api";
 
 // Action orchestrates external API and persistence
-export const processCatalogRefreshJobs = internalAction({
+export const processPendingChanges = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Read queue (query)
-    const batch = await ctx.runQuery(internal.catalog.queries.getBatch, {
+    // Read outbox (query)
+    const batch = await ctx.runQuery(internal.sync.inventory.helpers.getPendingOutbox, {
       limit: 10,
     });
 
-    // Call external API
+    // Call external marketplace API
     const results = await Promise.all(
-      batch.map(item => fetchFromBricklink(item))
+      batch.map(item => syncToMarketplace(ctx, item))
     );
 
-    // Update database (mutation)
-    await ctx.runMutation(internal.catalog.mutations.updateRefreshStatus, {
+    // Update sync state (mutation)
+    await ctx.runMutation(internal.sync.inventory.helpers.updateSyncStatus, {
       items: results,
     });
   },
 });
 
-// convex/catalog/queries.ts
-import { internalQuery } from "../_generated/server";
+// convex/sync/inventory/helpers.ts
+import { internalQuery, internalMutation } from "../../_generated/server";
 import { v } from "convex/values";
 
-// Internal query for reading
-export const getBatch = internalQuery({
+// Internal query for reading outbox
+export const getPendingOutbox = internalQuery({
   args: { limit: v.number() },
   handler: async (ctx, { limit }) => {
-    return await ctx.db.query("catalogRefreshQueue")
-      .withIndex("by_priority_and_nextAttempt")
+    return await ctx.db.query("marketplaceOutbox")
+      .withIndex("by_status_time", (q) => q.eq("status", "pending"))
       .take(limit);
   },
 });
 
-// convex/catalog/mutations.ts
-import { internalMutation } from "../_generated/server";
-import { v } from "convex/values";
-
 // Internal mutation for writing
-export const updateRefreshStatus = internalMutation({
+export const updateSyncStatus = internalMutation({
   args: { items: v.array(v.object({...})) },
   handler: async (ctx, { items }) => {
     for (const item of items) {
       await ctx.db.patch(item.id, {
-        status: "completed",
-        lastFetched: Date.now(),
+        status: item.success ? "succeeded" : "failed",
+        lastError: item.error,
       });
     }
   },
@@ -785,20 +908,22 @@ This flow prevents partial imports caused by catalog mismatches, ensures owners 
 
 BrickOps uses Convex cron jobs for background processing defined in `convex/crons.ts`:
 
-**Catalog Refresh Jobs (Story 2.3)**:
+**Catalog Refresh Jobs**:
 
 - Refresh stale catalog data from BrickLink API
-- Process `catalogRefreshQueue` table for on-demand updates
+- Process catalog refresh queue for on-demand updates
 - Run weekly to sync colors and categories reference data
 
-**Inventory Sync Job (Story 3.4)**:
+**Inventory Sync Job**:
+
+The sync module (`convex/sync/`) handles marketplace synchronization via the outbox pattern:
 
 ```typescript
 // Run every 30 seconds to process pending marketplace syncs
-schedules.interval(
+crons.interval(
   "inventory sync",
   { seconds: 30 },
-  internal.inventory.sync.processPendingChanges,
+  internal.sync.inventory.worker.processPendingChanges,
 );
 ```
 
@@ -811,19 +936,16 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Drain catalog refresh outbox every 10 minutes
+// Process marketplace sync outbox every 30 seconds
 crons.interval(
-  "process-catalog-refresh-jobs",
-  { minutes: 10 },
-  internal.catalog.refreshWorker.processCatalogRefreshJobs,
+  "process-marketplace-sync",
+  { seconds: 30 },
+  internal.sync.inventory.worker.processPendingChanges,
 );
 
-// Clean up old catalog refresh jobs daily
-crons.daily(
-  "cleanup-catalog-refresh-outbox",
-  { hourUTC: 2, minuteUTC: 0 },
-  internal.marketplaces.bricklink.catalog.refresh.cleanupOutbox,
-);
+// Catalog refresh jobs (actual implementation varies by refresh type)
+// Colors, categories, parts, and price guides each have their own refresh logic
+// in convex/marketplaces/bricklink/catalog/*/actions.ts
 
 export default crons;
 ```

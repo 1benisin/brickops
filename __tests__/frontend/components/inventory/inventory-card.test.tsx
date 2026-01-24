@@ -1,7 +1,7 @@
 import userEvent from "@testing-library/user-event";
 import { screen } from "@testing-library/react";
 
-import { InventoryCard } from "@/components/inventory/InventoryCard";
+import { InventoryCard } from "@/components/inventory/shared/InventoryCard";
 import { renderWithProviders } from "@/test-utils/render-with-providers";
 import { setMockPathname } from "@/test-utils/next-navigation";
 import type { Id } from "@convex/_generated/dataModel";

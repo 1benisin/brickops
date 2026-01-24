@@ -589,7 +589,7 @@ export const create = mutation({
     );
 
     // Use existing upsertOrder mutation (same flow as real orders)
-    await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
+    await ctx.runMutation(internal.sync.orders.ingestion.upsertOrder, {
       businessAccountId: args.businessAccountId,
       provider: "bricklink",
       orderData,
@@ -758,7 +758,7 @@ export const createBulkTestOrders = mutation({
         },
       );
 
-      await ctx.runMutation(internal.orders.ingestion.upsertOrder, {
+      await ctx.runMutation(internal.sync.orders.ingestion.upsertOrder, {
         businessAccountId,
         provider: "bricklink",
         orderData,

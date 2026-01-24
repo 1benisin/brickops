@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ActionCtx } from "@/convex/_generated/server";
-import {
-  executeBlRequest,
-  withDefaultHeaders,
-} from "@/convex/marketplaces/bricklink/request";
+import { executeBlRequest, withDefaultHeaders } from "@/convex/marketplaces/bricklink/request";
 import type { BLOAuthCredentials } from "@/convex/marketplaces/bricklink/credentials";
 import { upstreamRequest } from "@/convex/shared/http/upstreamRequest";
 import {
@@ -85,7 +82,7 @@ describe("BrickLink request helpers", () => {
         durationMs: 42,
         attempts: 2,
         throttle: { limit: 10, remaining: 9, resetAt: Date.now() + 1000 },
-        oauth: { header: "OAuth realm=\"bricklink\"" },
+        oauth: { header: 'OAuth realm="bricklink"' },
         rawBody: '{"meta":true}',
       });
 
@@ -144,7 +141,9 @@ describe("BrickLink request helpers", () => {
       expect(result.throttle).toEqual(
         expect.objectContaining({ limit: 10, remaining: 9, resetAt: expect.any(Number) }),
       );
-      expect(result.oauth).toEqual(expect.objectContaining({ header: expect.stringContaining("OAuth") }));
+      expect(result.oauth).toEqual(
+        expect.objectContaining({ header: expect.stringContaining("OAuth") }),
+      );
     });
 
     it("falls back to fetch when no Action context is provided and signs the request", async () => {
@@ -191,7 +190,7 @@ describe("BrickLink request helpers", () => {
         "X-Correlation-Id": "corr-fetch",
         Authorization: "OAuth header",
         "X-Custom": "one",
-        "Content-Type": "application/json; charset=utf-8",
+        "Content-Type": "application/json",
       });
 
       expect(generateOAuthSignatureMock).toHaveBeenCalledWith(
@@ -228,4 +227,3 @@ describe("BrickLink request helpers", () => {
     });
   });
 });
-
