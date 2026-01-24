@@ -36,7 +36,7 @@ vi.mock("@/convex/shared/metrics", () => ({
 import type { ActionCtx } from "@/convex/_generated/server";
 import type { Id } from "@/convex/_generated/dataModel";
 import { internal } from "@/convex/_generated/api";
-import { updateSyncStatuses, syncInventoryChange } from "@/convex/inventory/sync";
+import { updateSyncStatuses, syncInventoryChange } from "@/convex/sync/inventory/orchestrator";
 import { createConvexTestContext } from "@/test-utils/convex-test-context";
 import {
   ensureBrickowlIdForPartAction,

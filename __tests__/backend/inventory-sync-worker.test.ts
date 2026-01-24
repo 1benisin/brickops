@@ -39,7 +39,7 @@ import {
   markOutboxFailedPermanently,
   markOutboxInflight,
   markOutboxSucceeded,
-} from "@/convex/inventory/syncWorker";
+} from "@/convex/sync/inventory/worker";
 import { createConvexTestContext } from "@/test-utils/convex-test-context";
 import {
   ensureBrickowlIdForPartAction,
@@ -332,7 +332,7 @@ describe("drainMarketplaceOutbox action", () => {
     await (drainMarketplaceOutbox as any)._handler(ctx, {});
 
     expect(runQuery).toHaveBeenCalledWith(
-      internal.inventory.syncWorker.getPendingOutboxMessages,
+      internal.sync.inventory.getPendingOutboxMessages,
       expect.any(Object),
     );
     expect(unexpectedQueries).toEqual([]);

@@ -1,33 +1,33 @@
-import { internalAction, internalMutation, internalQuery } from "../_generated/server";
-import { internal } from "../_generated/api";
+import { internalAction, internalMutation, internalQuery } from "../../_generated/server";
+import { internal } from "../../_generated/api";
 import { v, ConvexError } from "convex/values";
-import type { Id, Doc } from "../_generated/dataModel";
-import type { ActionCtx } from "../_generated/server";
-import { recordMetric } from "../shared/metrics";
+import type { Id, Doc } from "../../_generated/dataModel";
+import type { ActionCtx } from "../../_generated/server";
+import { recordMetric } from "../../shared/metrics";
 import {
   mapConvexToBlCreate,
   mapConvexToBlUpdate,
-} from "../marketplaces/bricklink/inventory/transformers";
+} from "../../marketplaces/bricklink/inventory/transformers";
 import {
   mapConvexToBrickOwlCreate,
   mapConvexToBrickOwlUpdate,
-} from "../marketplaces/brickowl/inventory/transformers";
-import { partialInventoryItemData } from "./validators";
-import { ensureBrickowlIdForPartAction, formatApiError } from "./helpers";
+} from "../../marketplaces/brickowl/inventory/transformers";
+import { partialInventoryItemData } from "../../inventory/validators";
+import { ensureBrickowlIdForPartAction, formatApiError } from "../../inventory/helpers";
 import {
   createBLInventory as createBricklinkInventory,
   updateBLInventory as updateBricklinkInventory,
   deleteBLInventory as deleteBricklinkInventory,
-} from "../marketplaces/bricklink/inventory/actions";
+} from "../../marketplaces/bricklink/inventory/actions";
 import {
   createInventory as createBrickOwlInventory,
   updateInventory as updateBrickOwlInventory,
   deleteInventory as deleteBrickOwlInventory,
-} from "../marketplaces/brickowl/inventory/actions";
+} from "../../marketplaces/brickowl/inventory/actions";
 import {
   upsertSyncState,
   getSyncStateForItem,
-} from "../sync/inventory/helpers";
+} from "./helpers";
 
 type InventoryItemDoc = Doc<"inventoryItems">;
 
@@ -152,7 +152,7 @@ export const syncInventoryChange = internalAction({
     }));
 
     // Update inventory item sync status
-    await ctx.runMutation(internal.inventory.sync.updateSyncStatuses, {
+    await ctx.runMutation(internal.sync.inventory.updateSyncStatuses, {
       inventoryItemId: args.inventoryItemId,
       results,
     });
@@ -335,7 +335,7 @@ async function syncUpdate(
   idempotencyKey: string,
 ) {
   // Get lotId from inventorySyncState table
-  const marketplaceIdRaw = await ctx.runQuery(internal.inventory.sync.getLotIdForItem, {
+  const marketplaceIdRaw = await ctx.runQuery(internal.sync.inventory.getLotIdForItem, {
     itemId: args.inventoryItemId,
     provider: marketplace,
   });
@@ -405,7 +405,7 @@ async function syncDelete(
   let marketplaceIdRaw: string | number | undefined;
 
   if (args.inventoryItemId) {
-    marketplaceIdRaw = await ctx.runQuery(internal.inventory.sync.getLotIdForItem, {
+    marketplaceIdRaw = await ctx.runQuery(internal.sync.inventory.getLotIdForItem, {
       itemId: args.inventoryItemId,
       provider: marketplace,
     }) ?? undefined;
@@ -502,7 +502,7 @@ export const retryFailedSync = internalAction({
 
         if (result.success) {
           // Update sync status to success
-          await ctx.runMutation(internal.inventory.sync.updateSyncStatuses, {
+          await ctx.runMutation(internal.sync.inventory.updateSyncStatuses, {
             inventoryItemId: args.inventoryItemId,
             results: [{ provider: args.marketplace, success: true }],
           });
